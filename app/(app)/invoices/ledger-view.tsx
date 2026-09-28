@@ -10,7 +10,7 @@ import { DataTable, type Column, type FilterDef } from "@/components/ui/data-tab
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { SidePanel } from "@/components/ui/side-panel";
 import { fieldClass } from "@/components/ui/form-controls";
-import { cn, formatDate, formatMoney, toDateInput } from "@/lib/utils";
+import { addDays, cn, formatDate, formatMoney, toDateInput } from "@/lib/utils";
 import { markPaid, type PaymentInput } from "./actions";
 import { EntryForm, PaymentFields, blankEntry, type Lookups } from "./entry-form";
 
@@ -57,7 +57,7 @@ export function LedgerView({ rows, lookups }: { rows: LedgerRow[]; lookups: Look
     return {
       unpaidUsd: unpaid.reduce((s, r) => s + r.usdAmount, 0),
       unpaidCount: unpaid.length,
-      overdue: unpaid.filter((r) => (r.dueDate ?? r.invoiceDate).slice(0, 10) < today).length,
+      overdue: unpaid.filter((r) => toDateInput(r.dueDate ?? addDays(new Date(r.invoiceDate), 7)) < today).length,
       billedYtd: rows.filter((r) => r.invoiceDate.startsWith(year) && r.status !== "WAIVED").reduce((s, r) => s + r.usdAmount, 0),
       paidYtd: rows.filter((r) => r.receivedDate?.startsWith(year)).reduce((s, r) => s + (r.receivedAmount ?? 0), 0),
       year,
@@ -138,7 +138,7 @@ export function LedgerView({ rows, lookups }: { rows: LedgerRow[]; lookups: Look
     <>
       <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard icon={Hourglass} tone="warning" label="Unpaid (USD)" value={formatMoney(stats.unpaidUsd, 0)} footer={<Hint>{stats.unpaidCount} invoices sent, not paid</Hint>} />
-        <KpiCard icon={AlertTriangle} tone="danger" label="Overdue" value={String(stats.overdue)} footer={<Hint>Unpaid past the due date, or the invoice date when none is set</Hint>} />
+        <KpiCard icon={AlertTriangle} tone="danger" label="Overdue" value={String(stats.overdue)} footer={<Hint>Unpaid past the due date (invoice date + 7 days when none is set)</Hint>} />
         <KpiCard icon={Receipt} label={`Billed ${stats.year} (USD)`} value={formatMoney(stats.billedYtd, 0)} footer={<Hint>Excluding waived</Hint>} />
         <KpiCard icon={Wallet} tone="success" label={`Received ${stats.year} (USD)`} value={formatMoney(stats.paidYtd, 0)} footer={<Hint>Net of fees</Hint>} />
       </div>
