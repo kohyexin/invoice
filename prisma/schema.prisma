@@ -1,0 +1,286 @@
+// Invoice app data layer. Connection URLs live in prisma.config.ts (Prisma 7);
+// the runtime client uses the pg driver adapter (lib/db.ts).
+
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Currency {
+  USD
+  HKD
+  CNY
+  EUR
+  SGD
+}
+
+enum Language {
+  EN
+  ZH
+}
+
+/// Who produced the invoice: the STAR SAAS billing system (email PDF) or us.
+enum Generate {
+  SYSTEM
+  MANUAL
+}
+
+enum InvoiceStatus {
+  SENT
+  PAID
+  END
+  LOST
+  WAIVED
+}
+
+/* ----------------------------- Settings ----------------------------- */
+
+/// Issuer on the letterhead (SPARK PSP, STAR SAAS, 厦门星知付).
+model Company {
+  id           String   @id @default(cuid())
+  code         String   @unique
+  legalName    String
+  addressLines String[]
+  /// Public path of the letterhead logo, e.g. /logos/star.png.
+  logoPath     String?
+  defaultLang  Language @default(EN)
+  termsEn      String[]
+  termsZh      String[]
+  sortOrder    Int      @default(0)
+  active       Boolean  @default(true)
+
+  paymentRules PaymentRule[]
+  invoices     Invoice[]
+}
+
+model BankAccount {
+  id              String   @id @default(cuid())
+  /// Short label shown in pickers, e.g. "USD (SCB Bank)".
+  label           String   @unique
+  currency        Currency
+  accountName     String
+  accountNumber   String
+  bankName        String   @default("")
+  bankAddress     String   @default("")
+  bankCode        String   @default("")
+  branchCode      String   @default("")
+  swiftCode       String   @default("")
+  accountLocation String   @default("")
+  /// Compact accounts (e.g. Airwallex) print only name + number.
+  compact         Boolean  @default(false)
+  sortOrder       Int      @default(0)
+  active          Boolean  @default(true)
+
+  paymentRules    PaymentRule[]
+  invoices        Invoice[]
+}
+
+/// Default payment account. The most specific match wins:
+/// company + currency, then company only, then currency only.
+model PaymentRule {
+  id            String      @id @default(cuid())
+  companyId     String?
+  company       Company?    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  currency      Currency?
+  bankAccountId String
+  bankAccount   BankAccount @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, currency])
+}
+
+/// How many USD one unit of the currency is worth.
+model FxRate {
+  currency   Currency @id
+  usdPerUnit Decimal  @db.Decimal(18, 8)
+  updatedAt  DateTime @updatedAt
+}
+
+model Owner {
+  id        String    @id @default(cuid())
+  name      String    @unique
+  sortOrder Int       @default(0)
+  active    Boolean   @default(true)
+  clients   Client[]
+  invoices  Invoice[]
+}
+
+model InvoiceType {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  /// What the free-text subtype should say for this type.
+  subtypeHint String?
+  sortOrder   Int       @default(0)
+  active      Boolean   @default(true)
+  invoices    Invoice[]
+}
+
+model InvoiceItem {
+  id          String        @id @default(cuid())
+  labelEn     String
+  labelZh     String        @default("")
+  /// Prompt for the detail line, e.g. "Month :" or "Channel :".
+  detailHint  String?
+  /// Client fee field (Jotform header) that prices this item, if any.
+  clientFee   String?
+  sortOrder   Int           @default(0)
+  active      Boolean       @default(true)
+  lines       InvoiceLine[]
+}
+
+/* ------------------------------ Clients ------------------------------ */
+
+model Client {
+  id               String    @id @default(cuid())
+  name             String    @unique
+  alias            String    @default("")
+  agreementNo      String    @default("")
+  agreementDate    DateTime? @db.Date
+  country          String    @default("")
+  incorporationNo  String    @default("")
+  address1         String    @default("")
+  address2         String    @default("")
+  address3         String    @default("")
+  city             String    @default("")
+  directorName     String    @default("")
+  contactTitle     String    @default("")
+  contactEmail     String    @default("")
+  websiteUrls      String    @default("")
+  /// Payer name when funds arrive under a different name.
+  transferName     String    @default("")
+  defaultOwnerId   String?
+  defaultOwner     Owner?    @relation(fields: [defaultOwnerId], references: [id], onDelete: SetNull)
+  /// Fee schedule keyed by the Jotform column header.
+  fees             Json      @default("{}")
+  jotformId        String?   @unique
+  submittedAt      DateTime?
+  notes            String    @default("")
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  invoices         Invoice[]
+}
+
+/* ------------------------------ Invoices ----------------------------- */
+
+model Invoice {
+  id               String        @id @default(cuid())
+  /// Not unique: one invoice can be split into rows by type, and the legacy
+  /// ledger reused numbers. New numbers are checked for reuse in the app.
+  number           String
+  clientId         String
+  client           Client        @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  alias            String        @default("")
+  ownerId          String?
+  owner            Owner?        @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  typeId           String?
+  type             InvoiceType?  @relation(fields: [typeId], references: [id], onDelete: SetNull)
+  subtype          String        @default("")
+  generate         Generate      @default(MANUAL)
+  status           InvoiceStatus @default(SENT)
+
+  invoiceDate      DateTime      @db.Date
+  dueDate          DateTime?     @db.Date
+  billingFrom      DateTime?     @db.Date
+  billingTo        DateTime?     @db.Date
+  reference        String        @default("")
+
+  /// Currency the invoice lines are priced in.
+  currency         Currency      @default(USD)
+  amount           Decimal       @db.Decimal(14, 2)
+  /// Booked USD equivalent — the figure every total and KPI uses.
+  usdAmount        Decimal       @db.Decimal(14, 2)
+  fxRate           Decimal?      @db.Decimal(18, 8)
+  /// Included in amount (amount = line subtotal + tax).
+  taxAmount        Decimal       @default(0) @db.Decimal(14, 2)
+  /// Already paid before this invoice; amount due = amount - amountPaid.
+  amountPaid       Decimal       @default(0) @db.Decimal(14, 2)
+  /// Optional second "amount due" line in another currency.
+  altCurrency      Currency?
+  altAmount        Decimal?      @db.Decimal(14, 2)
+  /// Billed-to block as printed: { name, attention, lines[] }. Kept so a
+  /// later client address change does not alter issued invoices.
+  billTo           Json?
+
+  receivedDate     DateTime?     @db.Date
+  /// USD equivalent received, net of fee. receivedCurrency records what
+  /// actually arrived when it was not USD.
+  receivedAmount   Decimal?      @db.Decimal(14, 2)
+  receivedCurrency Currency?
+  /// Bank or transfer fee in USD.
+  fee              Decimal?      @db.Decimal(14, 2)
+  paymentNote      String        @default("")
+
+  companyId        String?
+  company          Company?      @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  language         Language      @default(EN)
+  bankAccountId    String?
+  bankAccount      BankAccount?  @relation(fields: [bankAccountId], references: [id], onDelete: SetNull)
+  extraAccountIds  String[]
+
+  notes            String        @default("")
+  /// Row number in the Excel Invoice List, for tracing imported rows.
+  legacyNo         Int?          @unique
+  sourceMessageId  String?       @unique
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  lines            InvoiceLine[]
+  document         InvoiceDocument?
+
+  @@index([number])
+  @@index([status])
+  @@index([invoiceDate])
+  @@index([clientId])
+}
+
+model InvoiceLine {
+  id          String       @id @default(cuid())
+  invoiceId   String
+  invoice     Invoice      @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  itemId      String?
+  item        InvoiceItem? @relation(fields: [itemId], references: [id], onDelete: SetNull)
+  category    String       @default("")
+  description String
+  detail      String       @default("")
+  quantity    Decimal      @db.Decimal(18, 4)
+  rate        Decimal      @db.Decimal(18, 6)
+  amount      Decimal      @db.Decimal(14, 2)
+  sortOrder   Int          @default(0)
+}
+
+/// Original PDF for system invoices received by email.
+model InvoiceDocument {
+  id          String   @id @default(cuid())
+  invoiceId   String   @unique
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  filename    String
+  contentType String   @default("application/pdf")
+  data        Bytes
+  createdAt   DateTime @default(now())
+}
+
+/* --------------------------- Email import ---------------------------- */
+
+enum ReviewStatus {
+  PENDING
+  IMPORTED
+  DISMISSED
+}
+
+/// A system-invoice email the importer could not post on its own.
+model ImportReview {
+  id         String       @id @default(cuid())
+  messageId  String       @unique
+  subject    String       @default("")
+  receivedAt DateTime?
+  filename   String       @default("")
+  pdf        Bytes?
+  parsed     Json?
+  reason     String
+  status     ReviewStatus @default(PENDING)
+  createdAt  DateTime     @default(now())
+}

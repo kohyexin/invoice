@@ -1,0 +1,27 @@
+# business data — never commit
+docs/
+/storage/
+
+# dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# next.js
+.next/
+out/
+build/
+
+# env
+.env
+.env*.local
+
+# prisma generated client
+lib/generated/
+
+# misc
+.DS_Store
+*.pem
+npm-debug.log*
+*.tsbuildinfo
+next-env.d.ts
