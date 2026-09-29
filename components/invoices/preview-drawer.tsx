@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronRight, Eye, Loader2 } from "lucide-react";
 import { useI18n } from "@/components/i18n/locale-provider";
 import { cn } from "@/lib/utils";
 
-/* PDF preview tucked against the right edge. A tab opens it as a drawer that
- * leaves the form usable underneath, so edits show up while it's open. */
+/* PDF preview tucked against the right edge. A tab opens it as a drawer;
+ * a click anywhere outside it, Esc or Hide tucks it away again. */
 export function PreviewDrawer({
   open,
   onOpenChange,
@@ -27,13 +27,22 @@ export function PreviewDrawer({
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
+  const panelRef = useRef<HTMLElement>(null);
+
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onOpenChange(false);
     };
+    const onPointer = (e: PointerEvent) => {
+      if (!panelRef.current?.contains(e.target as Node)) onOpenChange(false);
+    };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    document.addEventListener("pointerdown", onPointer);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.removeEventListener("pointerdown", onPointer);
+    };
   }, [open, onOpenChange]);
 
   if (!mounted) return null;
@@ -56,6 +65,7 @@ export function PreviewDrawer({
       </button>
 
       <aside
+        ref={panelRef}
         role="complementary"
         aria-label={t("Invoice preview")}
         aria-hidden={!open}
