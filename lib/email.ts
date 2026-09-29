@@ -11,6 +11,11 @@ const DEFAULT_FROM = "STAR SAAS <no-reply@star-saas.com>";
 async function send(to: string, email: RenderedEmail, consoleFallback: string) {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
+    // The fallback text carries live reset links and login codes; never write it to production logs.
+    if (process.env.NODE_ENV === "production") {
+      console.error(`RESEND_API_KEY is not set; "${email.subject}" was not sent.`);
+      return { sent: false, mocked: false };
+    }
     console.log(`[email mock] ${consoleFallback}`);
     return { sent: true, mocked: true };
   }
