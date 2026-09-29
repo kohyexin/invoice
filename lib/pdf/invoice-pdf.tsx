@@ -83,7 +83,7 @@ const s = StyleSheet.create({
   totalsRule: { marginLeft: 217.9, borderTopWidth: 0.84, borderTopColor: "#A6A6A6", marginTop: 11, marginBottom: 11 },
 
   terms: { marginTop: 45.6 },
-  payBar: { backgroundColor: "#D9D9D9", width: 218, height: 11.5, marginTop: 11.4 },
+  payBar: { backgroundColor: "#D9D9D9", height: 11.5, marginTop: 11.4 },
   kvKey: { width: 95.6, paddingLeft: 1.3 },
   box: { borderWidth: 0.84, borderColor: BLUE, width: 126.5, paddingLeft: 5.8, paddingRight: 4, paddingTop: 2.7, paddingBottom: 8.4, marginBottom: 8 },
   boxTitle: { fontSize: 8.28, lineHeight: 10.6 / 8.28, fontWeight: 700, color: BLUE, marginBottom: 10.7 },
@@ -233,7 +233,7 @@ export function InvoicePdf({ data }: { data: InvoicePdfData }) {
 
         {(data.account || data.extraAccounts.length > 0) && (
           <View style={{ flexDirection: "row", justifyContent: "space-between" }} wrap={false}>
-            <View style={{ width: 280 }}>
+            <View style={{ maxWidth: 320, alignSelf: "flex-start" }}>
               {data.account && (
                 <>
                   <View style={s.payBar}>
@@ -242,7 +242,7 @@ export function InvoicePdf({ data }: { data: InvoicePdfData }) {
                   {accountRows(data.account).map(([k, v]) => (
                     <View key={k} style={s.row}>
                       <Text style={[s.body, s.kvKey]}>{k}</Text>
-                      <Text style={[s.body, { flex: 1 }]}>{v}</Text>
+                      <Text style={[s.body, { flexShrink: 1, paddingRight: 1.3 }]}>{v}</Text>
                     </View>
                   ))}
                 </>
