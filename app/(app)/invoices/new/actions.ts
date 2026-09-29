@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { draftFromInput, draftTotal, type ComposerInput } from "@/lib/composer";
 import { fxRates, suggestInvoiceNumber, toUsd } from "@/lib/rules";
 import { authorize, requireRole } from "@/lib/session";
+import { freezeGeneratedPdf } from "@/lib/documents";
 import { round2 } from "@/lib/utils";
 
 type Result<T = object> = ({ ok: true } & T) | { ok: false; error: string };
@@ -74,6 +75,7 @@ export async function createManualInvoice(input: ComposerInput, confirmReuse = f
         },
       },
     });
+    await freezeGeneratedPdf(inv.id).catch(() => undefined);
     revalidatePath("/invoices");
     revalidatePath("/dashboard");
     revalidatePath(`/clients/${input.clientId}`);

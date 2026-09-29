@@ -316,14 +316,44 @@ model InvoiceLine {
 }
 
 /// Original PDF for system invoices received by email.
+enum DocumentSource {
+  /// Rendered by this app when the invoice was issued.
+  GENERATED
+  /// The billing system's own PDF, from the mailbox or an upload.
+  IMPORTED
+}
+
+/// The PDF of record for an invoice. Kept on Google Drive once connected;
+/// `data` holds the bytes only until the upload is confirmed.
 model InvoiceDocument {
-  id          String   @id @default(cuid())
-  invoiceId   String   @unique
-  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-  filename    String
-  contentType String   @default("application/pdf")
-  data        Bytes
-  createdAt   DateTime @default(now())
+  id            String         @id @default(cuid())
+  invoiceId     String         @unique
+  invoice       Invoice        @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  filename      String
+  contentType   String         @default("application/pdf")
+  source        DocumentSource @default(IMPORTED)
+  data          Bytes?
+  size          Int?
+  driveFileId   String?
+  driveFolderId String?
+  driveName     String?
+  syncedAt      DateTime?
+  syncError     String         @default("")
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @default(now()) @updatedAt
+}
+
+/// Drive files whose invoice was deleted but which could not be trashed yet.
+model DriveTrash {
+  fileId    String   @id
+  createdAt DateTime @default(now())
+}
+
+/// Small app-wide values, e.g. the Google Drive connection.
+model AppSetting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
 }
 
 /* --------------------------- Email import ---------------------------- */

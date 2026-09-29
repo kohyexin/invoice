@@ -6,6 +6,7 @@ import type { Currency, Generate, InvoiceStatus } from "@/lib/generated/prisma/c
 import { CURRENCIES, STATUSES, parseDateInput, round2 } from "@/lib/utils";
 import { fxRates, suggestInvoiceNumber, toUsd } from "@/lib/rules";
 import { authorize, requireRole } from "@/lib/session";
+import { discardDocument, refreshDocument } from "@/lib/documents";
 
 type Result<T = object> = ({ ok: true } & T) | { ok: false; error: string };
 
@@ -139,6 +140,7 @@ export async function saveEntry(id: string | null, input: EntryInput, confirmReu
     const row = id
       ? await prisma.invoice.update({ where: { id }, data })
       : await prisma.invoice.create({ data: { ...data, createdById: auth.user.id } });
+    if (id) await refreshDocument(row.id).catch(() => undefined);
     refresh(row.id);
     return { ok: true, id: row.id };
   } catch (e) {
@@ -189,6 +191,7 @@ export async function setStatus(id: string, status: InvoiceStatus): Promise<Resu
 export async function deleteEntry(id: string): Promise<Result> {
   const auth = await authorize("STAFF");
   if (!auth.ok) return auth;
+  await discardDocument(id);
   await prisma.invoice.delete({ where: { id } });
   refresh();
   return { ok: true };

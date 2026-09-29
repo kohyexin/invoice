@@ -5,6 +5,7 @@ import type { Currency, ReviewStatus } from "@/lib/generated/prisma/client";
 import { CURRENCIES, parseDateInput } from "@/lib/utils";
 import { fxRates, toUsd } from "@/lib/rules";
 import { extractPdfText, parseSystemInvoiceText, type SystemInvoice } from "@/lib/system-invoice";
+import { archiveName, syncDocument } from "@/lib/documents";
 
 export type ImportSource = {
   data: Uint8Array;
@@ -96,7 +97,8 @@ export async function stageSystemPdf(src: ImportSource): Promise<StageOutcome> {
 
   if (onLedger) {
     if (!onLedger.document) {
-      await prisma.invoiceDocument.create({ data: { invoiceId: onLedger.id, filename: src.filename, data: Buffer.from(src.data) } });
+      await prisma.invoiceDocument.create({ data: { invoiceId: onLedger.id, filename: src.filename, data: Buffer.from(src.data), size: src.data.length } });
+      await syncDocument(onLedger.id);
     }
     await prisma.importReview.create({ data: { ...withInvoice, status: "DUPLICATE", invoiceId: onLedger.id, reason: "Already in the ledger." } });
     return { status: "duplicate", number: inv.number };
@@ -177,7 +179,7 @@ export async function approveReview(id: string, clientId: string, actorId: strin
       sourceMessageId: row.messageId,
       createdById: actorId,
       updatedById: actorId,
-      document: { create: { filename: row.filename, data: Buffer.from(row.pdf) } },
+      document: { create: { filename: archiveName(inv.number, client.alias || inv.clientName.toUpperCase()), data: Buffer.from(row.pdf), size: row.pdf.length } },
     },
   });
   await prisma.importReview.update({
@@ -185,6 +187,7 @@ export async function approveReview(id: string, clientId: string, actorId: strin
     data: { status: "IMPORTED", invoiceId: created.id, clientId: client.id, reason: "", decidedAt: new Date(), decidedById: actorId },
   });
   if (!client.alias) await prisma.client.update({ where: { id: client.id }, data: { alias: inv.clientName.toUpperCase() } });
+  await syncDocument(created.id);
 
   return { ok: true, number: inv.number };
 }

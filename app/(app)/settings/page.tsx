@@ -2,9 +2,16 @@ import { PageHeader } from "@/components/ui/page-header";
 import { prisma } from "@/lib/db";
 import { requirePageRole } from "@/lib/session";
 import { SettingsView } from "./settings-view";
+import { DocumentStorage } from "./document-storage";
+import { documentStats } from "@/lib/documents";
+import { driveConfigured, getDriveConnection } from "@/lib/gdrive";
 
-export default async function SettingsPage() {
+export default async function SettingsPage({ searchParams }: { searchParams: { drive?: string; reason?: string } }) {
   const me = await requirePageRole("ADMIN");
+  const drive = searchParams.drive;
+  const notice =
+    drive === "connected" || drive === "error" || drive === "not-configured" ? { kind: drive as "connected" | "error" | "not-configured", reason: searchParams.reason } : null;
+  const [connection, docStats] = await Promise.all([getDriveConnection(), documentStats()]);
   const [companies, bankAccounts, rules, fx, owners, types, items, users] = await Promise.all([
     prisma.company.findMany({ orderBy: [{ sortOrder: "asc" }, { code: "asc" }] }),
     prisma.bankAccount.findMany({ orderBy: [{ sortOrder: "asc" }, { label: "asc" }] }),
@@ -24,6 +31,12 @@ export default async function SettingsPage() {
       <PageHeader
         title="Settings"
         subtitle="Users, issuers, bank accounts, payment defaults, exchange rates and the lists used on invoices."
+      />
+      <DocumentStorage
+        configured={driveConfigured()}
+        connection={connection && { email: connection.email, connectedAt: connection.connectedAt, folderUrl: connection.folderUrl }}
+        stats={docStats}
+        notice={notice}
       />
       <SettingsView
         companies={companies}
