@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Eye, FileDown, Plus, Trash2 } from "lucide-react";
+import { Eye, FileDown, Plus, Save, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Field, Segmented, Select, fieldClass } from "@/components/ui/form-controls";
 import { billToFromClient, type BillTo } from "@/lib/bill-to";
@@ -122,6 +122,7 @@ export function Composer({
 
   const [error, setError] = useState<string | null>(null);
   const [reuse, setReuse] = useState<string | null>(null);
+  const [downloadAfterSave, setDownloadAfterSave] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [previewing, setPreviewing] = useState(false);
@@ -313,21 +314,20 @@ export function Composer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inputKey]);
 
-  function save() {
+  function save(download: boolean) {
     setError(null);
+    setDownloadAfterSave(download);
     start(async () => {
       const res = editing ? await updateManualInvoice(editing.id, input, Boolean(reuse)) : await createManualInvoice(input, Boolean(reuse));
       if (!res.ok) return setError(res.error);
       if (res.reuse) return setReuse(res.reuse);
-      if (editing) {
-        router.push(`/invoices/${res.id}`);
-        router.refresh();
-        return;
+      if (download) {
+        const a = document.createElement("a");
+        a.href = `/api/invoices/${res.id}/pdf`;
+        a.click();
       }
-      const a = document.createElement("a");
-      a.href = `/api/invoices/${res.id}/pdf`;
-      a.click();
       router.push(`/invoices/${res.id}`);
+      if (editing) router.refresh();
     });
   }
 
@@ -711,10 +711,23 @@ export function Composer({
         {error && <p className="rounded-control border border-danger/30 bg-danger/10 px-3 py-2 text-[13px] text-rose-700 dark:text-rose-200">{t(error)}</p>}
         {reuse && <p className="rounded-control border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-[13px] text-amber-700 dark:text-amber-200">{t(reuse)}</p>}
         <div className="flex items-center gap-2 pb-4">
-          <Button size="lg" onClick={save} loading={pending}>
-            <FileDown className="h-4 w-4" />
-            {t(reuse ? (editing ? "Save anyway" : "Issue anyway") : editing ? "Save changes" : "Save and download PDF")}
-          </Button>
+          {reuse ? (
+            <Button size="lg" onClick={() => save(downloadAfterSave)} loading={pending}>
+              {downloadAfterSave ? <FileDown className="h-4 w-4" /> : <Save className="h-4 w-4" />}
+              {t(editing ? "Save anyway" : "Issue anyway")}
+            </Button>
+          ) : (
+            <>
+              <Button size="lg" onClick={() => save(false)} loading={pending && !downloadAfterSave} disabled={pending}>
+                <Save className="h-4 w-4" />
+                {t(editing ? "Save changes" : "Save")}
+              </Button>
+              <Button size="lg" variant="secondary" onClick={() => save(true)} loading={pending && downloadAfterSave} disabled={pending}>
+                <FileDown className="h-4 w-4" />
+                {t("Save and download PDF")}
+              </Button>
+            </>
+          )}
           <Button size="lg" variant="secondary" onClick={() => setPreviewOpen(true)}>
             <Eye className="h-4 w-4" />
             {t("Preview")}

@@ -252,7 +252,7 @@ export const ZH: Record<string, string> = {
   "Mailbox import": "邮箱导入",
 
   // Composer
-  "Compose a manual invoice, check the PDF, then save it to the ledger and download.": "编制手工发票，核对 PDF 后保存到台账并下载。",
+  "Compose a manual invoice, check the PDF, then save it to the ledger, with or without downloading the PDF.": "编制手工发票，核对 PDF 后保存到台账，可选择是否同时下载 PDF。",
   "Bill to": "开票对象",
   Attention: "收件人",
   "Name on invoice": "发票抬头",

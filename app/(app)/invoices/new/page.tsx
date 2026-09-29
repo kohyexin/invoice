@@ -13,7 +13,7 @@ export default async function NewInvoicePage({ searchParams }: { searchParams: {
         breadcrumb="Invoices"
         breadcrumbHref="/invoices"
         title="New invoice"
-        subtitle="Compose a manual invoice, check the PDF, then save it to the ledger and download."
+        subtitle="Compose a manual invoice, check the PDF, then save it to the ledger, with or without downloading the PDF."
       />
       <Composer initialClientId={searchParams.client ?? ""} {...props} />
     </>
