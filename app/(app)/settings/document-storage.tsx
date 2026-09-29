@@ -20,6 +20,7 @@ export function DocumentStorage({ configured, connection, stats, notice }: Props
   const { t } = useI18n();
   const [pending, start] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
+  const expired = stats.failing > 0 && Boolean(stats.lastError?.includes("Reconnect"));
 
   const sync = () =>
     start(async () => {
@@ -52,6 +53,11 @@ export function DocumentStorage({ configured, connection, stats, notice }: Props
         <div className="flex shrink-0 flex-wrap items-center gap-2">
           {connection ? (
             <>
+              {expired && (
+                <a href="/api/google/connect">
+                  <Button size="sm">{t("Reconnect Google Drive")}</Button>
+                </a>
+              )}
               <a href={connection.folderUrl} target="_blank" rel="noreferrer">
                 <Button size="sm" variant="secondary">
                   <ExternalLink className="h-4 w-4" />

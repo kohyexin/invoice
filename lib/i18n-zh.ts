@@ -428,6 +428,7 @@ export const ZH: Record<string, string> = {
   "Sync now": "立即同步",
   Disconnect: "断开连接",
   "Connect Google Drive": "连接 Google 云端硬盘",
+  "Reconnect Google Drive": "重新连接 Google 云端硬盘",
   "Google Drive connected.": "已连接 Google 云端硬盘。",
   "Couldn't connect Google Drive.": "无法连接 Google 云端硬盘。",
   "Not set up yet. Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to the environment, then connect the archive account here. Until then, PDFs are kept in the app.":
