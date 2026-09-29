@@ -324,7 +324,7 @@ export function Composer({
   const title = "mb-4 font-mono text-[11px] uppercase tracking-[0.16em] text-ink-soft";
 
   return (
-    <div className="mx-auto max-w-5xl pr-6">
+    <div>
       <div className="space-y-5">
         <section className={card}>
           <h2 className={title}>{t("Issuer")}</h2>
