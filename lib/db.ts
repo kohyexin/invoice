@@ -5,7 +5,14 @@ import { PrismaPg } from "@prisma/adapter-pg";
    hot-reloads don't exhaust the Neon connection pool. */
 
 function createClient(): PrismaClient {
-  const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
+  // Neon drops idle connections and suspends the compute after a few quiet minutes; a pooled
+  // socket it has closed hangs the next query, so retire idle ones early and fail fast.
+  const adapter = new PrismaPg({
+    connectionString: process.env.DATABASE_URL,
+    idleTimeoutMillis: 30_000,
+    connectionTimeoutMillis: 15_000,
+    keepAlive: true,
+  });
   return new PrismaClient({ adapter });
 }
 
