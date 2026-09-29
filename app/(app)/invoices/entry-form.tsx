@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Field, Select, fieldClass } from "@/components/ui/form-controls";
 import { CURRENCIES, STATUSES, cn, round2, toDateInput } from "@/lib/utils";
 import { useI18n } from "@/components/i18n/locale-provider";
+import { FxRateNote, type FxState } from "@/components/invoices/fx-rate-note";
 import { deleteEntry, entryDefaults, saveEntry, type EntryInput } from "./actions";
 
 export type Lookups = {
@@ -12,6 +13,7 @@ export type Lookups = {
   owners: { id: string; name: string }[];
   types: { id: string; name: string; subtypeHint: string | null }[];
   rates: Record<string, number>;
+  ratesUpdatedAt: string | null;
 };
 
 export function blankEntry(): EntryInput {
@@ -58,6 +60,7 @@ export function EntryForm({
   const [v, setV] = useState<EntryInput>(initial);
   const [clientText, setClientText] = useState(() => lookups.clients.find((c) => c.id === initial.clientId)?.name ?? "");
   const [usdTouched, setUsdTouched] = useState(Boolean(id));
+  const [fx, setFx] = useState<FxState>({ rates: lookups.rates, updatedAt: lookups.ratesUpdatedAt });
   const [error, setError] = useState<string | null>(null);
   const [reuse, setReuse] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -66,9 +69,9 @@ export function EntryForm({
   const byName = useMemo(() => new Map(lookups.clients.map((c) => [c.name.toLowerCase(), c.id])), [lookups.clients]);
   const typeHint = lookups.types.find((ty) => ty.id === v.typeId)?.subtypeHint;
 
-  function suggestedUsd(amount: string, currency: string) {
+  function suggestedUsd(amount: string, currency: string, rates = fx.rates) {
     const n = Number(amount.replace(/,/g, ""));
-    const rate = currency === "USD" ? 1 : lookups.rates[currency];
+    const rate = currency === "USD" ? 1 : rates[currency];
     return amount && Number.isFinite(n) && rate ? String(round2(n * rate)) : "";
   }
 
@@ -206,7 +209,7 @@ export function EntryForm({
         </Field>
         {nonUsd && (
           <div className="sm:col-span-2">
-            <Field label="USD equivalent" hint={t("Suggested from the {0} rate in Settings. Overwrite it with the booked figure if it differs.", v.currency)}>
+            <Field label="USD equivalent" hint={t("Suggested from the {0} rate. Overwrite it with the booked figure if it differs.", v.currency)}>
               <input
                 inputMode="decimal"
                 value={v.usdAmount}
@@ -217,6 +220,17 @@ export function EntryForm({
                 className={cn(fieldClass, "tnum text-right")}
               />
             </Field>
+            {!readOnly && (
+              <FxRateNote
+                className="mt-1.5"
+                currencies={[v.currency]}
+                fx={fx}
+                onChange={(next) => {
+                  setFx(next);
+                  if (!usdTouched) setV((prev) => ({ ...prev, usdAmount: suggestedUsd(prev.amount, prev.currency, next.rates) }));
+                }}
+              />
+            )}
           </div>
         )}
         <Field label="Status">

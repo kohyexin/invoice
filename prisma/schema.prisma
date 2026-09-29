@@ -150,6 +150,8 @@ model PaymentRule {
 model FxRate {
   currency   Currency @id
   usdPerUnit Decimal  @db.Decimal(18, 8)
+  /// "YAHOO" when pulled from Yahoo Finance, "MANUAL" when typed in Settings.
+  source     String   @default("MANUAL")
   updatedAt  DateTime @updatedAt
 }
 

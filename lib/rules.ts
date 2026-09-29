@@ -2,6 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/db";
 import type { Currency } from "@/lib/generated/prisma/client";
 import { round2 } from "@/lib/utils";
+import { freshFxRates } from "@/lib/fx";
 
 /** Pick the default payment account: company + currency beats company only,
  *  which beats currency only. */
@@ -44,11 +45,9 @@ export async function suggestInvoiceNumber(clientId: string) {
   return `${base}-${String(maxSeq + 1).padStart(3, "0")}`;
 }
 
+/** USD per unit of each currency, refreshed from Yahoo Finance when stale. */
 export async function fxRates(): Promise<Record<string, number>> {
-  const rows = await prisma.fxRate.findMany();
-  const map: Record<string, number> = { USD: 1 };
-  for (const r of rows) map[r.currency] = Number(r.usdPerUnit);
-  return map;
+  return (await freshFxRates()).rates;
 }
 
 export function toUsd(amount: number, currency: string, rates: Record<string, number>) {

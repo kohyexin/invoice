@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Building2, Coins, KeyRound, Landmark, ListChecks, Plus, Route, ShieldCheck, Tags, UserRound, X } from "lucide-react";
+import { Building2, Coins, KeyRound, Landmark, ListChecks, Plus, RefreshCw, Route, ShieldCheck, Tags, UserRound, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { RecordPanel } from "@/components/ui/record-panel";
@@ -12,6 +12,7 @@ import { cn, formatDate } from "@/lib/utils";
 import { useI18n } from "@/components/i18n/locale-provider";
 import { deleteSetting, saveSetting } from "./actions";
 import { saveUser } from "./users-actions";
+import { refreshRates } from "../invoices/fx-actions";
 
 type Row = Record<string, unknown> & { id: string };
 
@@ -171,12 +172,14 @@ export function SettingsView(props: {
       id: "fxRate",
       label: "FX rates",
       icon: Coins,
-      description: "Used to suggest the USD equivalent of non-USD invoices. You can still override the booked USD on each invoice.",
+      description:
+        "Pulled from Yahoo Finance once a day and whenever someone refreshes the rate on an invoice. A rate typed here is used until the next pull. Each invoice can still override the booked USD.",
       rows: props.fx,
       columns: [
         { label: "Currency", render: (r) => String(r.currency), mono: true },
         { label: "Units per 1 USD", render: (r) => String(r.perUsd), mono: true, align: "right" },
-        { label: "Updated", render: (r) => formatDate(String(r.updatedAt)), align: "right" },
+        { label: "Source", render: (r) => (r.source === "YAHOO" ? <Badge tone="brand">Yahoo Finance</Badge> : <Badge tone="outline">{t("Manual")}</Badge>) },
+        { label: "Updated", render: (r) => formatDateTime(String(r.updatedAt)), align: "right" },
       ],
     },
     {
@@ -269,10 +272,13 @@ export function SettingsView(props: {
             <h2 className="text-[15px] font-semibold text-ink">{t(tab.label)}</h2>
             <p className="mt-0.5 max-w-2xl text-[13px] text-ink-muted">{t(tab.description)}</p>
           </div>
-          <Button size="sm" onClick={() => setEditing({ entity: tab.id, row: null })}>
-            <Plus className="h-4 w-4" />
-            {t("Add")}
-          </Button>
+          <div className="flex shrink-0 items-center gap-2">
+            {tab.id === "fxRate" && <RefreshFxButton />}
+            <Button size="sm" onClick={() => setEditing({ entity: tab.id, row: null })}>
+              <Plus className="h-4 w-4" />
+              {t("Add")}
+            </Button>
+          </div>
         </div>
         <div className="overflow-x-auto px-5 pb-2">
           <table className="tnum w-full text-sm">
@@ -358,5 +364,37 @@ export function SettingsView(props: {
         />
       )}
     </div>
+  );
+}
+
+function formatDateTime(iso: string) {
+  return `${formatDate(iso)} ${new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`;
+}
+
+function RefreshFxButton() {
+  const router = useRouter();
+  const { t } = useI18n();
+  const [error, setError] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+  return (
+    <>
+      {error && <span className="text-[12px] text-rose-600 dark:text-rose-300">{t(error)}</span>}
+      <Button
+        size="sm"
+        variant="secondary"
+        loading={pending}
+        onClick={() =>
+          start(async () => {
+            setError(null);
+            const res = await refreshRates();
+            if (!res.ok) return setError(res.error);
+            router.refresh();
+          })
+        }
+      >
+        {!pending && <RefreshCw className="h-4 w-4" />}
+        {t("Refresh from Yahoo Finance")}
+      </Button>
+    </>
   );
 }

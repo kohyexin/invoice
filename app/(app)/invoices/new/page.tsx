@@ -1,12 +1,12 @@
 import { PageHeader } from "@/components/ui/page-header";
 import { prisma } from "@/lib/db";
 import { requirePageRole } from "@/lib/session";
-import { fxRates } from "@/lib/rules";
+import { freshFxRates } from "@/lib/fx";
 import { Composer } from "./composer";
 
 export default async function NewInvoicePage({ searchParams }: { searchParams: { client?: string } }) {
   await requirePageRole("STAFF");
-  const [companies, accounts, rules, clients, items, types, owners, rates] = await Promise.all([
+  const [companies, accounts, rules, clients, items, types, owners, fx] = await Promise.all([
     prisma.company.findMany({ where: { active: true }, orderBy: [{ sortOrder: "asc" }, { code: "asc" }] }),
     prisma.bankAccount.findMany({ where: { active: true }, orderBy: [{ sortOrder: "asc" }, { label: "asc" }] }),
     prisma.paymentRule.findMany(),
@@ -30,7 +30,7 @@ export default async function NewInvoicePage({ searchParams }: { searchParams: {
     prisma.invoiceItem.findMany({ where: { active: true }, orderBy: [{ sortOrder: "asc" }, { labelEn: "asc" }] }),
     prisma.invoiceType.findMany({ where: { active: true }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }] }),
     prisma.owner.findMany({ where: { active: true }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }] }),
-    fxRates(),
+    freshFxRates(),
   ]);
 
   return (
@@ -50,7 +50,8 @@ export default async function NewInvoicePage({ searchParams }: { searchParams: {
         items={items.map((i) => ({ id: i.id, labelEn: i.labelEn, labelZh: i.labelZh, detailHint: i.detailHint ?? "", clientFee: i.clientFee ?? "" }))}
         types={types.map((t) => ({ id: t.id, name: t.name, subtypeHint: t.subtypeHint ?? "" }))}
         owners={owners.map((o) => ({ id: o.id, name: o.name }))}
-        rates={rates}
+        rates={fx.rates}
+        ratesUpdatedAt={fx.updatedAt}
       />
     </>
   );

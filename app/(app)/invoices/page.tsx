@@ -1,11 +1,10 @@
 import { PageHeader } from "@/components/ui/page-header";
 import { prisma } from "@/lib/db";
-import { fxRates } from "@/lib/rules";
 import { LedgerView } from "./ledger-view";
 import { loadLookups } from "./lookups";
 
 export default async function InvoicesPage() {
-  const [invoices, lookups, rates] = await Promise.all([
+  const [invoices, lookups] = await Promise.all([
     prisma.invoice.findMany({
       orderBy: [{ invoiceDate: "desc" }, { number: "desc" }],
       select: {
@@ -31,14 +30,13 @@ export default async function InvoicesPage() {
       },
     }),
     loadLookups(),
-    fxRates(),
   ]);
 
   return (
     <>
       <PageHeader title="Invoices" subtitle="Every invoice billed, with its USD value and payment. Replaces the Invoice List sheet." />
       <LedgerView
-        lookups={{ ...lookups, rates }}
+        lookups={lookups}
         rows={invoices.map((i) => ({
           id: i.id,
           number: i.number,

@@ -9,6 +9,7 @@ import { billToFromClient, type BillTo } from "@/lib/bill-to";
 import { CURRENCIES, addDays, cn, formatMoney, round2, toDateInput } from "@/lib/utils";
 import type { ComposerInput, ComposerLine } from "@/lib/composer";
 import { useI18n } from "@/components/i18n/locale-provider";
+import { FxRateNote, type FxState } from "@/components/invoices/fx-rate-note";
 import { createManualInvoice, nextNumber } from "./actions";
 
 type Company = { id: string; code: string; name: string; defaultLang: "EN" | "ZH" };
@@ -63,6 +64,7 @@ export function Composer({
   types,
   owners,
   rates,
+  ratesUpdatedAt,
 }: {
   initialClientId: string;
   companies: Company[];
@@ -73,6 +75,7 @@ export function Composer({
   types: { id: string; name: string; subtypeHint: string }[];
   owners: { id: string; name: string }[];
   rates: Record<string, number>;
+  ratesUpdatedAt: string | null;
 }) {
   const router = useRouter();
   const { t } = useI18n();
@@ -104,6 +107,7 @@ export function Composer({
   const [alias, setAlias] = useState("");
   const [usdAmount, setUsdAmount] = useState("");
   const [usdTouched, setUsdTouched] = useState(false);
+  const [fx, setFx] = useState<FxState>({ rates, updatedAt: ratesUpdatedAt });
 
   const [error, setError] = useState<string | null>(null);
   const [reuse, setReuse] = useState<string | null>(null);
@@ -120,9 +124,9 @@ export function Composer({
   const subtotal = round2(lines.reduce((s, l) => s + round2(num(l.rate) * (num(l.quantity) || 1)) * (l.description.trim() ? 1 : 0), 0));
   const total = round2(subtotal + num(taxAmount));
   const due = round2(total - num(amountPaid));
-  const altRate = altCurrency && rates[currency] && rates[altCurrency] ? rates[currency] / rates[altCurrency] : null;
+  const altRate = altCurrency && fx.rates[currency] && fx.rates[altCurrency] ? fx.rates[currency] / fx.rates[altCurrency] : null;
   const suggestedAlt = altRate ? String(round2(due * altRate)) : "";
-  const suggestedUsd = rates[currency] ? String(round2(total * rates[currency])) : "";
+  const suggestedUsd = fx.rates[currency] ? String(round2(total * fx.rates[currency])) : "";
 
   useEffect(() => {
     if (!bankTouched) setBankAccountId(resolveAccount(rules, companyId, payable));
@@ -363,6 +367,7 @@ export function Composer({
               </Select>
             </Field>
           </div>
+          <FxRateNote className="mt-3" currencies={[currency, altCurrency]} fx={fx} onChange={setFx} />
         </section>
 
         <section className={card}>
@@ -554,7 +559,7 @@ export function Composer({
               <input value={alias} onChange={(e) => setAlias(e.target.value)} className={cn(fieldClass, "font-mono uppercase")} />
             </Field>
             {currency !== "USD" && (
-              <Field label="USD equivalent" hint="Booked on the ledger. Suggested from the rate in Settings.">
+              <Field label="USD equivalent" hint="Booked on the ledger. Suggested from the exchange rate shown under Currency.">
                 <input
                   inputMode="decimal"
                   value={usdAmount}

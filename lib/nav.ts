@@ -9,7 +9,14 @@ import {
 } from "lucide-react";
 import type { RoleName } from "@/lib/roles";
 
-export type NavItem = { label: string; href: string; icon: LucideIcon; minRole?: RoleName };
+export type NavItem = {
+  label: string;
+  href: string;
+  icon: LucideIcon;
+  minRole?: RoleName;
+  /** false: reachable from the profile menu and command palette only. */
+  sidebar?: boolean;
+};
 export type NavGroup = { label?: string; items: NavItem[] };
 
 export const navGroups: NavGroup[] = [
@@ -28,7 +35,7 @@ export const navGroups: NavGroup[] = [
     label: "Records",
     items: [
       { label: "Clients", href: "/clients", icon: Users },
-      { label: "Settings", href: "/settings", icon: Settings, minRole: "ADMIN" },
+      { label: "Settings", href: "/settings", icon: Settings, minRole: "ADMIN", sidebar: false },
     ],
   },
 ];

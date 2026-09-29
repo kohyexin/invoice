@@ -26,7 +26,7 @@ export function SidebarNav({
   const { role } = useCurrentUser();
   const { t } = useI18n();
   const groups = navGroups
-    .map((g) => ({ ...g, items: g.items.filter((i) => !i.minRole || hasRole(role, i.minRole)) }))
+    .map((g) => ({ ...g, items: g.items.filter((i) => i.sidebar !== false && (!i.minRole || hasRole(role, i.minRole))) }))
     .filter((g) => g.items.length > 0);
 
   return (

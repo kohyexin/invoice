@@ -21,7 +21,7 @@ export type DashboardData = {
   best: { month: string; billed: number; count: number } | null;
   medianMonth: number;
   monthly: { month: string; billed: number; count: number; received: number }[];
-  unpaid: { clientId: string; name: string; amount: number; count: number; oldest: string }[];
+  unpaid: { clientId: string; name: string; amount: number; count: number; oldest: string; byMonth: Record<string, number> }[];
   activeByType: { type: string; clients: number }[];
   recentMonths: string[];
   recentClients: { clientId: string; name: string; byType: Record<string, Record<string, number>> }[];
@@ -39,6 +39,7 @@ export function DashboardView({ data }: { data: DashboardData }) {
   const monthLabel = (m: string) => formatMonth(locale, m);
   const [range, setRange] = useState<(typeof RANGES)[number]["value"]>("12");
   const [typeFilter, setTypeFilter] = useState("All");
+  const [unpaidView, setUnpaidView] = useState<"summary" | "months">("summary");
   const { totals } = data;
 
   const series = useMemo(() => {
@@ -116,10 +117,27 @@ export function DashboardView({ data }: { data: DashboardData }) {
         </div>
       </section>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <section className="glass-panel neon-edge rounded-card p-5">
-          <h2 className="text-base font-semibold text-ink">{t("Unpaid by client")}</h2>
-          <p className="text-[13px] text-ink-muted">{t("Invoices with status SENT, largest balance first.")}</p>
+      <div className={cn("grid gap-6", unpaidView === "summary" && "xl:grid-cols-[minmax(0,1fr)_360px]")}>
+        <section className="glass-panel neon-edge min-w-0 rounded-card p-5">
+          <div className="flex flex-wrap items-start gap-3">
+            <div className="mr-auto">
+              <h2 className="text-base font-semibold text-ink">{t("Unpaid by client")}</h2>
+              <p className="text-[13px] text-ink-muted">
+                {t(unpaidView === "summary" ? "Invoices with status SENT, largest balance first." : "Unpaid USD by invoice month, largest balance first.")}
+              </p>
+            </div>
+            <Segmented
+              value={unpaidView}
+              options={[
+                { value: "summary", label: "Summary" },
+                { value: "months", label: "By month" },
+              ]}
+              onChange={setUnpaidView}
+            />
+          </div>
+          {unpaidView === "months" ? (
+            <UnpaidByMonth rows={data.unpaid} monthLabel={monthLabel} />
+          ) : (
           <div className="mt-4 overflow-x-auto">
             <table className="w-full text-[13px]">
               <thead>
@@ -153,6 +171,7 @@ export function DashboardView({ data }: { data: DashboardData }) {
               </tbody>
             </table>
           </div>
+          )}
         </section>
 
         <section className="glass-panel neon-edge rounded-card p-5">
@@ -228,6 +247,63 @@ export function DashboardView({ data }: { data: DashboardData }) {
           </table>
         </div>
       </section>
+    </div>
+  );
+}
+
+/** Excel-style pivot: one row per client, one column per invoice month. */
+function UnpaidByMonth({ rows, monthLabel }: { rows: DashboardData["unpaid"]; monthLabel: (m: string) => string }) {
+  const { t } = useI18n();
+  const months = Array.from(new Set(rows.flatMap((r) => Object.keys(r.byMonth)))).sort();
+  const colTotal = (m: string) => rows.reduce((s, r) => s + (r.byMonth[m] ?? 0), 0);
+  const grand = rows.reduce((s, r) => s + r.amount, 0);
+  const sticky = "sticky left-0 z-[1] bg-surface";
+
+  if (rows.length === 0) return <p className="py-8 text-center text-[13px] text-ink-soft">{t("Nothing outstanding.")}</p>;
+
+  return (
+    <div className="mt-4 max-h-[560px] overflow-auto">
+      <table className="w-full whitespace-nowrap text-[13px]">
+        <thead className="sticky top-0 z-[2] bg-surface">
+          <tr className="border-b border-line text-left text-[11px] uppercase tracking-wider text-ink-soft">
+            <th className={cn(sticky, "z-[3] py-2 pr-4")}>{t("Client")}</th>
+            {months.map((m) => (
+              <th key={m} className="px-3 py-2 text-right">
+                {monthLabel(m)}
+              </th>
+            ))}
+            <th className="py-2 pl-3 text-right">{t("Total")}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.clientId} className="border-b border-line/60">
+              <td className={cn(sticky, "max-w-[260px] truncate py-2 pr-4")}>
+                <Link href={`/clients/${r.clientId}`} className="text-ink hover:text-brand-700 dark:hover:text-brand-200" title={r.name}>
+                  {r.name}
+                </Link>
+              </td>
+              {months.map((m) => (
+                <td key={m} className="tnum px-3 py-2 text-right text-ink-muted">
+                  {r.byMonth[m] ? formatMoney(r.byMonth[m]) : ""}
+                </td>
+              ))}
+              <td className="tnum py-2 pl-3 text-right font-medium text-amber-600 dark:text-amber-300">{formatMoney(r.amount)}</td>
+            </tr>
+          ))}
+        </tbody>
+        <tfoot className="sticky bottom-0 z-[2] bg-surface">
+          <tr className="border-t border-line font-semibold text-ink">
+            <td className={cn(sticky, "z-[3] py-2 pr-4")}>{t("Total")}</td>
+            {months.map((m) => (
+              <td key={m} className="tnum px-3 py-2 text-right">
+                {formatMoney(colTotal(m))}
+              </td>
+            ))}
+            <td className="tnum py-2 pl-3 text-right text-amber-600 dark:text-amber-300">{formatMoney(grand)}</td>
+          </tr>
+        </tfoot>
+      </table>
     </div>
   );
 }

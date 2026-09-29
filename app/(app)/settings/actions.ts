@@ -84,8 +84,8 @@ export async function saveSetting(entity: SettingsEntity, id: string | null, inp
         const currency = data.currency as never;
         await prisma.fxRate.upsert({
           where: { currency },
-          update: { usdPerUnit: 1 / perUsd },
-          create: { currency, usdPerUnit: 1 / perUsd },
+          update: { usdPerUnit: 1 / perUsd, source: "MANUAL" },
+          create: { currency, usdPerUnit: 1 / perUsd, source: "MANUAL" },
         });
         break;
       }

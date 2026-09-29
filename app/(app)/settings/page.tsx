@@ -40,6 +40,7 @@ export default async function SettingsPage() {
           id: r.currency,
           currency: r.currency,
           perUsd: Math.round((1 / Number(r.usdPerUnit)) * 10000) / 10000,
+          source: r.source,
           updatedAt: r.updatedAt.toISOString(),
         }))}
         owners={owners}

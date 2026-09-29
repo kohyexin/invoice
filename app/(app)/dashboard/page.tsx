@@ -29,7 +29,7 @@ export default async function DashboardPage() {
   const bucket = () => ({ amount: 0, count: 0 });
   const totals = { all: bucket(), paid: bucket(), unpaid: bucket(), endLost: bucket(), waived: bucket() };
   const months = new Map<string, { billed: number; count: number; received: number }>();
-  const unpaidByClient = new Map<string, { clientId: string; name: string; amount: number; count: number; oldest: string }>();
+  const unpaidByClient = new Map<string, { clientId: string; name: string; amount: number; count: number; oldest: string; byMonth: Record<string, number> }>();
   const activeByType = new Map<string, Set<string>>();
   const activeClients = new Set<string>();
   const billedByClientMonth = new Map<string, { clientId: string; name: string; byType: Record<string, Record<string, number>> }>();
@@ -60,9 +60,10 @@ export default async function DashboardPage() {
 
     const label = r.alias || r.client.name;
     if (r.status === "SENT") {
-      const u = unpaidByClient.get(r.clientId) ?? { clientId: r.clientId, name: label, amount: 0, count: 0, oldest: r.invoiceDate.toISOString() };
+      const u = unpaidByClient.get(r.clientId) ?? { clientId: r.clientId, name: label, amount: 0, count: 0, oldest: r.invoiceDate.toISOString(), byMonth: {} };
       u.amount += usd;
       u.count++;
+      u.byMonth[m] = (u.byMonth[m] ?? 0) + usd;
       if (r.invoiceDate.toISOString() < u.oldest) u.oldest = r.invoiceDate.toISOString();
       unpaidByClient.set(r.clientId, u);
     }

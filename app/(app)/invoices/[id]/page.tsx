@@ -6,13 +6,12 @@ import { GenerateBadge, StatusBadge } from "@/components/ui/badge";
 import { prisma } from "@/lib/db";
 import { getI18n } from "@/lib/i18n-server";
 import type { Translate } from "@/lib/i18n";
-import { fxRates } from "@/lib/rules";
 import { formatDate, formatMoney, toDateInput } from "@/lib/utils";
 import { loadLookups } from "../lookups";
 import { InvoiceDetail } from "./invoice-detail";
 
 export default async function InvoicePage({ params }: { params: { id: string } }) {
-  const [inv, lookups, rates] = await Promise.all([
+  const [inv, lookups] = await Promise.all([
     prisma.invoice.findUnique({
       where: { id: params.id },
       include: {
@@ -26,7 +25,6 @@ export default async function InvoicePage({ params }: { params: { id: string } }
       },
     }),
     loadLookups(),
-    fxRates(),
   ]);
   if (!inv) notFound();
   const { t } = getI18n();
@@ -66,7 +64,7 @@ export default async function InvoicePage({ params }: { params: { id: string } }
         <InvoiceDetail
           id={inv.id}
           status={inv.status}
-          lookups={{ ...lookups, rates }}
+          lookups={lookups}
           initial={{
             clientId: inv.clientId,
             number: inv.number,
