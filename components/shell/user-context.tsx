@@ -22,3 +22,13 @@ export function useCurrentUser() {
 export function useCan(min: RoleName) {
   return hasRole(useCurrentUser().role, min);
 }
+
+export function initials(name: string) {
+  const parts = name.trim().split(/\s+/);
+  return ((parts[0]?.[0] ?? "") + (parts.length > 1 ? parts[parts.length - 1][0] : "")).toUpperCase() || "?";
+}
+
+export async function signOut() {
+  await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
+  window.location.assign("/login");
+}

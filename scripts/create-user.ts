@@ -5,7 +5,8 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient, type Role } from "../lib/generated/prisma/client";
 
 /* Creates a user, or resets an existing one (new password, re-enabled,
-   signed out everywhere). Use it for the first admin and for lock-outs:
+   two-factor cleared so they set up a new authenticator, signed out
+   everywhere). Use it for the first admin and for lock-outs:
 
      npm run user:create -- --email you@example.com --name "Your Name" --role ADMIN
      npm run user:create -- --email you@example.com --password "chosen password"
@@ -44,6 +45,11 @@ async function main() {
         passwordHash,
         active: true,
         sessionVersion: { increment: 1 },
+        totpSecret: null,
+        totpPendingSecret: null,
+        totpEnabledAt: null,
+        emailCodeHash: null,
+        mfaFailures: 0,
         ...(name ? { name } : {}),
         ...(role ? { role } : {}),
       },

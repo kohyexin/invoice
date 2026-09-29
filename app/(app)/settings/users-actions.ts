@@ -51,6 +51,7 @@ export async function saveUser(id: string | null, input: Record<string, unknown>
     }
 
     const password = input.resetPassword ? generatePassword() : undefined;
+    const resetTwoFactor = Boolean(input.resetTwoFactor);
     await prisma.user.update({
       where: { id },
       data: {
@@ -59,8 +60,10 @@ export async function saveUser(id: string | null, input: Record<string, unknown>
         role,
         active,
         ...(password ? { passwordHash: await hashPassword(password) } : {}),
-        // Signs the user out on every device.
-        ...(password || (before.active && !active) ? { sessionVersion: { increment: 1 } } : {}),
+        // They enrol a new authenticator on their next sign-in.
+        ...(resetTwoFactor ? { totpSecret: null, totpPendingSecret: null, totpEnabledAt: null, emailCodeHash: null } : {}),
+        // Signs the user out on every device and forgets remembered browsers.
+        ...(password || resetTwoFactor || (before.active && !active) ? { sessionVersion: { increment: 1 } } : {}),
       },
     });
     revalidatePath("/settings");

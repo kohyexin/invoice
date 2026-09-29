@@ -8,6 +8,7 @@ import { Field, Segmented, Select, fieldClass } from "@/components/ui/form-contr
 import { billToFromClient, type BillTo } from "@/lib/bill-to";
 import { CURRENCIES, addDays, cn, formatMoney, round2, toDateInput } from "@/lib/utils";
 import type { ComposerInput, ComposerLine } from "@/lib/composer";
+import { useI18n } from "@/components/i18n/locale-provider";
 import { createManualInvoice, nextNumber } from "./actions";
 
 type Company = { id: string; code: string; name: string; defaultLang: "EN" | "ZH" };
@@ -74,6 +75,7 @@ export function Composer({
   rates: Record<string, number>;
 }) {
   const router = useRouter();
+  const { t } = useI18n();
   const today = new Date();
   const keyRef = useRef(1);
 
@@ -222,7 +224,7 @@ export function Composer({
   useEffect(() => {
     if (!billTo.name || !number || !lines.some((l) => l.description.trim())) return;
     const ctrl = new AbortController();
-    const t = setTimeout(async () => {
+    const timer = setTimeout(async () => {
       setPreviewing(true);
       try {
         const res = await fetch("/api/invoices/preview", {
@@ -248,7 +250,7 @@ export function Composer({
       }
     }, 900);
     return () => {
-      clearTimeout(t);
+      clearTimeout(timer);
       ctrl.abort();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -269,7 +271,7 @@ export function Composer({
 
   const mainAccounts = accounts.filter((a) => !a.compact);
   const compactAccounts = accounts.filter((a) => a.compact);
-  const type = types.find((t) => t.id === typeId);
+  const type = types.find((ty) => ty.id === typeId);
   const card = "glass-panel neon-edge rounded-card p-5";
   const title = "mb-4 font-mono text-[11px] uppercase tracking-[0.16em] text-ink-soft";
 
@@ -277,7 +279,7 @@ export function Composer({
     <div className="grid gap-6 2xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
       <div className="space-y-5">
         <section className={card}>
-          <h2 className={title}>Issuer</h2>
+          <h2 className={title}>{t("Issuer")}</h2>
           <div className="flex flex-wrap items-center gap-3">
             <Segmented value={companyId} options={companies.map((c) => ({ value: c.id, label: c.code }))} onChange={pickCompany} />
             <Segmented
@@ -293,7 +295,7 @@ export function Composer({
         </section>
 
         <section className={card}>
-          <h2 className={title}>Bill to</h2>
+          <h2 className={title}>{t("Bill to")}</h2>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="sm:col-span-2">
               <Field label="Client *">
@@ -301,7 +303,7 @@ export function Composer({
                   list="composer-clients"
                   value={clientText}
                   onChange={(e) => pickClient(e.target.value)}
-                  placeholder="Type to search"
+                  placeholder={t("Type to search")}
                   className={cn(fieldClass, clientText && !clientId && "border-amber-400/60")}
                 />
                 <datalist id="composer-clients">
@@ -331,7 +333,7 @@ export function Composer({
         </section>
 
         <section className={card}>
-          <h2 className={title}>Invoice</h2>
+          <h2 className={title}>{t("Invoice")}</h2>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <Field label="Invoice no. *">
               <input value={number} onChange={(e) => { setNumber(e.target.value); setReuse(null); }} className={cn(fieldClass, "font-mono")} />
@@ -365,18 +367,18 @@ export function Composer({
 
         <section className={card}>
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="font-mono text-[11px] uppercase tracking-[0.16em] text-ink-soft">Lines</h2>
+            <h2 className="font-mono text-[11px] uppercase tracking-[0.16em] text-ink-soft">{t("Lines")}</h2>
             <Button size="sm" variant="secondary" onClick={() => setLines((p) => [...p, blankLine(keyRef.current++)])}>
               <Plus className="h-3.5 w-3.5" />
-              Add line
+              {t("Add line")}
             </Button>
           </div>
           <div className="space-y-3">
             {lines.map((l) => (
               <div key={l.key} className="rounded-card border border-line/70 p-3">
                 <div className="grid gap-2 sm:grid-cols-[180px_minmax(0,1fr)_36px]">
-                  <Select value={l.itemId} onChange={(e) => pickItem(l.key, e.target.value)} aria-label="Item">
-                    <option value="">Custom line</option>
+                  <Select value={l.itemId} onChange={(e) => pickItem(l.key, e.target.value)} aria-label={t("Item")}>
+                    <option value="">{t("Custom line")}</option>
                     {items.map((i) => (
                       <option key={i.id} value={i.id}>
                         {i.labelEn}
@@ -386,13 +388,13 @@ export function Composer({
                   <input
                     value={l.description}
                     onChange={(e) => setLine(l.key, { description: e.target.value })}
-                    placeholder="Description"
+                    placeholder={t("Description")}
                     className={cn(fieldClass, "font-medium")}
                   />
                   <button
                     onClick={() => setLines((p) => (p.length > 1 ? p.filter((x) => x.key !== l.key) : [blankLine(keyRef.current++)]))}
-                    aria-label="Remove line"
-                    className="flex h-10 items-center justify-center rounded-control text-ink-soft hover:bg-overlay/[0.06] hover:text-rose-300"
+                    aria-label={t("Remove line")}
+                    className="flex h-10 items-center justify-center rounded-control text-ink-soft hover:bg-overlay/[0.06] hover:text-rose-600 dark:hover:text-rose-300"
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>
@@ -401,21 +403,21 @@ export function Composer({
                   <input
                     value={l.detail}
                     onChange={(e) => setLine(l.key, { detail: e.target.value })}
-                    placeholder="Detail line (optional), e.g. month, channel, website"
+                    placeholder={t("Detail line (optional), e.g. month, channel, website")}
                     className={cn(fieldClass, "text-[13px]")}
                   />
                   <input
                     inputMode="decimal"
                     value={l.rate}
                     onChange={(e) => setLine(l.key, { rate: e.target.value })}
-                    placeholder="Rate"
+                    placeholder={t("Rate")}
                     className={cn(fieldClass, "tnum text-right")}
                   />
                   <input
                     inputMode="decimal"
                     value={l.quantity}
                     onChange={(e) => setLine(l.key, { quantity: e.target.value })}
-                    placeholder="Qty"
+                    placeholder={t("Qty")}
                     className={cn(fieldClass, "tnum text-right")}
                   />
                   <div className="tnum flex h-10 items-center justify-end px-1 text-sm text-ink">
@@ -425,23 +427,23 @@ export function Composer({
               </div>
             ))}
           </div>
-          <p className="mt-2 text-[12px] text-ink-soft">Use a negative rate for adjustments; it prints in parentheses.</p>
+          <p className="mt-2 text-[12px] text-ink-soft">{t("Use a negative rate for adjustments; it prints in parentheses.")}</p>
 
           <div className="mt-5 ml-auto grid max-w-sm gap-2 text-sm">
             <div className="flex justify-between text-ink-muted">
-              <span>Subtotal</span>
+              <span>{t("Subtotal")}</span>
               <span className="tnum text-ink">{formatMoney(subtotal)}</span>
             </div>
             <div className="flex items-center justify-between gap-3 text-ink-muted">
-              <span>Tax</span>
+              <span>{t("Tax")}</span>
               <input inputMode="decimal" value={taxAmount} onChange={(e) => setTaxAmount(e.target.value)} placeholder="0.00" className={cn(fieldClass, "tnum h-8 w-32 text-right")} />
             </div>
             <div className="flex items-center justify-between gap-3 text-ink-muted">
-              <span>Amount paid</span>
+              <span>{t("Amount paid")}</span>
               <input inputMode="decimal" value={amountPaid} onChange={(e) => setAmountPaid(e.target.value)} placeholder="0.00" className={cn(fieldClass, "tnum h-8 w-32 text-right")} />
             </div>
             <div className="flex justify-between border-t border-line pt-2 font-semibold text-ink">
-              <span>Amount due ({currency})</span>
+              <span>{t("Amount due ({0})", currency)}</span>
               <span className="tnum">{formatMoney(due)}</span>
             </div>
             <div className="flex items-center justify-between gap-3 text-ink-muted">
@@ -453,10 +455,10 @@ export function Composer({
                 }}
                 className="h-8 w-44 text-[13px]"
               >
-                <option value="">No second amount</option>
+                <option value="">{t("No second amount")}</option>
                 {CURRENCIES.filter((c) => c !== currency).map((c) => (
                   <option key={c} value={c}>
-                    Also due in {c}
+                    {t("Also due in {0}", c)}
                   </option>
                 ))}
               </Select>
@@ -474,16 +476,16 @@ export function Composer({
             </div>
             {altCurrency && altRate && (
               <p className="text-right text-[12px] text-ink-soft">
-                At {round2(altRate * 10000) / 10000} {altCurrency} per {currency}. Overwrite to use the agreed figure.
+                {t("At {0} {1} per {2}. Overwrite to use the agreed figure.", round2(altRate * 10000) / 10000, altCurrency, currency)}
               </p>
             )}
           </div>
         </section>
 
         <section className={card}>
-          <h2 className={title}>Payment details</h2>
+          <h2 className={title}>{t("Payment details")}</h2>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Pay to" hint={bankTouched ? "Chosen by hand" : `Default for ${companies.find((c) => c.id === companyId)?.code} in ${payable}. Change the rules in Settings.`}>
+            <Field label="Pay to" hint={bankTouched ? t("Chosen by hand") : t("Default for {0} in {1}. Change the rules in Settings.", companies.find((c) => c.id === companyId)?.code ?? "", payable)}>
               <Select
                 value={bankAccountId}
                 onChange={(e) => {
@@ -491,7 +493,7 @@ export function Composer({
                   setBankAccountId(e.target.value);
                 }}
               >
-                <option value="">No bank details</option>
+                <option value="">{t("No bank details")}</option>
                 {mainAccounts.map((a) => (
                   <option key={a.id} value={a.id}>
                     {a.label}
@@ -501,7 +503,7 @@ export function Composer({
             </Field>
             {compactAccounts.length > 0 && (
               <div>
-                <p className="mb-1.5 text-[13px] font-medium text-ink">Also show</p>
+                <p className="mb-1.5 text-[13px] font-medium text-ink">{t("Also show")}</p>
                 <div className="space-y-1.5">
                   {compactAccounts.map((a) => (
                     <label key={a.id} className="flex items-center gap-2 text-sm text-ink">
@@ -523,20 +525,20 @@ export function Composer({
         </section>
 
         <section className={card}>
-          <h2 className={title}>Ledger</h2>
+          <h2 className={title}>{t("Ledger")}</h2>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Type">
               <Select value={typeId} onChange={(e) => setTypeId(e.target.value)}>
                 <option value="">—</option>
-                {types.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
+                {types.map((ty) => (
+                  <option key={ty.id} value={ty.id}>
+                    {ty.name}
                   </option>
                 ))}
               </Select>
             </Field>
             <Field label="Subtype">
-              <input value={subtype} onChange={(e) => setSubtype(e.target.value)} placeholder={type?.subtypeHint || "Explains the type"} className={fieldClass} />
+              <input value={subtype} onChange={(e) => setSubtype(e.target.value)} placeholder={type?.subtypeHint || t("Explains the type")} className={fieldClass} />
             </Field>
             <Field label="Owner">
               <Select value={ownerId} onChange={(e) => setOwnerId(e.target.value)}>
@@ -567,29 +569,29 @@ export function Composer({
           </div>
         </section>
 
-        {error && <p className="rounded-control border border-danger/30 bg-danger/10 px-3 py-2 text-[13px] text-rose-200">{error}</p>}
-        {reuse && <p className="rounded-control border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-[13px] text-amber-200">{reuse}</p>}
+        {error && <p className="rounded-control border border-danger/30 bg-danger/10 px-3 py-2 text-[13px] text-rose-700 dark:text-rose-200">{t(error)}</p>}
+        {reuse && <p className="rounded-control border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-[13px] text-amber-700 dark:text-amber-200">{t(reuse)}</p>}
         <div className="flex items-center gap-2 pb-4">
           <Button size="lg" onClick={save} loading={pending}>
             <FileDown className="h-4 w-4" />
-            {reuse ? "Issue anyway" : "Save and download PDF"}
+            {t(reuse ? "Issue anyway" : "Save and download PDF")}
           </Button>
-          <span className="text-[13px] text-ink-soft">Adds the invoice to the ledger as Manual, status Sent.</span>
+          <span className="text-[13px] text-ink-soft">{t("Adds the invoice to the ledger as Manual, status Sent.")}</span>
         </div>
       </div>
 
       <div className="2xl:sticky 2xl:top-6 2xl:self-start">
         <div className={cn(card, "p-3")}>
           <div className="mb-2 flex items-center justify-between px-2">
-            <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-ink-soft">Preview</span>
+            <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-ink-soft">{t("Preview")}</span>
             {previewing && <Loader2 className="h-4 w-4 animate-spin text-ink-soft" />}
           </div>
-          {previewError && <p className="mx-2 mb-2 text-[13px] text-amber-200">{previewError}</p>}
+          {previewError && <p className="mx-2 mb-2 text-[13px] text-amber-700 dark:text-amber-200">{t(previewError)}</p>}
           {previewUrl ? (
-            <iframe src={`${previewUrl}#toolbar=0&view=FitH`} title="Invoice preview" className="h-[80vh] w-full rounded-control bg-white" />
+            <iframe src={`${previewUrl}#toolbar=0&view=FitH`} title={t("Invoice preview")} className="h-[80vh] w-full rounded-control bg-white" />
           ) : (
             <div className="flex h-[50vh] items-center justify-center rounded-control border border-dashed border-overlay/15 text-center text-[13px] text-ink-soft">
-              Pick a client and add a line to see the PDF.
+              {t("Pick a client and add a line to see the PDF.")}
             </div>
           )}
         </div>

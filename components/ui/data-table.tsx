@@ -15,7 +15,7 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { t, useI18n } from "@/lib/i18n";
+import { useI18n } from "@/components/i18n/locale-provider";
 
 /* ------------------------------------------------------------------ */
 /*  Gatehub table standard — open, Stripe-like layout:                 */
@@ -137,6 +137,7 @@ function FilterChip<T>({
   value: string | null;
   onChange: (next: string | null) => void;
 }) {
+  const { t } = useI18n();
   const { open, setOpen, ref } = usePopover();
 
   return (
@@ -208,6 +209,7 @@ function MoreFilters<T>({
   filters: FilterDef<T>[];
   onPick: (filterId: string, value: string) => void;
 }) {
+  const { t } = useI18n();
   const { open, setOpen, ref } = usePopover();
 
   return (
@@ -259,6 +261,7 @@ function EditColumns<T>({
   hiddenKeys: Set<string>;
   onToggle: (key: string) => void;
 }) {
+  const { t } = useI18n();
   const { open, setOpen, ref } = usePopover();
 
   const fixed = columns.filter((c) => c.fixed && !c.exportOnly);
@@ -388,7 +391,7 @@ export function DataTable<T>({
     onPageSizeChange: (size: number) => void;
   };
 }) {
-  const { locale } = useI18n();
+  const { locale, t } = useI18n();
   const [mounted, setMounted] = useState(false);
   const [filterValues, setFilterValues] = useState<Record<string, string | null>>({});
   const [sort, setSort] = useState<SortState>(null);

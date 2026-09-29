@@ -4,6 +4,7 @@ import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useCan } from "@/components/shell/user-context";
 import { Button } from "@/components/ui/button";
+import { useI18n } from "@/components/i18n/locale-provider";
 import type { InvoiceStatus } from "@/lib/generated/prisma/enums";
 import { setStatus, type EntryInput } from "../actions";
 import { EntryForm, type Lookups } from "../entry-form";
@@ -29,11 +30,12 @@ export function InvoiceDetail({
   const router = useRouter();
   const canEdit = useCan("STAFF");
   const [pending, start] = useTransition();
+  const { t } = useI18n();
 
   return (
     <section className="glass-panel neon-edge rounded-card p-5">
       <div className="mb-5 flex flex-wrap items-center gap-2">
-        <h2 className="mr-auto font-mono text-[11px] uppercase tracking-[0.16em] text-ink-soft">Ledger entry</h2>
+        <h2 className="mr-auto font-mono text-[11px] uppercase tracking-[0.16em] text-ink-soft">{t("Ledger entry")}</h2>
         {canEdit &&
           QUICK.filter((q) => q.status !== status).map((q) => (
             <Button
@@ -48,7 +50,7 @@ export function InvoiceDetail({
                 })
               }
             >
-              {q.label}
+              {t(q.label)}
             </Button>
           ))}
       </div>

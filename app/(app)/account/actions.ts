@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { SESSION_COOKIE, createSessionToken, sessionCookieOptions } from "@/lib/auth";
+import { checkTotp, newTotpSetup } from "@/lib/mfa";
 import { hashPassword, passwordProblem, verifyPassword } from "@/lib/passwords";
 import { authorize } from "@/lib/session";
 
@@ -35,6 +36,44 @@ export async function changeMyPassword(current: string, next: string): Promise<R
     data: { passwordHash: await hashPassword(next), sessionVersion: { increment: 1 } },
     select: { sessionVersion: true },
   });
-  cookies().set(SESSION_COOKIE, await createSessionToken(auth.user.id, updated.sessionVersion), sessionCookieOptions);
+  cookies().set(SESSION_COOKIE, await createSessionToken(auth.user.id, updated.sessionVersion), sessionCookieOptions());
+  return { ok: true };
+}
+
+/** Starts moving two-factor to a new authenticator. The current one keeps
+ *  working until the new one is confirmed. */
+export async function startAuthenticatorChange(
+  password: string
+): Promise<{ ok: true; secret: string; qr: string } | { ok: false; error: string }> {
+  const auth = await authorize("VIEWER");
+  if (!auth.ok) return auth;
+  const user = await prisma.user.findUniqueOrThrow({ where: { id: auth.user.id }, select: { passwordHash: true, email: true } });
+  if (!(await verifyPassword(password, user.passwordHash))) return { ok: false, error: "Current password is incorrect." };
+  const setup = await newTotpSetup(user.email);
+  await prisma.user.update({ where: { id: auth.user.id }, data: { totpPendingSecret: setup.secret } });
+  return { ok: true, ...setup };
+}
+
+/** Confirms the new authenticator with a live code. Browsers remembered for
+ *  48 hours are forgotten and other devices are signed out. */
+export async function confirmAuthenticatorChange(code: string): Promise<Result> {
+  const auth = await authorize("VIEWER");
+  if (!auth.ok) return auth;
+  const user = await prisma.user.findUniqueOrThrow({ where: { id: auth.user.id }, select: { totpPendingSecret: true } });
+  if (!user.totpPendingSecret) return { ok: false, error: "Start the setup again." };
+  if (!(await checkTotp(user.totpPendingSecret, code.trim()))) return { ok: false, error: "Invalid code. Please try again." };
+
+  const updated = await prisma.user.update({
+    where: { id: auth.user.id },
+    data: {
+      totpSecret: user.totpPendingSecret,
+      totpPendingSecret: null,
+      totpEnabledAt: new Date(),
+      sessionVersion: { increment: 1 },
+    },
+    select: { sessionVersion: true },
+  });
+  cookies().set(SESSION_COOKIE, await createSessionToken(auth.user.id, updated.sessionVersion), sessionCookieOptions());
+  revalidatePath("/account");
   return { ok: true };
 }

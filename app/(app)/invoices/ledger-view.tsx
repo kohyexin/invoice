@@ -9,6 +9,7 @@ import { GenerateBadge, StatusBadge } from "@/components/ui/badge";
 import { DataTable, type Column, type FilterDef } from "@/components/ui/data-table";
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { useCan } from "@/components/shell/user-context";
+import { useI18n } from "@/components/i18n/locale-provider";
 import { SidePanel } from "@/components/ui/side-panel";
 import { fieldClass } from "@/components/ui/form-controls";
 import { addDays, cn, formatDate, formatMoney, toDateInput } from "@/lib/utils";
@@ -43,6 +44,7 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 export function LedgerView({ rows, lookups }: { rows: LedgerRow[]; lookups: Lookups }) {
   const router = useRouter();
   const canEdit = useCan("STAFF");
+  const { t } = useI18n();
   const [query, setQuery] = useState("");
   const [adding, setAdding] = useState(false);
   const [paying, setPaying] = useState<LedgerRow | null>(null);
@@ -77,7 +79,7 @@ export function LedgerView({ rows, lookups }: { rows: LedgerRow[]; lookups: Look
       width: "170px",
       accessor: (r) => r.number,
       render: (r) => (
-        <Link href={`/invoices/${r.id}`} className="font-mono text-[13px] text-brand-200 hover:text-brand-100">
+        <Link href={`/invoices/${r.id}`} className="font-mono text-[13px] text-brand-700 dark:text-brand-200 hover:text-brand-900 dark:hover:text-brand-100">
           {r.number}
         </Link>
       ),
@@ -89,7 +91,7 @@ export function LedgerView({ rows, lookups }: { rows: LedgerRow[]; lookups: Look
       width: "300px",
       accessor: (r) => r.client,
       render: (r) => (
-        <Link href={`/clients/${r.clientId}`} className="block truncate text-ink hover:text-brand-200" title={r.client}>
+        <Link href={`/clients/${r.clientId}`} className="block truncate text-ink hover:text-brand-700 dark:hover:text-brand-200" title={r.client}>
           {r.alias || r.client}
         </Link>
       ),
@@ -139,10 +141,10 @@ export function LedgerView({ rows, lookups }: { rows: LedgerRow[]; lookups: Look
   return (
     <>
       <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <KpiCard icon={Hourglass} tone="warning" label="Unpaid (USD)" value={formatMoney(stats.unpaidUsd, 0)} footer={<Hint>{stats.unpaidCount} invoices sent, not paid</Hint>} />
-        <KpiCard icon={AlertTriangle} tone="danger" label="Overdue" value={String(stats.overdue)} footer={<Hint>Unpaid past the due date (invoice date + 7 days when none is set)</Hint>} />
-        <KpiCard icon={Receipt} label={`Billed ${stats.year} (USD)`} value={formatMoney(stats.billedYtd, 0)} footer={<Hint>Excluding waived</Hint>} />
-        <KpiCard icon={Wallet} tone="success" label={`Received ${stats.year} (USD)`} value={formatMoney(stats.paidYtd, 0)} footer={<Hint>Net of fees</Hint>} />
+        <KpiCard icon={Hourglass} tone="warning" label="Unpaid (USD)" value={formatMoney(stats.unpaidUsd, 0)} footer={<Hint>{t("{0} invoices sent, not paid", stats.unpaidCount)}</Hint>} />
+        <KpiCard icon={AlertTriangle} tone="danger" label="Overdue" value={String(stats.overdue)} footer={<Hint>{t("Unpaid past the due date (invoice date + 7 days when none is set)")}</Hint>} />
+        <KpiCard icon={Receipt} label={t("Billed {0} (USD)", stats.year)} value={formatMoney(stats.billedYtd, 0)} footer={<Hint>{t("Excluding waived")}</Hint>} />
+        <KpiCard icon={Wallet} tone="success" label={t("Received {0} (USD)", stats.year)} value={formatMoney(stats.paidYtd, 0)} footer={<Hint>{t("Net of fees")}</Hint>} />
       </div>
 
       <div className="mb-4 flex flex-wrap items-center gap-2.5">
@@ -151,7 +153,7 @@ export function LedgerView({ rows, lookups }: { rows: LedgerRow[]; lookups: Look
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search number, client, alias, subtype"
+            placeholder={t("Search number, client, alias, subtype")}
             className={cn(fieldClass, "pl-9")}
           />
         </div>
@@ -159,7 +161,7 @@ export function LedgerView({ rows, lookups }: { rows: LedgerRow[]; lookups: Look
           <div className="ml-auto flex gap-2">
             <Button variant="secondary" onClick={() => setAdding(true)}>
               <Plus className="h-4 w-4" />
-              Record invoice
+              {t("Record invoice")}
             </Button>
           </div>
         )}
@@ -176,7 +178,7 @@ export function LedgerView({ rows, lookups }: { rows: LedgerRow[]; lookups: Look
         rowActions={(r) =>
           canEdit && r.status === "SENT" ? (
             <Button size="sm" variant="secondary" onClick={() => setPaying(r)}>
-              Mark paid
+              {t("Mark paid")}
             </Button>
           ) : null
         }
@@ -184,7 +186,7 @@ export function LedgerView({ rows, lookups }: { rows: LedgerRow[]; lookups: Look
 
       <SidePanel open={adding} onClose={() => setAdding(false)} title="Record invoice">
         <p className="mb-4 text-[13px] text-ink-muted">
-          Adds a ledger row without producing a PDF. Use New invoice to compose and download one.
+          {t("Adds a ledger row without producing a PDF. Use New invoice to compose and download one.")}
         </p>
         {adding && (
           <EntryForm
@@ -214,6 +216,7 @@ function MarkPaidPanel({ row, onClose }: { row: LedgerRow | null; onClose: () =>
   const [v, setV] = useState<PaymentInput | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  const { t } = useI18n();
   const [forId, setForId] = useState<string | null>(null);
 
   if (row && forId !== row.id) {
@@ -250,10 +253,10 @@ function MarkPaidPanel({ row, onClose }: { row: LedgerRow | null; onClose: () =>
       footer={
         <>
           <Button variant="secondary" size="sm" onClick={onClose}>
-            Cancel
+            {t("Cancel")}
           </Button>
           <Button size="sm" onClick={save} loading={pending}>
-            Mark paid
+            {t("Mark paid")}
           </Button>
         </>
       }
@@ -261,14 +264,14 @@ function MarkPaidPanel({ row, onClose }: { row: LedgerRow | null; onClose: () =>
       {row && v && (
         <>
           <div className="mb-5 rounded-card border border-line/70 p-4">
-            <p className="font-mono text-[13px] text-brand-200">{row.number}</p>
+            <p className="font-mono text-[13px] text-brand-700 dark:text-brand-200">{row.number}</p>
             <p className="mt-0.5 text-sm text-ink">{row.client}</p>
             <p className="tnum mt-2 text-lg font-semibold text-ink">
               {row.currency} {formatMoney(row.amount)}
               {row.currency !== "USD" && <span className="ml-2 text-sm font-normal text-ink-soft">≈ USD {formatMoney(row.usdAmount)}</span>}
             </p>
           </div>
-          {error && <p className="mb-4 rounded-control border border-danger/30 bg-danger/10 px-3 py-2 text-[13px] text-rose-200">{error}</p>}
+          {error && <p className="mb-4 rounded-control border border-danger/30 bg-danger/10 px-3 py-2 text-[13px] text-rose-700 dark:text-rose-200">{t(error)}</p>}
           <PaymentFields
             value={v}
             onChange={(key, value) => setV((prev) => (prev ? { ...prev, [key]: value } : prev))}

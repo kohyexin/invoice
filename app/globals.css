@@ -2,12 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Design tokens mirror Gatehub (github.com/kohyexin/gatehub, app/globals.css).
-   The app always renders dark + the Midnight skin; the light token set is
-   kept so printed invoice previews can opt into a `.light` scope. */
-
 @layer base {
   :root {
+    /* Brand accent scale (RGB triplets) — voltage indigo. Theme-independent;
+       overridden to amber under .env-sandbox so every brand-colored element flips. */
     --brand-default: 79 70 229;
     --brand-50: 238 240 255;
     --brand-100: 224 227 255;
@@ -20,6 +18,40 @@
     --brand-800: 55 47 168;
     --brand-900: 39 34 97;
 
+    /* Light theme — futuristic crypto: iridescent cool canvas, frosted glass,
+       violet/cyan glow accents (light-mode mirror of the dark neon theme) */
+    --canvas: 234 236 243; /* #EAECF3 near-neutral light gray, faint cool cast */
+    --surface: 245 246 251; /* #F5F6FB clean neutral glass — only a whisper of color blooms through */
+    --elevated: 248 249 252; /* #F8F9FC */
+    --overlay: 30 27 75; /* indigo-tinted dark tint over light surfaces */
+    --ink: 17 18 38; /* #111226 deep indigo-ink */
+    --ink-muted: 72 75 105; /* #484B69 cool gray */
+    --ink-soft: 110 114 146; /* #6E7292 */
+    --line: 210 215 236; /* #D2D7EC cool hairline */
+    --scroll-thumb: 196 201 222;
+    --scroll-thumb-hover: 156 162 188;
+    /* Light = SAME LOGIC AS DARK: thin, cool-tinted translucent glass so the
+       luminous colored field + grid bloom THROUGH the card. High saturate makes
+       whatever color sits behind the glass glow, instead of a flat white panel. */
+    --glass-alpha: 0.46;
+    --chrome-alpha: 0.4;
+    --glass-blur: 24px;
+    --glass-saturate: 1.5;
+    --glass-border: var(--overlay) / 0.06;
+    /* Crisp white rim-light on top + a colored violet→cyan halo so cards FLOAT
+       and glow over the scene (the light-mode mirror of the dark neon halo). */
+    --glass-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.85),
+      0 1px 2px 0 rgba(30, 27, 75, 0.05),
+      0 14px 36px -16px rgba(30, 27, 75, 0.12),
+      0 24px 50px -32px rgb(var(--brand-500) / 0.14),
+      0 0 44px -28px rgb(var(--brand-500) / 0.14);
+    color-scheme: light;
+  }
+
+  /* Forced-light scope (e.g. Layout Builder preview inside a dark app).
+     Re-declares the :root light tokens so a `.light` subtree always renders
+     light even when `html.dark` is set. */
+  .light {
     --canvas: 234 236 243;
     --surface: 245 246 251;
     --elevated: 248 249 252;
@@ -44,14 +76,15 @@
   }
 
   .dark {
-    --canvas: 6 9 17;
-    --surface: 13 19 33;
-    --elevated: 20 29 48;
-    --overlay: 255 255 255;
-    --ink: 235 239 248;
-    --ink-muted: 148 163 188;
-    --ink-soft: 100 116 139;
-    --line: 28 38 60;
+    /* Dark theme — futuristic neon crypto-exchange ink */
+    --canvas: 6 9 17; /* #060911 near-black with blue tint */
+    --surface: 13 19 33; /* #0D1321 */
+    --elevated: 20 29 48; /* #141D30 */
+    --overlay: 255 255 255; /* white tint over dark surfaces */
+    --ink: 235 239 248; /* #EBEFF8 */
+    --ink-muted: 148 163 188; /* #94A3BC */
+    --ink-soft: 100 116 139; /* #64748B */
+    --line: 28 38 60; /* #1C263C */
     --scroll-thumb: 43 54 80;
     --scroll-thumb-hover: 58 71 96;
     --glass-alpha: 0.66;
@@ -59,6 +92,7 @@
     --glass-blur: 20px;
     --glass-saturate: 1.4;
     --glass-border: var(--overlay) / 0.08;
+    /* Neon-edged depth: inner top highlight + deep drop + faint brand halo */
     --glass-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.07),
       0 18px 48px -14px rgba(0, 0, 0, 0.7),
       0 0 0 1px rgb(var(--brand-500) / 0.05),
@@ -66,19 +100,124 @@
     color-scheme: dark;
   }
 
-  /* Midnight — sapphire private-banking blue anchored at #1E40AF. */
+  /* ---- Brand skins (published login theme → app accent color) ----
+     Aurora is the default violet/indigo token set, so it needs no class.
+     Midnight re-tints the accent to electric blue; Minimal to neutral slate.
+     Atmosphere (beams vs stars vs flat) stays component-driven — these only
+     swap the accent scale. Declared BEFORE .env-sandbox so sandbox amber
+     still wins by source order. */
   .theme-skin-midnight {
+    /* Sapphire — dark, quiet private-banking blue anchored at #1E40AF.
+       Understated authority rather than neon pop. */
     --brand-default: 30 64 175;
     --brand-50: 236 242 255;
     --brand-100: 217 228 252;
     --brand-200: 180 198 248;
     --brand-300: 134 160 235;
     --brand-400: 84 112 214;
-    --brand-500: 30 64 175;
+    --brand-500: 30 64 175; /* #1E40AF sapphire */
     --brand-600: 26 53 145;
     --brand-700: 22 44 119;
     --brand-800: 18 36 96;
     --brand-900: 14 27 70;
+  }
+  .theme-skin-minimal {
+    --brand-default: 71 85 105; /* slate-600 */
+    --brand-50: 248 250 252;
+    --brand-100: 241 245 249;
+    --brand-200: 226 232 240;
+    --brand-300: 203 213 225;
+    --brand-400: 148 163 184;
+    --brand-500: 100 116 139; /* slate-500 */
+    --brand-600: 71 85 105;
+    --brand-700: 51 65 85;
+    --brand-800: 30 41 59;
+    --brand-900: 15 23 42;
+  }
+
+  /* Sandbox/test environment: re-skin the entire brand accent to amber so every
+     button, link, active nav item, focus ring, badge, etc. reads as "test". */
+  .env-sandbox {
+    --brand-default: 217 119 6; /* amber-600 */
+    --brand-50: 255 251 235;
+    --brand-100: 254 243 199;
+    --brand-200: 253 230 138;
+    --brand-300: 252 211 77;
+    --brand-400: 251 191 36;
+    --brand-500: 245 158 11; /* amber-500 */
+    --brand-600: 217 119 6; /* amber-600 */
+    --brand-700: 180 83 9; /* amber-700 */
+    --brand-800: 146 64 14;
+    --brand-900: 120 53 15;
+  }
+
+  /* Color themes (Layout Builder) — retune glass density + contrast app-wide.
+     "Balanced" is the default token set, so it needs no class. */
+  .theme-high-contrast {
+    --glass-alpha: 0.92;
+    --chrome-alpha: 0.88;
+    --glass-blur: 8px;
+    --glass-saturate: 1.1;
+    --line: 170 178 210;
+    --ink-muted: 51 54 82;
+  }
+  .dark .theme-high-contrast {
+    --glass-alpha: 0.85;
+    --chrome-alpha: 0.8;
+    --line: 58 72 104;
+    --ink-muted: 176 190 214;
+  }
+
+  .theme-soft-focus {
+    --glass-alpha: 0.32;
+    --chrome-alpha: 0.26;
+    --glass-blur: 34px;
+    --glass-saturate: 1.75;
+    --line: 222 226 242;
+    --ink-muted: 122 126 152;
+  }
+  .dark .theme-soft-focus {
+    --glass-alpha: 0.5;
+    --chrome-alpha: 0.4;
+    --line: 22 30 50;
+    --ink-muted: 128 144 170;
+  }
+
+  /* Forced-light theme tuning must out-rank the `.dark .theme-*` rules above
+     (same specificity, later source order wins). */
+  .light .theme-high-contrast {
+    --glass-alpha: 0.92;
+    --chrome-alpha: 0.88;
+    --glass-blur: 8px;
+    --glass-saturate: 1.1;
+    --line: 170 178 210;
+    --ink-muted: 51 54 82;
+  }
+  .light .theme-soft-focus {
+    --glass-alpha: 0.32;
+    --chrome-alpha: 0.26;
+    --glass-blur: 34px;
+    --glass-saturate: 1.75;
+    --line: 222 226 242;
+    --ink-muted: 122 126 152;
+  }
+
+  /* ---- Font themes (Layout Builder → Font Style) ----
+     Each class declares font-family on the scope (so every descendant
+     inherits the new typeface) AND re-points --font-geist-sans (so any
+     nested `font-sans` utility resolves to the same face). Mono (numbers,
+     IDs) and the brand wordmark intentionally keep their own fonts. */
+  .font-theme-atlas {
+    --font-geist-sans: var(--font-inter);
+    font-family: var(--font-inter), system-ui, sans-serif;
+  }
+  .font-theme-solar {
+    --font-geist-sans: var(--font-poppins);
+    font-family: var(--font-poppins), system-ui, sans-serif;
+  }
+  .font-theme-apex {
+    --font-geist-sans: var(--font-manrope);
+    font-family: var(--font-manrope), system-ui, sans-serif;
   }
 
   * {
@@ -95,8 +234,9 @@
     font-feature-settings: "cv11", "ss01";
   }
 
-  /* Native <select> popups are OS-painted; give options explicit colors so
-     Windows dark mode stays readable. */
+  /* Native <select> popups are painted by the OS/browser, not the page, so
+     on Windows a dark-mode page can get a white popup whose options inherit
+     near-white ink — unreadable. Give every option explicit colors. */
   select option {
     background-color: rgb(var(--surface));
     color: rgb(var(--ink));
@@ -106,6 +246,7 @@
     background: rgb(var(--brand-500) / 0.22);
   }
 
+  /* Custom scrollbar for a refined fintech feel */
   ::-webkit-scrollbar {
     width: 10px;
     height: 10px;
@@ -130,11 +271,305 @@
     @apply outline-none ring-2 ring-brand/40 ring-offset-2 ring-offset-surface;
   }
 
+  /* Skeleton shimmer */
+  .skeleton {
+    @apply relative overflow-hidden bg-white/5;
+  }
+  .skeleton::after {
+    content: "";
+    @apply absolute inset-0 -translate-x-full;
+    background-image: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0) 0,
+      rgba(255, 255, 255, 0.6) 50%,
+      rgba(255, 255, 255, 0) 100%
+    );
+    animation: shimmer 1.6s infinite;
+  }
+
+  .grid-fade {
+    background-image: radial-gradient(circle at 1px 1px, rgba(148, 163, 184, 0.25) 1px, transparent 0);
+    background-size: 22px 22px;
+  }
+
+  /* Subtle ambient depth for the dark app canvas */
+  .app-ambient {
+    background:
+      radial-gradient(1200px 600px at 12% -8%, rgb(var(--brand-600) / 0.1), transparent 60%),
+      radial-gradient(1000px 500px at 100% 0%, rgb(var(--brand-400) / 0.07), transparent 55%);
+  }
+
+  /* Tabular figures for precise financial alignment (Stripe-style) */
   .tnum {
     font-variant-numeric: tabular-nums;
     font-feature-settings: "tnum";
   }
 
+  /* Premium multi-stop mesh gradient for auth/marketing surfaces */
+  .mesh-indigo {
+    background-color: #1e1b4b;
+    background-image:
+      radial-gradient(at 18% 22%, rgba(99, 91, 255, 0.55) 0px, transparent 50%),
+      radial-gradient(at 82% 14%, rgba(167, 139, 250, 0.38) 0px, transparent 45%),
+      radial-gradient(at 75% 82%, rgba(129, 90, 255, 0.45) 0px, transparent 50%),
+      radial-gradient(at 28% 88%, rgba(124, 58, 237, 0.4) 0px, transparent 50%);
+  }
+
+  /* Midnight login theme — a night-sky scene (stars + glowing horizon arc),
+     deliberately different from Aurora's grid-and-beams. Fully theme-aware:
+     pale dawn sky in light mode, near-black ink sky in dark mode. */
+  .midnight-sky {
+    /* Day sky: the same constellation as night, drawn in brand ink. The soft
+       halo makes 1px specks read against the pale canvas. */
+    --mn-star: var(--brand-600);
+    --mn-star-glow: drop-shadow(0 0 1px rgb(var(--brand-600) / 0.9))
+      drop-shadow(0 0 4px rgb(var(--brand-500) / 0.5));
+    background-color: #dfe3ef;
+    background-image:
+      radial-gradient(ellipse 90% 55% at 50% 115%, rgb(var(--brand-500) / 0.17), transparent 65%),
+      radial-gradient(ellipse 70% 45% at 82% -10%, rgb(var(--brand-400) / 0.09), transparent 60%),
+      linear-gradient(to bottom, #eaedf6, #d9deee);
+  }
+  .dark .midnight-sky {
+    --mn-star: 226 232 255; /* pale starlight */
+    --mn-star-glow: none;
+    background-color: #090918;
+    background-image:
+      radial-gradient(ellipse 90% 55% at 50% 115%, rgb(var(--brand-500) / 0.18), transparent 65%),
+      radial-gradient(ellipse 60% 40% at 82% -10%, rgb(var(--brand-400) / 0.06), transparent 60%),
+      linear-gradient(to bottom, #090918, #090918);
+  }
+  /* Forced-light scope (Layout Builder preview) must out-rank `.dark .midnight-sky`. */
+  .light .midnight-sky {
+    --mn-star: var(--brand-600);
+    --mn-star-glow: drop-shadow(0 0 1px rgb(var(--brand-600) / 0.9))
+      drop-shadow(0 0 4px rgb(var(--brand-500) / 0.5));
+    background-color: #dfe3ef;
+    background-image:
+      radial-gradient(ellipse 90% 55% at 50% 115%, rgb(var(--brand-500) / 0.17), transparent 65%),
+      radial-gradient(ellipse 70% 45% at 82% -10%, rgb(var(--brand-400) / 0.09), transparent 60%),
+      linear-gradient(to bottom, #eaedf6, #d9deee);
+  }
+
+  /* Scattered constellation dots — color driven by --mn-star so the same
+     field reads as ink specks by day and starlight by night. Two layers
+     twinkle at offset phases so the sky feels gently alive. */
+  .midnight-stars {
+    background-image:
+      radial-gradient(1.5px 1.5px at 8% 18%, rgb(var(--mn-star) / 0.55) 50%, transparent 100%),
+      radial-gradient(1px 1px at 22% 30%, rgb(var(--mn-star) / 0.4) 50%, transparent 100%),
+      radial-gradient(1px 1px at 34% 70%, rgb(var(--mn-star) / 0.3) 50%, transparent 100%),
+      radial-gradient(1.5px 1.5px at 41% 26%, rgb(var(--mn-star) / 0.5) 50%, transparent 100%),
+      radial-gradient(1px 1px at 52% 48%, rgb(var(--mn-star) / 0.3) 50%, transparent 100%),
+      radial-gradient(2px 2px at 63% 20%, rgb(var(--mn-star) / 0.55) 50%, transparent 100%),
+      radial-gradient(1.5px 1.5px at 74% 35%, rgb(var(--mn-star) / 0.5) 50%, transparent 100%),
+      radial-gradient(1.5px 1.5px at 85% 50%, rgb(var(--mn-star) / 0.45) 50%, transparent 100%),
+      radial-gradient(1px 1px at 94% 68%, rgb(var(--mn-star) / 0.3) 50%, transparent 100%),
+      radial-gradient(1px 1px at 38% 88%, rgb(var(--mn-star) / 0.25) 50%, transparent 100%);
+    filter: var(--mn-star-glow);
+    animation: star-twinkle 5.5s ease-in-out infinite;
+  }
+  .midnight-stars-2 {
+    background-image:
+      radial-gradient(1px 1px at 16% 56%, rgb(var(--mn-star) / 0.35) 50%, transparent 100%),
+      radial-gradient(2px 2px at 29% 12%, rgb(var(--mn-star) / 0.6) 50%, transparent 100%),
+      radial-gradient(1px 1px at 47% 8%, rgb(var(--mn-star) / 0.4) 50%, transparent 100%),
+      radial-gradient(1.5px 1.5px at 58% 78%, rgb(var(--mn-star) / 0.35) 50%, transparent 100%),
+      radial-gradient(1px 1px at 70% 60%, rgb(var(--mn-star) / 0.35) 50%, transparent 100%),
+      radial-gradient(1px 1px at 79% 10%, rgb(var(--mn-star) / 0.4) 50%, transparent 100%),
+      radial-gradient(2px 2px at 90% 25%, rgb(var(--mn-star) / 0.6) 50%, transparent 100%),
+      radial-gradient(1px 1px at 12% 78%, rgb(var(--mn-star) / 0.25) 50%, transparent 100%);
+    filter: var(--mn-star-glow);
+    animation: star-twinkle 7s ease-in-out 1.6s infinite;
+  }
+
+  /* The constellation is visible in BOTH modes: pale starlight by night,
+     brand-ink specks by day — same dots, same twinkle. */
+
+  /* Shooting star: a glowing head with a fading tail that streaks diagonally
+     for ~1s, then rests for the remainder of its cycle so the sky stays calm.
+     Inherits --mn-star, so it's pale starlight at night and brand ink by day.
+     Position + cadence come from inline style (--meteor-duration/-delay). */
+  .midnight-meteor {
+    position: absolute;
+    height: 3px;
+    width: 3px;
+    border-radius: 9999px;
+    background: rgb(var(--mn-star) / 1);
+    box-shadow: 0 0 8px 2px rgb(var(--mn-star) / 0.55);
+    rotate: 215deg;
+    opacity: 0;
+    animation: meteor-streak var(--meteor-duration, 11s) linear
+      var(--meteor-delay, 0s) infinite;
+  }
+  .midnight-meteor::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 2px;
+    height: 1.5px;
+    width: 140px;
+    transform: translateY(-50%);
+    background: linear-gradient(to right, rgb(var(--mn-star) / 0.8), transparent);
+  }
+  /* Workspace meteors sit outside .app-midnight-stars, so they carry their
+     own day/night ink (must match the .app-midnight-stars mapping). */
+  .app-midnight-meteor {
+    --mn-star: var(--brand-700);
+  }
+  .dark .app-midnight-meteor {
+    --mn-star: 226 232 255;
+  }
+
+  /* Workspace-grade Midnight field — shown behind the app shell when the
+     entity published the Midnight login theme. Deliberately quieter than the
+     auth scene: sparse, slow-twinkling dots in both modes.
+     No horizon arc — data stays the hero. */
+  .app-midnight-stars {
+    --mn-star: var(--brand-700);
+    filter: drop-shadow(0 0 1px rgb(var(--brand-600) / 0.7))
+      drop-shadow(0 0 3px rgb(var(--brand-500) / 0.35));
+    animation: star-twinkle 9s ease-in-out infinite;
+    background-image:
+      radial-gradient(1.5px 1.5px at 12% 20%, rgb(var(--mn-star) / 0.3) 50%, transparent 100%),
+      radial-gradient(1px 1px at 30% 55%, rgb(var(--mn-star) / 0.2) 50%, transparent 100%),
+      radial-gradient(1.5px 1.5px at 48% 12%, rgb(var(--mn-star) / 0.28) 50%, transparent 100%),
+      radial-gradient(1px 1px at 64% 40%, rgb(var(--mn-star) / 0.18) 50%, transparent 100%),
+      radial-gradient(1.5px 1.5px at 78% 18%, rgb(var(--mn-star) / 0.28) 50%, transparent 100%),
+      radial-gradient(1px 1px at 90% 62%, rgb(var(--mn-star) / 0.2) 50%, transparent 100%),
+      radial-gradient(1px 1px at 22% 80%, rgb(var(--mn-star) / 0.16) 50%, transparent 100%),
+      radial-gradient(1.5px 1.5px at 70% 85%, rgb(var(--mn-star) / 0.18) 50%, transparent 100%);
+  }
+  .dark .app-midnight-stars {
+    --mn-star: 226 232 255;
+    filter: none;
+  }
+
+  /* Crypto-exchange style dark auth surface */
+  .auth-grid {
+    background-image:
+      linear-gradient(to right, rgba(148, 163, 184, 0.06) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(148, 163, 184, 0.06) 1px, transparent 1px);
+    background-size: 44px 44px;
+    mask-image: radial-gradient(ellipse 80% 60% at 50% 40%, #000 40%, transparent 100%);
+    -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 40%, #000 40%, transparent 100%);
+  }
+
+  /* ---- Auth/hero animated grid: lines + glowing dots + travelling beams ---- */
+  /* The whole field is masked to a soft vignette so motion fades at the edges. */
+  .auth-beam-field {
+    --beam-cell: 128px;
+    mask-image: radial-gradient(ellipse 85% 75% at 50% 42%, #000 45%, transparent 100%);
+    -webkit-mask-image: radial-gradient(ellipse 85% 75% at 50% 42%, #000 45%, transparent 100%);
+  }
+
+  .auth-grid-lines {
+    background-image:
+      linear-gradient(to right, rgba(99, 91, 255, 0.05) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(99, 91, 255, 0.05) 1px, transparent 1px);
+    background-size: var(--beam-cell) var(--beam-cell);
+  }
+  .dark .auth-grid-lines {
+    background-image:
+      linear-gradient(to right, rgba(148, 163, 184, 0.025) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(148, 163, 184, 0.025) 1px, transparent 1px);
+  }
+
+  /* Dots sit exactly on the grid intersections so beams pass right through them. */
+  .auth-grid-dots {
+    background-image: radial-gradient(
+      circle,
+      rgba(129, 140, 248, 0.6) 1.5px,
+      transparent 2px
+    );
+    background-size: var(--beam-cell) var(--beam-cell);
+    background-position: 0 0;
+    filter: drop-shadow(0 0 4px rgba(99, 91, 255, 0.4));
+  }
+
+  /* Vertical comet that falls down a grid column. Base = light theme. */
+  .beam-v {
+    position: absolute;
+    top: 0;
+    width: 1px;
+    height: 130px;
+    background: linear-gradient(
+      to bottom,
+      transparent,
+      rgba(79, 70, 229, 0.08) 30%,
+      rgba(79, 70, 229, 0.7) 72%,
+      rgba(124, 58, 237, 0.78) 92%,
+      rgba(67, 56, 202, 1) 100%
+    );
+    border-radius: 999px;
+    filter: drop-shadow(0 0 5px rgba(99, 91, 255, 0.5)) drop-shadow(0 0 10px rgba(124, 58, 237, 0.3));
+    animation-name: beam-fall;
+    animation-timing-function: cubic-bezier(0.4, 0, 0.6, 1);
+    animation-iteration-count: infinite;
+    will-change: transform, opacity;
+  }
+  .dark .beam-v {
+    background: linear-gradient(
+      to bottom,
+      transparent,
+      rgba(99, 91, 255, 0.1) 30%,
+      rgba(129, 140, 248, 0.95) 72%,
+      rgba(167, 139, 250, 0.92) 92%,
+      #fff 100%
+    );
+    filter: drop-shadow(0 0 6px rgba(99, 91, 255, 0.9)) drop-shadow(0 0 12px rgba(167, 139, 250, 0.5));
+  }
+
+  /* Horizontal comet that streaks across a grid row. Base = light theme. */
+  .beam-h {
+    position: absolute;
+    left: 0;
+    height: 1px;
+    width: 130px;
+    background: linear-gradient(
+      to right,
+      transparent,
+      rgba(124, 58, 237, 0.08) 30%,
+      rgba(124, 58, 237, 0.7) 72%,
+      rgba(79, 70, 229, 0.78) 92%,
+      rgba(109, 40, 217, 1) 100%
+    );
+    border-radius: 999px;
+    filter: drop-shadow(0 0 5px rgba(124, 58, 237, 0.5)) drop-shadow(0 0 10px rgba(99, 91, 255, 0.3));
+    animation-name: beam-slide;
+    animation-timing-function: cubic-bezier(0.4, 0, 0.6, 1);
+    animation-iteration-count: infinite;
+    will-change: transform, opacity;
+  }
+  .dark .beam-h {
+    background: linear-gradient(
+      to right,
+      transparent,
+      rgba(167, 139, 250, 0.1) 30%,
+      rgba(167, 139, 250, 0.9) 72%,
+      rgba(129, 140, 248, 0.95) 92%,
+      #fff 100%
+    );
+    filter: drop-shadow(0 0 6px rgba(167, 139, 250, 0.9)) drop-shadow(0 0 12px rgba(99, 91, 255, 0.5));
+  }
+
+  /* Auth glass card — light by default, frosted dark under .dark */
+  .glass {
+    background: rgb(var(--surface) / 0.62);
+    border: 1px solid rgb(var(--brand-500) / 0.14);
+    backdrop-filter: blur(18px) saturate(1.5);
+    -webkit-backdrop-filter: blur(18px) saturate(1.5);
+    box-shadow:
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.7),
+      0 24px 60px -22px rgb(var(--brand-600) / 0.28);
+  }
+  .dark .glass {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: none;
+  }
+
+  /* Surface panel: frosted glass in dark, clean flat card in light (cards, tables, KPIs) */
   .glass-panel {
     background-color: rgb(var(--surface) / var(--glass-alpha));
     border: 1px solid rgb(var(--glass-border));
@@ -143,12 +578,10 @@
     -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
   }
 
-  .glass-chrome {
-    background-color: rgb(var(--surface) / var(--chrome-alpha));
-    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
-    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
-  }
-
+  /* Shared dialog positioning: horizontally centered; free vertical space
+     splits 1 (top) : 2 (bottom) so dialogs sit slightly above center,
+     Stripe-style. The ::before/::after spacers collapse gracefully when a
+     tall dialog fills the viewport. */
   .dialog-layer {
     position: fixed;
     inset: 0;
@@ -167,6 +600,14 @@
     flex: 2 2 0;
   }
 
+  /* Full-height chrome (sidebar, header): frosted in dark, near-solid in light */
+  .glass-chrome {
+    background-color: rgb(var(--surface) / var(--chrome-alpha));
+    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  }
+
+  /* Neon gradient hairline border for cards (both themes) */
   .neon-edge {
     position: relative;
   }
@@ -176,6 +617,7 @@
     inset: 0;
     border-radius: inherit;
     padding: 1px;
+    /* Light: iridescent brand glass edge (mirrors dark, brighter) */
     background: linear-gradient(
       135deg,
       rgba(255, 255, 255, 1),
@@ -192,6 +634,7 @@
     z-index: 1;
   }
   .dark .neon-edge::before {
+    /* Dark: brighter neon edge */
     background: linear-gradient(
       135deg,
       rgb(var(--brand-500) / 0.8),
@@ -200,47 +643,56 @@
     );
   }
 
+  /* Glow accents for figures/labels in the dark crypto theme */
   .text-glow-brand {
     text-shadow: 0 0 18px rgb(var(--brand-500) / 0.55);
   }
+  .text-glow-green {
+    text-shadow: 0 0 16px rgba(14, 203, 129, 0.55);
+  }
 
-  /* Midnight workspace sky: sparse, slow-twinkling stars behind the shell. */
-  .app-midnight-stars {
-    --mn-star: 226 232 255;
-    animation: star-twinkle 9s ease-in-out infinite;
+  /* Neon grid for the dark app canvas — same large cells + slow drift as light */
+  .neon-grid {
     background-image:
-      radial-gradient(1.5px 1.5px at 12% 20%, rgb(var(--mn-star) / 0.3) 50%, transparent 100%),
-      radial-gradient(1px 1px at 30% 55%, rgb(var(--mn-star) / 0.2) 50%, transparent 100%),
-      radial-gradient(1.5px 1.5px at 48% 12%, rgb(var(--mn-star) / 0.28) 50%, transparent 100%),
-      radial-gradient(1px 1px at 64% 40%, rgb(var(--mn-star) / 0.18) 50%, transparent 100%),
-      radial-gradient(1.5px 1.5px at 78% 18%, rgb(var(--mn-star) / 0.28) 50%, transparent 100%),
-      radial-gradient(1px 1px at 90% 62%, rgb(var(--mn-star) / 0.2) 50%, transparent 100%),
-      radial-gradient(1px 1px at 22% 80%, rgb(var(--mn-star) / 0.16) 50%, transparent 100%),
-      radial-gradient(1.5px 1.5px at 70% 85%, rgb(var(--mn-star) / 0.18) 50%, transparent 100%);
+      linear-gradient(to right, rgb(var(--brand-500) / 0.09) 1px, transparent 1px),
+      linear-gradient(to bottom, rgb(var(--brand-500) / 0.09) 1px, transparent 1px);
+    background-size: 110px 110px;
+    mask-image: radial-gradient(ellipse 100% 85% at 50% 5%, #000 45%, transparent 92%);
+    -webkit-mask-image: radial-gradient(ellipse 100% 85% at 50% 5%, #000 45%, transparent 92%);
+    animation: grid-drift 38s linear infinite;
   }
 
-  .midnight-meteor {
-    --mn-star: 226 232 255;
-    position: absolute;
-    height: 3px;
-    width: 3px;
-    border-radius: 9999px;
-    background: rgb(var(--mn-star) / 1);
-    box-shadow: 0 0 8px 2px rgb(var(--mn-star) / 0.55);
-    rotate: 215deg;
-    opacity: 0;
-    animation: meteor-streak var(--meteor-duration, 11s) linear var(--meteor-delay, 0s) infinite;
+  /* Light-mode grid — whisper-faint (like star-saas.com) with a slow drift.
+     Still reads softly through the frosted cards so panes blend into the scene. */
+  .glass-grid {
+    background-image:
+      linear-gradient(to right, rgba(67, 56, 202, 0.05) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(67, 56, 202, 0.05) 1px, transparent 1px);
+    background-size: 110px 110px;
+    mask-image: radial-gradient(ellipse 100% 85% at 50% 5%, #000 45%, transparent 92%);
+    -webkit-mask-image: radial-gradient(ellipse 100% 85% at 50% 5%, #000 45%, transparent 92%);
+    animation: grid-drift 38s linear infinite;
   }
-  .midnight-meteor::before {
-    content: "";
-    position: absolute;
-    top: 50%;
-    left: 2px;
-    height: 1.5px;
-    width: 140px;
-    transform: translateY(-50%);
-    background: linear-gradient(to right, rgb(var(--mn-star) / 0.8), transparent);
-  }
+}
+
+@keyframes grid-drift {
+  0% { background-position: 0 0; }
+  100% { background-position: 110px 110px; }
+}
+
+/* Beams travel the full height/width, fading in/out at the ends */
+@keyframes beam-fall {
+  0% { transform: translateY(-140px); opacity: 0; }
+  8% { opacity: 1; }
+  92% { opacity: 1; }
+  100% { transform: translateY(100vh); opacity: 0; }
+}
+
+@keyframes beam-slide {
+  0% { transform: translateX(-140px); opacity: 0; }
+  8% { opacity: 1; }
+  92% { opacity: 1; }
+  100% { transform: translateX(100vw); opacity: 0; }
 }
 
 @keyframes blob {
@@ -255,6 +707,9 @@
   50% { opacity: 0.35; }
 }
 
+/* The element is pre-rotated (rotate: 215deg), so translateX runs along the
+   streak's own axis — head leading, tail trailing. Visible for ~10% of the
+   cycle, invisible while it "waits" for the next pass. */
 @keyframes meteor-streak {
   0% { opacity: 0; transform: translateX(0); }
   2% { opacity: 1; }
@@ -263,10 +718,29 @@
   100% { opacity: 0; transform: translateX(-560px); }
 }
 
+@keyframes ping-soft {
+  0% { transform: scale(1); opacity: 0.7; }
+  75%, 100% { transform: scale(2.4); opacity: 0; }
+}
+.animate-ping-soft { animation: ping-soft 2.2s cubic-bezier(0, 0, 0.2, 1) infinite; }
+
+/* Respect reduced-motion: freeze the ambient background animations. The grid,
+   beams and orbs remain visible (static), so the look is preserved without the
+   continuous compositing/repaint cost. */
 @media (prefers-reduced-motion: reduce) {
+  .beam-v,
+  .beam-h,
   .animate-blob,
+  .glass-grid,
+  .neon-grid,
+  .midnight-stars,
+  .midnight-stars-2,
   .app-midnight-stars,
   .midnight-meteor {
     animation: none !important;
+  }
+  .beam-v,
+  .beam-h {
+    opacity: 0;
   }
 }

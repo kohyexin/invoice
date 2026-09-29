@@ -6,6 +6,7 @@ import { Field, Select, fieldClass } from "@/components/ui/form-controls";
 import { SidePanel } from "@/components/ui/side-panel";
 import type { FieldDef } from "@/lib/settings-config";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/components/i18n/locale-provider";
 
 export type Options = Record<string, { value: string; label: string }[]>;
 
@@ -30,6 +31,7 @@ export function RecordPanel({
   onSave: (values: Record<string, unknown>) => Promise<string | null>;
   onDelete?: () => Promise<string | null>;
 }) {
+  const { t } = useI18n();
   const [values, setValues] = useState<Record<string, unknown>>({});
   const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -81,21 +83,21 @@ export function RecordPanel({
         <>
           {onDelete && (
             <Button variant={confirmDelete ? "danger" : "ghost"} size="sm" onClick={remove} disabled={pending} className="mr-auto">
-              {confirmDelete ? "Confirm delete" : "Delete"}
+              {confirmDelete ? t("Confirm delete") : t("Delete")}
             </Button>
           )}
           <Button variant="secondary" size="sm" onClick={onClose}>
-            Cancel
+            {t("Cancel")}
           </Button>
           <Button size="sm" onClick={save} loading={pending}>
-            Save
+            {t("Save")}
           </Button>
         </>
       }
     >
       <div className="space-y-4">
         {error && (
-          <p className="rounded-control border border-danger/30 bg-danger/10 px-3 py-2 text-[13px] text-rose-200">{error}</p>
+          <p className="rounded-control border border-danger/30 bg-danger/10 px-3 py-2 text-[13px] text-rose-700 dark:text-rose-200">{t(error)}</p>
         )}
         {fields.map((f) => {
           const value = values[f.key];
@@ -108,7 +110,7 @@ export function RecordPanel({
                   onChange={(e) => set(f.key, e.target.checked)}
                   className="h-4 w-4 rounded border-overlay/20 bg-overlay/5 text-brand focus:ring-brand/40"
                 />
-                {f.label}
+                {t(f.label)}
               </label>
             );
           }
@@ -118,11 +120,11 @@ export function RecordPanel({
             return (
               <Field key={f.key} label={label} hint={f.hint}>
                 <Select value={String(value ?? "")} onChange={(e) => set(f.key, e.target.value)}>
-                  {(f.nullable || !f.required) && <option value="">{f.nullable ? "Any" : "—"}</option>}
-                  {!f.nullable && f.required && !value && <option value="">Choose…</option>}
+                  {(f.nullable || !f.required) && <option value="">{f.nullable ? t("Any") : "—"}</option>}
+                  {!f.nullable && f.required && !value && <option value="">{t("Choose…")}</option>}
                   {opts.map((o) => (
                     <option key={o.value} value={o.value}>
-                      {o.label}
+                      {t(o.label)}
                     </option>
                   ))}
                 </Select>

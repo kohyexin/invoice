@@ -1,7 +1,20 @@
 import { SignJWT, jwtVerify } from "jose";
 
+/* Edge-safe token helpers (middleware imports this file). Three cookies:
+ *  - session: full access, checked against the user record in lib/session.ts
+ *  - mfa:     password accepted, second factor pending (10 minutes)
+ *  - trust:   "remember this browser" — skips the second factor for 48 hours
+ * Each carries the user's sessionVersion, so a password change, disable or
+ * 2FA reset invalidates all of them at once. */
+
 export const SESSION_COOKIE = "invoice_session";
-const SESSION_DAYS = 14;
+export const MFA_COOKIE = "invoice_mfa";
+export const TRUST_COOKIE = "invoice_trust";
+
+const REMEMBER_DAYS = 14;
+const SHORT_SESSION_HOURS = 12;
+const MFA_MINUTES = 10;
+const TRUST_HOURS = 48;
 
 function secret() {
   const value = process.env.SESSION_SECRET;
@@ -9,34 +22,72 @@ function secret() {
   return new TextEncoder().encode(value);
 }
 
-export type SessionClaims = { userId: string; version: number };
+type Stage = "full" | "mfa" | "trust";
 
-export async function createSessionToken(userId: string, version: number) {
-  return new SignJWT({ sv: version })
+async function sign(stage: Stage, userId: string, version: number, ttl: string, extra: Record<string, unknown> = {}) {
+  return new SignJWT({ sv: version, stg: stage, ...extra })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(userId)
     .setIssuedAt()
-    .setExpirationTime(`${SESSION_DAYS}d`)
+    .setExpirationTime(ttl)
     .sign(secret());
 }
 
-/** Signature and expiry only; the user record is checked in lib/session.ts. */
-export async function verifySessionToken(token: string): Promise<SessionClaims | null> {
+async function verify(token: string, stage: Stage) {
   try {
     const { payload } = await jwtVerify(token, secret());
     if (typeof payload.sub !== "string" || typeof payload.sv !== "number") return null;
-    return { userId: payload.sub, version: payload.sv };
+    // Sessions issued before stages existed carry no `stg` and count as full.
+    if ((payload.stg ?? "full") !== stage) return null;
+    return payload;
   } catch {
     return null;
   }
 }
 
-export const SESSION_MAX_AGE = SESSION_DAYS * 24 * 60 * 60;
+export type SessionClaims = { userId: string; version: number };
 
-export const sessionCookieOptions = {
+export async function createSessionToken(userId: string, version: number, remember = true) {
+  return sign("full", userId, version, remember ? `${REMEMBER_DAYS}d` : `${SHORT_SESSION_HOURS}h`);
+}
+
+/** Signature and expiry only; the user record is checked in lib/session.ts. */
+export async function verifySessionToken(token: string): Promise<SessionClaims | null> {
+  const p = await verify(token, "full");
+  return p ? { userId: p.sub!, version: p.sv as number } : null;
+}
+
+export type MfaClaims = SessionClaims & { remember: boolean };
+
+export async function createMfaToken(userId: string, version: number, remember: boolean) {
+  return sign("mfa", userId, version, `${MFA_MINUTES}m`, { rem: remember });
+}
+
+export async function verifyMfaToken(token: string): Promise<MfaClaims | null> {
+  const p = await verify(token, "mfa");
+  return p ? { userId: p.sub!, version: p.sv as number, remember: p.rem === true } : null;
+}
+
+export async function createTrustToken(userId: string, version: number) {
+  return sign("trust", userId, version, `${TRUST_HOURS}h`);
+}
+
+export async function verifyTrustToken(token: string): Promise<SessionClaims | null> {
+  const p = await verify(token, "trust");
+  return p ? { userId: p.sub!, version: p.sv as number } : null;
+}
+
+const base = {
   httpOnly: true,
   sameSite: "lax" as const,
   secure: process.env.NODE_ENV === "production",
   path: "/",
-  maxAge: SESSION_MAX_AGE,
 };
+
+/** Without "remember me" the cookie ends with the browser session. */
+export function sessionCookieOptions(remember = true) {
+  return remember ? { ...base, maxAge: REMEMBER_DAYS * 24 * 60 * 60 } : base;
+}
+
+export const mfaCookieOptions = { ...base, maxAge: MFA_MINUTES * 60 };
+export const trustCookieOptions = { ...base, maxAge: TRUST_HOURS * 60 * 60 };

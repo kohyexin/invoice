@@ -7,6 +7,7 @@ import Papa from "papaparse";
 import { FileUp, Plus, Search } from "lucide-react";
 import { useCan } from "@/components/shell/user-context";
 import { Button } from "@/components/ui/button";
+import { useI18n } from "@/components/i18n/locale-provider";
 import { DataTable, type Column, type FilterDef } from "@/components/ui/data-table";
 import { SidePanel } from "@/components/ui/side-panel";
 import { toClientDraft } from "@/lib/client-import";
@@ -29,6 +30,7 @@ type Row = {
 export function ClientsView({ rows }: { rows: Row[] }) {
   const router = useRouter();
   const canEdit = useCan("STAFF");
+  const { t } = useI18n();
   const [query, setQuery] = useState("");
   const [importOpen, setImportOpen] = useState(false);
 
@@ -47,7 +49,7 @@ export function ClientsView({ rows }: { rows: Row[] }) {
       width: "360px",
       accessor: (r) => r.name,
       render: (r) => (
-        <Link href={`/clients/${r.id}`} className="block truncate font-medium text-ink hover:text-brand-200">
+        <Link href={`/clients/${r.id}`} className="block truncate font-medium text-ink hover:text-brand-700 dark:hover:text-brand-200">
           {r.name}
         </Link>
       ),
@@ -62,7 +64,7 @@ export function ClientsView({ rows }: { rows: Row[] }) {
       header: "Unpaid (USD)",
       align: "right",
       accessor: (r) => r.unpaid,
-      render: (r) => (r.unpaid > 0 ? <span className="text-amber-300">{formatMoney(r.unpaid)}</span> : <span className="text-ink-soft">—</span>),
+      render: (r) => (r.unpaid > 0 ? <span className="text-amber-600 dark:text-amber-300">{formatMoney(r.unpaid)}</span> : <span className="text-ink-soft">—</span>),
     },
     { key: "submittedAt", header: "Form submitted", defaultHidden: true, accessor: (r) => r.submittedAt ?? "", render: (r) => formatDate(r.submittedAt) },
   ];
@@ -80,18 +82,18 @@ export function ClientsView({ rows }: { rows: Row[] }) {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search name, alias, agreement"
+            placeholder={t("Search name, alias, agreement")}
             className={cn(fieldClass, "pl-9")}
           />
         </div>
         <div className={cn("ml-auto flex gap-2", !canEdit && "hidden")}>
           <Button variant="secondary" onClick={() => setImportOpen(true)}>
             <FileUp className="h-4 w-4" />
-            Import Jotform CSV
+            {t("Import Jotform CSV")}
           </Button>
           <Button onClick={() => router.push("/clients/new")}>
             <Plus className="h-4 w-4" />
-            Add client
+            {t("Add client")}
           </Button>
         </div>
       </div>
@@ -111,6 +113,7 @@ function JotformImport({ open, onClose, existing }: { open: boolean; onClose: ()
   const [result, setResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  const { t } = useI18n();
 
   const drafts = rows.map((r) => toClientDraft(r)).filter((d): d is NonNullable<typeof d> => d !== null);
   const newCount = drafts.filter((d) => !existing.has(d.name)).length;
@@ -141,7 +144,7 @@ function JotformImport({ open, onClose, existing }: { open: boolean; onClose: ()
         setError(res.error);
         return;
       }
-      setResult(`${res.created} added, ${res.updated} updated${res.skipped ? `, ${res.skipped} skipped (no client name)` : ""}.`);
+      setResult(res.skipped ? t("{0} added, {1} updated, {2} skipped (no client name).", res.created, res.updated, res.skipped) : t("{0} added, {1} updated.", res.created, res.updated));
       setRows([]);
       router.refresh();
     });
@@ -158,17 +161,16 @@ function JotformImport({ open, onClose, existing }: { open: boolean; onClose: ()
       footer={
         <>
           <Button variant="secondary" size="sm" onClick={() => { reset(); onClose(); }}>
-            Close
+            {t("Close")}
           </Button>
           <Button size="sm" onClick={run} disabled={drafts.length === 0} loading={pending}>
-            Import {drafts.length || ""} clients
+            {drafts.length ? t("Import {0} clients", drafts.length) : t("Import clients")}
           </Button>
         </>
       }
     >
       <p className="text-[13px] text-ink-muted">
-        Clients are matched by client name. Existing clients get their address, agreement and fee schedule refreshed from
-        the form. Alias, owner, transfer name and notes stay as they are.
+        {t("Clients are matched by client name. Existing clients get their address, agreement and fee schedule refreshed from the form. Alias, owner, transfer name and notes stay as they are.")}
       </p>
 
       <button
@@ -176,27 +178,27 @@ function JotformImport({ open, onClose, existing }: { open: boolean; onClose: ()
         onClick={() => inputRef.current?.click()}
         className="mt-4 flex w-full flex-col items-center gap-2 rounded-card border border-dashed border-overlay/20 px-4 py-8 text-center transition-colors hover:border-brand-400/60 hover:bg-brand-500/[0.05]"
       >
-        <FileUp className="h-6 w-6 text-brand-300" />
-        <span className="text-sm font-medium text-ink">{fileName || "Choose a CSV file"}</span>
-        <span className="text-[12px] text-ink-soft">Jotform export with a CLIENT NAME column</span>
+        <FileUp className="h-6 w-6 text-brand-600 dark:text-brand-300" />
+        <span className="text-sm font-medium text-ink">{fileName || t("Choose a CSV file")}</span>
+        <span className="text-[12px] text-ink-soft">{t("Jotform export with a CLIENT NAME column")}</span>
       </button>
       <input ref={inputRef} type="file" accept=".csv,text/csv" className="hidden" onChange={(e) => e.target.files?.[0] && pick(e.target.files[0])} />
 
-      {error && <p className="mt-4 rounded-control border border-danger/30 bg-danger/10 px-3 py-2 text-[13px] text-rose-200">{error}</p>}
-      {result && <p className="mt-4 rounded-control border border-success/30 bg-success/10 px-3 py-2 text-[13px] text-emerald-200">{result}</p>}
+      {error && <p className="mt-4 rounded-control border border-danger/30 bg-danger/10 px-3 py-2 text-[13px] text-rose-700 dark:text-rose-200">{t(error)}</p>}
+      {result && <p className="mt-4 rounded-control border border-success/30 bg-success/10 px-3 py-2 text-[13px] text-emerald-700 dark:text-emerald-200">{result}</p>}
 
       {drafts.length > 0 && (
         <div className="mt-5">
           <p className="mb-2 text-[13px] text-ink-muted">
-            {drafts.length} rows: <span className="text-ink">{newCount} new</span>, {drafts.length - newCount} existing.
+            {t("{0} rows: {1} new, {2} existing.", drafts.length, newCount, drafts.length - newCount)}
           </p>
           <div className="max-h-[50vh] overflow-y-auto rounded-card border border-line/70">
             <table className="w-full text-[13px]">
               <thead className="sticky top-0 bg-surface">
                 <tr className="border-b border-line text-left text-[11px] uppercase tracking-wider text-ink-soft">
-                  <th className="px-3 py-2">Client</th>
-                  <th className="px-3 py-2">Agreement</th>
-                  <th className="px-3 py-2 text-right">Fees</th>
+                  <th className="px-3 py-2">{t("Client")}</th>
+                  <th className="px-3 py-2">{t("Agreement")}</th>
+                  <th className="px-3 py-2 text-right">{t("Fees")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -204,7 +206,7 @@ function JotformImport({ open, onClose, existing }: { open: boolean; onClose: ()
                   <tr key={i} className="border-b border-line/60 last:border-0">
                     <td className="px-3 py-2">
                       <span className="text-ink">{d.name}</span>
-                      {!existing.has(d.name) && <span className="ml-2 rounded-full bg-brand-500/15 px-1.5 text-[11px] text-brand-200">new</span>}
+                      {!existing.has(d.name) && <span className="ml-2 rounded-full bg-brand-500/15 px-1.5 text-[11px] text-brand-700 dark:text-brand-200">{t("new")}</span>}
                     </td>
                     <td className="px-3 py-2 font-mono text-ink-muted">{d.agreementNo || "—"}</td>
                     <td className="px-3 py-2 text-right text-ink-muted">{Object.keys(d.fees).length}</td>

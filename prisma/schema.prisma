@@ -61,8 +61,34 @@ model User {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
+  /// Authenticator-app (TOTP) secret, base32. Required on every sign-in;
+  /// users without one enrol on their next sign-in.
+  totpSecret        String?
+  totpEnabledAt     DateTime?
+  /// Secret being enrolled, promoted to totpSecret once a code confirms it.
+  totpPendingSecret String?
+  /// Emailed one-time sign-in code ("Sign in another way"), sha256.
+  emailCodeHash     String?
+  emailCodeSentAt   DateTime?
+  /// Wrong codes since the last successful sign-in; too many ends the attempt.
+  mfaFailures       Int       @default(0)
+
   invoicesCreated Invoice[] @relation("InvoiceCreatedBy")
   invoicesUpdated Invoice[] @relation("InvoiceUpdatedBy")
+  resetTokens     PasswordResetToken[]
+}
+
+/// One-time "forgot password" link; only the sha256 of the token is kept.
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
 }
 
 /* ----------------------------- Settings ----------------------------- */

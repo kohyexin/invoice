@@ -9,6 +9,7 @@ import { RecordPanel } from "@/components/ui/record-panel";
 import { ROLE_HELP, ROLE_LABEL, type RoleName } from "@/lib/roles";
 import { SETTINGS_ENTITIES, type FieldDef, type SettingsEntity } from "@/lib/settings-config";
 import { cn, formatDate } from "@/lib/utils";
+import { useI18n } from "@/components/i18n/locale-provider";
 import { deleteSetting, saveSetting } from "./actions";
 import { saveUser } from "./users-actions";
 
@@ -18,15 +19,23 @@ type Column = { label: string; render: (r: Row) => React.ReactNode; mono?: boole
 
 type TabId = SettingsEntity | "user";
 
-const ROLE_OPTIONS = (["ADMIN", "STAFF", "VIEWER"] as RoleName[]).map((r) => ({ value: r, label: `${ROLE_LABEL[r]}: ${ROLE_HELP[r]}` }));
+const ROLES: RoleName[] = ["ADMIN", "STAFF", "VIEWER"];
+function userFields(t: (s: string) => string, editing: boolean): FieldDef[] {
+  const base: FieldDef[] = [
+    { key: "name", label: "Name", kind: "text", required: true },
+    { key: "email", label: "Email", kind: "text", required: true, hint: "Used to sign in" },
+    {
+      key: "role",
+      label: "Role",
+      kind: "select",
+      required: true,
+      options: ROLES.map((r) => ({ value: r, label: `${t(ROLE_LABEL[r])}: ${t(ROLE_HELP[r])}` })),
+    },
+  ];
+  return editing ? [...base, ...EDIT_USER_EXTRA] : [...base, ...NEW_USER_EXTRA];
+}
 
-const USER_FIELDS: FieldDef[] = [
-  { key: "name", label: "Name", kind: "text", required: true },
-  { key: "email", label: "Email", kind: "text", required: true, hint: "Used to sign in" },
-  { key: "role", label: "Role", kind: "select", required: true, options: ROLE_OPTIONS },
-];
-const NEW_USER_FIELDS: FieldDef[] = [
-  ...USER_FIELDS,
+const NEW_USER_EXTRA: FieldDef[] = [
   {
     key: "password",
     label: "Password",
@@ -36,10 +45,10 @@ const NEW_USER_FIELDS: FieldDef[] = [
   },
   { key: "active", label: "Active", kind: "checkbox" },
 ];
-const EDIT_USER_FIELDS: FieldDef[] = [
-  ...USER_FIELDS,
+const EDIT_USER_EXTRA: FieldDef[] = [
   { key: "active", label: "Active (untick to block sign-in and sign them out)", kind: "checkbox" },
   { key: "resetPassword", label: "Generate a new password and sign them out everywhere", kind: "checkbox" },
+  { key: "resetTwoFactor", label: "Reset two-factor (they set up a new authenticator at next sign-in)", kind: "checkbox" },
 ];
 
 const ROLE_TONE: Record<RoleName, "brand" | "outline" | "neutral"> = { ADMIN: "brand", STAFF: "outline", VIEWER: "neutral" };
@@ -54,7 +63,11 @@ type Tab = {
   canDelete?: boolean;
 };
 
-const inactive = (r: Row) => (r.active === false ? <Badge tone="neutral">Inactive</Badge> : null);
+function Inactive({ row }: { row: Row }) {
+  const { t } = useI18n();
+  return row.active === false ? <Badge tone="neutral">{t("Inactive")}</Badge> : null;
+}
+const inactive = (r: Row) => <Inactive row={r} />;
 
 export function SettingsView(props: {
   companies: Row[];
@@ -68,6 +81,7 @@ export function SettingsView(props: {
   meId: string;
 }) {
   const router = useRouter();
+  const { t } = useI18n();
   const [tabId, setTabId] = useState<TabId>("user");
   const [editing, setEditing] = useState<{ entity: TabId; row: Row | null } | null>(null);
   const [issued, setIssued] = useState<{ email: string; password: string } | null>(null);
@@ -94,16 +108,21 @@ export function SettingsView(props: {
           render: (r) => (
             <span className="flex items-center gap-2">
               {String(r.name)}
-              {r.id === props.meId && <Badge tone="outline">You</Badge>}
-              {r.active === false && <Badge tone="danger">Disabled</Badge>}
+              {r.id === props.meId && <Badge tone="outline">{t("You")}</Badge>}
+              {r.active === false && <Badge tone="danger">{t("Disabled")}</Badge>}
             </span>
           ),
         },
         { label: "Email", render: (r) => String(r.email) },
-        { label: "Role", render: (r) => <Badge tone={ROLE_TONE[r.role as RoleName]}>{ROLE_LABEL[r.role as RoleName]}</Badge> },
+        { label: "Role", render: (r) => <Badge tone={ROLE_TONE[r.role as RoleName]}>{t(ROLE_LABEL[r.role as RoleName])}</Badge> },
+        {
+          label: "Two-factor",
+          render: (r) =>
+            r.totpEnabledAt ? <Badge tone="success">{t("On")}</Badge> : <Badge tone="warning">{t("Set up at next sign-in")}</Badge>,
+        },
         {
           label: "Last sign-in",
-          render: (r) => (r.lastLoginAt ? formatDate(String(r.lastLoginAt)) : <span className="text-ink-soft">Never</span>),
+          render: (r) => (r.lastLoginAt ? formatDate(String(r.lastLoginAt)) : <span className="text-ink-soft">{t("Never")}</span>),
           align: "right",
         },
       ],
@@ -118,7 +137,7 @@ export function SettingsView(props: {
         { label: "Code", render: (r) => String(r.code), mono: true },
         { label: "Legal name", render: (r) => <span className="flex items-center gap-2">{String(r.legalName)} {inactive(r)}</span> },
         { label: "Address", render: (r) => (r.addressLines as string[]).join(", ") },
-        { label: "Language", render: (r) => (r.defaultLang === "ZH" ? "Chinese" : "English") },
+        { label: "Language", render: (r) => (r.defaultLang === "ZH" ? t("Chinese") : t("English")) },
       ],
     },
     {
@@ -128,7 +147,7 @@ export function SettingsView(props: {
       description: "Accounts that can appear under Payment Details.",
       rows: props.bankAccounts,
       columns: [
-        { label: "Label", render: (r) => <span className="flex items-center gap-2">{String(r.label)} {r.compact ? <Badge tone="outline">Compact</Badge> : null} {inactive(r)}</span> },
+        { label: "Label", render: (r) => <span className="flex items-center gap-2">{String(r.label)} {r.compact ? <Badge tone="outline">{t("Compact")}</Badge> : null} {inactive(r)}</span> },
         { label: "Currency", render: (r) => String(r.currency), mono: true },
         { label: "Account name", render: (r) => String(r.accountName) },
         { label: "Account number", render: (r) => String(r.accountNumber), mono: true },
@@ -143,8 +162,8 @@ export function SettingsView(props: {
         "Which account an invoice uses by default. Company and currency together beat company only, which beats currency only. The payable currency is used (the second amount-due currency when there is one).",
       rows: props.rules,
       columns: [
-        { label: "Company", render: (r) => (r.companyName ? String(r.companyName) : <span className="text-ink-soft">Any</span>) },
-        { label: "Currency", render: (r) => (r.currency ? String(r.currency) : <span className="text-ink-soft">Any</span>), mono: true },
+        { label: "Company", render: (r) => (r.companyName ? String(r.companyName) : <span className="text-ink-soft">{t("Any")}</span>) },
+        { label: "Currency", render: (r) => (r.currency ? String(r.currency) : <span className="text-ink-soft">{t("Any")}</span>), mono: true },
         { label: "Bank account", render: (r) => String(r.accountLabel) },
       ],
     },
@@ -187,39 +206,39 @@ export function SettingsView(props: {
       rows: props.items,
       columns: [
         { label: "English", render: (r) => <span className="flex items-center gap-2">{String(r.labelEn)} {inactive(r)}</span> },
-        { label: "Chinese", render: (r) => (r.labelZh ? String(r.labelZh) : <span className="text-ink-soft">Uses English</span>) },
+        { label: "Chinese", render: (r) => (r.labelZh ? String(r.labelZh) : <span className="text-ink-soft">{t("Uses English")}</span>) },
         { label: "Detail hint", render: (r) => (r.detailHint ? String(r.detailHint) : "—") },
         { label: "Client fee", render: (r) => (r.clientFee ? String(r.clientFee) : "—"), mono: true },
       ],
     },
   ];
 
-  const tab = tabs.find((t) => t.id === tabId)!;
+  const tab = tabs.find((x) => x.id === tabId)!;
   const config = !editing
     ? null
     : editing.entity === "user"
-      ? { title: "User", fields: editing.row ? EDIT_USER_FIELDS : NEW_USER_FIELDS }
+      ? { title: "User", fields: userFields(t, Boolean(editing.row)) }
       : SETTINGS_ENTITIES[editing.entity];
 
   return (
     <div className="grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
       <nav className="flex gap-1 overflow-x-auto lg:flex-col">
-        {tabs.map((t) => {
-          const Icon = t.icon;
+        {tabs.map((x) => {
+          const Icon = x.icon;
           return (
             <button
-              key={t.id}
-              onClick={() => setTabId(t.id)}
+              key={x.id}
+              onClick={() => setTabId(x.id)}
               className={cn(
                 "flex shrink-0 items-center gap-2.5 rounded-control px-3 py-2 text-left text-sm font-medium transition-colors",
-                t.id === tabId
-                  ? "bg-brand-500/15 text-brand-200 shadow-[inset_0_0_0_1px_rgb(var(--brand-400)/0.3)]"
+                x.id === tabId
+                  ? "bg-brand-500/10 text-brand-700 shadow-[inset_0_0_0_1px_rgb(var(--brand-500)/0.2)] dark:text-brand-200 dark:shadow-[inset_0_0_0_1px_rgb(var(--brand-500)/0.25)]"
                   : "text-ink-muted hover:bg-overlay/[0.05] hover:text-ink"
               )}
             >
               <Icon className="h-4 w-4" />
-              {t.label}
-              <span className="ml-auto font-mono text-[11px] text-ink-soft">{t.rows.length}</span>
+              {t(x.label)}
+              <span className="ml-auto font-mono text-[11px] text-ink-soft">{x.rows.length}</span>
             </button>
           );
         })}
@@ -228,15 +247,17 @@ export function SettingsView(props: {
       <section className="glass-panel neon-edge rounded-card">
         {issued && (
           <div className="flex items-start gap-3 border-b border-line bg-brand-500/10 px-5 py-3.5">
-            <KeyRound className="mt-0.5 h-4 w-4 shrink-0 text-brand-300" />
+            <KeyRound className="mt-0.5 h-4 w-4 shrink-0 text-brand-600 dark:text-brand-300" />
             <div className="min-w-0 flex-1 text-[13px] text-ink">
-              Password for <span className="font-medium">{issued.email}</span>:{" "}
-              <code className="rounded bg-overlay/10 px-1.5 py-0.5 font-mono text-[13px] text-brand-200 select-all">{issued.password}</code>
-              <p className="mt-1 text-ink-muted">Copy it now; it won&apos;t be shown again. They can change it under My account after signing in.</p>
+              {t("Password for {0}:", issued.email)}{" "}
+              <code className="select-all rounded bg-overlay/10 px-1.5 py-0.5 font-mono text-[13px] text-brand-700 dark:text-brand-200">{issued.password}</code>
+              <p className="mt-1 text-ink-muted">
+                {t("Copy it now; it won't be shown again. They can change it under My account after signing in.")}
+              </p>
             </div>
             <button
               onClick={() => setIssued(null)}
-              aria-label="Dismiss"
+              aria-label={t("Dismiss")}
               className="flex h-7 w-7 items-center justify-center rounded-control text-ink-soft hover:bg-overlay/[0.06] hover:text-ink"
             >
               <X className="h-4 w-4" />
@@ -245,12 +266,12 @@ export function SettingsView(props: {
         )}
         <div className="flex items-start justify-between gap-4 border-b border-line px-5 py-4">
           <div>
-            <h2 className="text-[15px] font-semibold text-ink">{tab.label}</h2>
-            <p className="mt-0.5 max-w-2xl text-[13px] text-ink-muted">{tab.description}</p>
+            <h2 className="text-[15px] font-semibold text-ink">{t(tab.label)}</h2>
+            <p className="mt-0.5 max-w-2xl text-[13px] text-ink-muted">{t(tab.description)}</p>
           </div>
           <Button size="sm" onClick={() => setEditing({ entity: tab.id, row: null })}>
             <Plus className="h-4 w-4" />
-            Add
+            {t("Add")}
           </Button>
         </div>
         <div className="overflow-x-auto px-5 pb-2">
@@ -265,7 +286,7 @@ export function SettingsView(props: {
                       c.align === "right" ? "text-right" : "text-left"
                     )}
                   >
-                    {c.label}
+                    {t(c.label)}
                   </th>
                 ))}
               </tr>
@@ -294,7 +315,7 @@ export function SettingsView(props: {
               {tab.rows.length === 0 && (
                 <tr>
                   <td colSpan={tab.columns.length} className="py-10 text-center text-[13px] text-ink-soft">
-                    Nothing here yet.
+                    {t("Nothing here yet.")}
                   </td>
                 </tr>
               )}
@@ -306,7 +327,7 @@ export function SettingsView(props: {
       {editing && config && (
         <RecordPanel
           open
-          title={`${editing.row ? "Edit" : "Add"} ${config.title.toLowerCase()}`}
+          title={t(editing.row ? "Edit {0}" : "Add {0}", t(config.title).toLowerCase())}
           fields={config.fields as FieldDef[]}
           initial={editing.row}
           options={options}

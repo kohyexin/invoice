@@ -4,6 +4,8 @@ import { FileDown } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { GenerateBadge, StatusBadge } from "@/components/ui/badge";
 import { prisma } from "@/lib/db";
+import { getI18n } from "@/lib/i18n-server";
+import type { Translate } from "@/lib/i18n";
 import { fxRates } from "@/lib/rules";
 import { formatDate, formatMoney, toDateInput } from "@/lib/utils";
 import { loadLookups } from "../lookups";
@@ -27,6 +29,7 @@ export default async function InvoicePage({ params }: { params: { id: string } }
     fxRates(),
   ]);
   if (!inv) notFound();
+  const { t } = getI18n();
 
   const siblings = await prisma.invoice.findMany({
     where: { number: inv.number, NOT: { id: inv.id } },
@@ -90,12 +93,12 @@ export default async function InvoicePage({ params }: { params: { id: string } }
         <aside className="space-y-4">
           {(inv.company || inv.lines.length > 0) && (
             <div className="glass-panel neon-edge rounded-card p-5">
-              <h2 className="font-mono text-[11px] uppercase tracking-[0.16em] text-ink-soft">Invoice</h2>
+              <h2 className="font-mono text-[11px] uppercase tracking-[0.16em] text-ink-soft">{t("Invoice")}</h2>
               <dl className="mt-3 space-y-1.5 text-[13px]">
-                {inv.company && <Row label="Issuer" value={inv.company.code} />}
-                <Row label="Language" value={inv.language === "ZH" ? "Chinese" : "English"} />
-                {inv.bankAccount && <Row label="Pay to" value={inv.bankAccount.label} />}
-                {inv.altCurrency && <Row label="Amount due" value={`${inv.altCurrency} ${formatMoney(Number(inv.altAmount))}`} />}
+                {inv.company && <Row label={t("Issuer")} value={inv.company.code} />}
+                <Row label={t("Language")} value={t(inv.language === "ZH" ? "Chinese" : "English")} />
+                {inv.bankAccount && <Row label={t("Pay to")} value={inv.bankAccount.label} />}
+                {inv.altCurrency && <Row label={t("Amount due")} value={`${inv.altCurrency} ${formatMoney(Number(inv.altAmount))}`} />}
               </dl>
               {inv.lines.length > 0 && (
                 <ul className="mt-4 divide-y divide-line/60 border-t border-line/60">
@@ -114,17 +117,17 @@ export default async function InvoicePage({ params }: { params: { id: string } }
           )}
 
           <div className="glass-panel neon-edge rounded-card p-5">
-            <h2 className="font-mono text-[11px] uppercase tracking-[0.16em] text-ink-soft">History</h2>
+            <h2 className="font-mono text-[11px] uppercase tracking-[0.16em] text-ink-soft">{t("History")}</h2>
             <dl className="mt-3 space-y-1.5 text-[13px]">
-              <Row label="Created" value={`${formatDateTime(inv.createdAt)} · ${inv.createdBy?.name ?? originLabel(inv)}`} />
-              <Row label="Last changed" value={`${formatDateTime(inv.updatedAt)} · ${inv.updatedBy?.name ?? originLabel(inv)}`} />
+              <Row label={t("Created")} value={`${formatDateTime(inv.createdAt)} · ${inv.createdBy?.name ?? originLabel(inv, t)}`} />
+              <Row label={t("Last changed")} value={`${formatDateTime(inv.updatedAt)} · ${inv.updatedBy?.name ?? originLabel(inv, t)}`} />
             </dl>
           </div>
 
           {siblings.length > 0 && (
             <div className="glass-panel neon-edge rounded-card p-5">
-              <h2 className="font-mono text-[11px] uppercase tracking-[0.16em] text-ink-soft">Same number</h2>
-              <p className="mt-1 text-[12px] text-ink-soft">Other ledger rows carrying {inv.number}.</p>
+              <h2 className="font-mono text-[11px] uppercase tracking-[0.16em] text-ink-soft">{t("Same number")}</h2>
+              <p className="mt-1 text-[12px] text-ink-soft">{t("Other ledger rows carrying {0}.", inv.number)}</p>
               <ul className="mt-3 divide-y divide-line/60">
                 {siblings.map((s) => (
                   <li key={s.id}>
@@ -150,10 +153,10 @@ export default async function InvoicePage({ params }: { params: { id: string } }
 }
 
 /** Who to credit when no user is recorded: rows from before user accounts. */
-function originLabel(inv: { legacyNo: number | null; sourceMessageId: string | null }) {
-  if (inv.legacyNo !== null) return "Excel import";
-  if (inv.sourceMessageId) return "Mailbox import";
-  return "Unknown";
+function originLabel(inv: { legacyNo: number | null; sourceMessageId: string | null }, t: Translate) {
+  if (inv.legacyNo !== null) return t("Excel import");
+  if (inv.sourceMessageId) return t("Mailbox import");
+  return t("Unknown");
 }
 
 function formatDateTime(d: Date) {

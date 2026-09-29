@@ -6,7 +6,7 @@
 
 import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { t } from "@/lib/i18n";
+import { useI18n } from "@/components/i18n/locale-provider";
 
 export const fieldClass =
   "h-10 w-full rounded-control border border-overlay/10 bg-overlay/[0.04] px-3 text-sm text-ink placeholder:text-ink-soft focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/25";
@@ -40,11 +40,12 @@ export function Field({
   children: React.ReactNode;
   hint?: string;
 }) {
+  const { t } = useI18n();
   return (
     <div>
-      <label className={labelClass}>{label}</label>
+      <label className={labelClass}>{label.endsWith(" *") ? `${t(label.slice(0, -2))} *` : t(label)}</label>
       {children}
-      {hint && <p className="mt-1 text-[12px] text-ink-soft">{hint}</p>}
+      {hint && <p className="mt-1 text-[12px] text-ink-soft">{t(hint)}</p>}
     </div>
   );
 }
@@ -52,6 +53,7 @@ export function Field({
 /* Read-only Active/Inactive pill — activation is managed from the catalog
  * list (table Power action), never inside an editor. */
 export function StatusPill({ active }: { active: boolean }) {
+  const { t } = useI18n();
   return (
     <span
       className={cn(
@@ -76,6 +78,7 @@ export function Segmented<T extends string>({
   options: { value: T; label: string }[];
   onChange: (v: T) => void;
 }) {
+  const { t } = useI18n();
   return (
     <div className="inline-flex rounded-control border border-overlay/10 bg-overlay/[0.03] p-1">
       {options.map((o) => (
@@ -90,7 +93,7 @@ export function Segmented<T extends string>({
               : "text-ink-muted hover:text-ink"
           )}
         >
-          {o.label}
+          {t(o.label)}
         </button>
       ))}
     </div>

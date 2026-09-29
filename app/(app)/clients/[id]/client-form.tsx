@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { FilePlus2, Plus, Trash2 } from "lucide-react";
 import { useCan } from "@/components/shell/user-context";
 import { Button } from "@/components/ui/button";
+import { useI18n } from "@/components/i18n/locale-provider";
 import { GenerateBadge, StatusBadge } from "@/components/ui/badge";
 import { Field, Select, fieldClass } from "@/components/ui/form-controls";
 import { cn, formatDate, formatMoney } from "@/lib/utils";
@@ -56,6 +57,7 @@ export function ClientForm({
 }) {
   const router = useRouter();
   const canEdit = useCan("STAFF");
+  const { t } = useI18n();
   const [values, setValues] = useState<ClientInput>(initial);
   const [fees, setFees] = useState<[string, string][]>(Object.entries(initial.fees));
   const [error, setError] = useState<string | null>(null);
@@ -103,8 +105,8 @@ export function ClientForm({
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
       <fieldset disabled={!canEdit} className="min-w-0 space-y-6">
         <section className="glass-panel neon-edge rounded-card p-5">
-          <h2 className="font-mono text-[11px] uppercase tracking-[0.16em] text-ink-soft">Profile</h2>
-          {error && <p className="mt-4 rounded-control border border-danger/30 bg-danger/10 px-3 py-2 text-[13px] text-rose-200">{error}</p>}
+          <h2 className="font-mono text-[11px] uppercase tracking-[0.16em] text-ink-soft">{t("Profile")}</h2>
+          {error && <p className="mt-4 rounded-control border border-danger/30 bg-danger/10 px-3 py-2 text-[13px] text-rose-700 dark:text-rose-200">{t(error)}</p>}
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             {TEXT_FIELDS.map((f) => (
               <div key={f.key} className={cn(f.wide && "sm:col-span-2")}>
@@ -145,16 +147,16 @@ export function ClientForm({
 
         <section className="glass-panel neon-edge rounded-card p-5">
           <div className="flex items-center justify-between">
-            <h2 className="font-mono text-[11px] uppercase tracking-[0.16em] text-ink-soft">Fee schedule</h2>
+            <h2 className="font-mono text-[11px] uppercase tracking-[0.16em] text-ink-soft">{t("Fee schedule")}</h2>
             {canEdit && (
               <Button variant="secondary" size="sm" onClick={() => setFees((f) => [...f, ["", ""]])}>
                 <Plus className="h-3.5 w-3.5" />
-                Add fee
+                {t("Add fee")}
               </Button>
             )}
           </div>
           <p className="mt-1 text-[13px] text-ink-muted">
-            From the Jotform agreement. When an invoice item is linked to one of these fields, its amount is suggested as the rate.
+            {t("From the Jotform agreement. When an invoice item is linked to one of these fields, its amount is suggested as the rate.")}
           </p>
           <div className="mt-4 space-y-2">
             {fees.map(([k, v], i) => (
@@ -162,7 +164,7 @@ export function ClientForm({
                 <input
                   value={k}
                   onChange={(e) => setFees((f) => f.map((p, j) => (j === i ? [e.target.value, p[1]] : p)))}
-                  placeholder="FIELD"
+                  placeholder={t("FIELD")}
                   className={cn(fieldClass, "font-mono text-[12px] uppercase")}
                 />
                 <input
@@ -172,26 +174,26 @@ export function ClientForm({
                 />
                 <button
                   onClick={() => setFees((f) => f.filter((_, j) => j !== i))}
-                  aria-label="Remove fee"
-                  className="flex h-10 items-center justify-center rounded-control text-ink-soft hover:bg-overlay/[0.06] hover:text-rose-300"
+                  aria-label={t("Remove fee")}
+                  className="flex h-10 items-center justify-center rounded-control text-ink-soft hover:bg-overlay/[0.06] hover:text-rose-600 dark:hover:text-rose-300"
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
               </div>
             ))}
-            {fees.length === 0 && <p className="py-4 text-center text-[13px] text-ink-soft">No fees recorded.</p>}
+            {fees.length === 0 && <p className="py-4 text-center text-[13px] text-ink-soft">{t("No fees recorded.")}</p>}
           </div>
         </section>
 
         {canEdit && (
           <div className="flex items-center gap-2.5">
             <Button onClick={save} loading={pending}>
-              {id ? "Save changes" : "Create client"}
+              {t(id ? "Save changes" : "Create client")}
             </Button>
-            {saved && <span className="text-[13px] text-emerald-300">Saved.</span>}
+            {saved && <span className="text-[13px] text-emerald-600 dark:text-emerald-300">{t("Saved.")}</span>}
             {id && (
               <Button variant={confirmDelete ? "danger" : "ghost"} onClick={remove} disabled={pending} className="ml-auto">
-                {confirmDelete ? "Confirm delete" : "Delete client"}
+                {t(confirmDelete ? "Confirm delete" : "Delete client")}
               </Button>
             )}
           </div>
@@ -201,25 +203,25 @@ export function ClientForm({
       {id && (
         <aside className="space-y-4">
           <div className="glass-panel neon-edge rounded-card p-5">
-            <p className="text-sm font-medium text-ink-muted">Unpaid</p>
+            <p className="text-sm font-medium text-ink-muted">{t("Unpaid")}</p>
             <p className="tnum mt-1 text-2xl font-bold text-ink">USD {formatMoney(unpaid)}</p>
-            <p className="mt-1 text-[13px] text-ink-soft">{invoices.length} invoices in total</p>
+            <p className="mt-1 text-[13px] text-ink-soft">{t("{0} invoices in total", invoices.length)}</p>
             {canEdit && <Link
               href={`/invoices/new?client=${id}`}
               className="mt-4 inline-flex h-9 items-center gap-2 rounded-control bg-gradient-to-r from-brand-600 to-brand-400 px-3.5 text-sm font-medium text-white shadow-glow-brand hover:brightness-110"
             >
               <FilePlus2 className="h-4 w-4" />
-              New invoice
+              {t("New invoice")}
             </Link>}
           </div>
           <div className="glass-panel neon-edge rounded-card p-5">
-            <h2 className="font-mono text-[11px] uppercase tracking-[0.16em] text-ink-soft">Invoices</h2>
+            <h2 className="font-mono text-[11px] uppercase tracking-[0.16em] text-ink-soft">{t("Invoices")}</h2>
             <ul className="mt-3 max-h-[60vh] divide-y divide-line/60 overflow-y-auto">
               {invoices.map((inv) => (
                 <li key={inv.id}>
                   <Link href={`/invoices/${inv.id}`} className="flex items-center gap-3 py-2.5 hover:bg-overlay/[0.03]">
                     <div className="min-w-0 flex-1">
-                      <p className="truncate font-mono text-[13px] text-brand-200">{inv.number}</p>
+                      <p className="truncate font-mono text-[13px] text-brand-700 dark:text-brand-200">{inv.number}</p>
                       <p className="truncate text-[12px] text-ink-soft">
                         {formatDate(inv.invoiceDate)} · {inv.type || "—"}
                         {inv.subtype ? ` · ${inv.subtype}` : ""}
@@ -235,7 +237,7 @@ export function ClientForm({
                   </Link>
                 </li>
               ))}
-              {invoices.length === 0 && <li className="py-6 text-center text-[13px] text-ink-soft">No invoices yet.</li>}
+              {invoices.length === 0 && <li className="py-6 text-center text-[13px] text-ink-soft">{t("No invoices yet.")}</li>}
             </ul>
           </div>
         </aside>

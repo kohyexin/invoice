@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
-import { t } from "@/lib/i18n";
+import { useI18n } from "@/components/i18n/locale-provider";
 
 /* Right-hand drawer (Stripe-style) for editing flows — long forms scroll
  * better here than in a centered modal. */
@@ -21,6 +21,7 @@ export function SidePanel({
   children: React.ReactNode;
   footer?: React.ReactNode;
 }) {
+  const { t } = useI18n();
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -42,11 +43,11 @@ export function SidePanel({
       <div
         role="dialog"
         aria-modal="true"
-        aria-label={title}
+        aria-label={t(title)}
         className="glass-panel absolute right-0 top-0 flex h-full w-full max-w-xl flex-col border-l border-line shadow-float animate-slide-in-right"
       >
         <div className="flex items-start justify-between gap-4 border-b border-line px-6 py-5">
-          <h2 className="text-lg font-semibold text-ink">{title}</h2>
+          <h2 className="text-lg font-semibold text-ink">{t(title)}</h2>
           <button
             type="button"
             onClick={onClose}

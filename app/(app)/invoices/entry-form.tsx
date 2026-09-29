@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Field, Select, fieldClass } from "@/components/ui/form-controls";
 import { CURRENCIES, STATUSES, cn, round2, toDateInput } from "@/lib/utils";
+import { useI18n } from "@/components/i18n/locale-provider";
 import { deleteEntry, entryDefaults, saveEntry, type EntryInput } from "./actions";
 
 export type Lookups = {
@@ -53,6 +54,7 @@ export function EntryForm({
   onCancel?: () => void;
   readOnly?: boolean;
 }) {
+  const { t } = useI18n();
   const [v, setV] = useState<EntryInput>(initial);
   const [clientText, setClientText] = useState(() => lookups.clients.find((c) => c.id === initial.clientId)?.name ?? "");
   const [usdTouched, setUsdTouched] = useState(Boolean(id));
@@ -62,7 +64,7 @@ export function EntryForm({
   const [pending, start] = useTransition();
 
   const byName = useMemo(() => new Map(lookups.clients.map((c) => [c.name.toLowerCase(), c.id])), [lookups.clients]);
-  const typeHint = lookups.types.find((t) => t.id === v.typeId)?.subtypeHint;
+  const typeHint = lookups.types.find((ty) => ty.id === v.typeId)?.subtypeHint;
 
   function suggestedUsd(amount: string, currency: string) {
     const n = Number(amount.replace(/,/g, ""));
@@ -131,8 +133,8 @@ export function EntryForm({
 
   return (
     <fieldset disabled={readOnly} className="min-w-0 space-y-5">
-      {error && <p className="rounded-control border border-danger/30 bg-danger/10 px-3 py-2 text-[13px] text-rose-200">{error}</p>}
-      {reuse && <p className="rounded-control border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-[13px] text-amber-200">{reuse}</p>}
+      {error && <p className="rounded-control border border-danger/30 bg-danger/10 px-3 py-2 text-[13px] text-rose-700 dark:text-rose-200">{t(error)}</p>}
+      {reuse && <p className="rounded-control border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-[13px] text-amber-700 dark:text-amber-200">{t(reuse)}</p>}
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="sm:col-span-2">
@@ -141,7 +143,7 @@ export function EntryForm({
               list="entry-clients"
               value={clientText}
               onChange={(e) => pickClient(e.target.value)}
-              placeholder="Type to search"
+              placeholder={t("Type to search")}
               className={cn(fieldClass, clientText && !v.clientId && "border-amber-400/60")}
             />
             <datalist id="entry-clients">
@@ -160,15 +162,15 @@ export function EntryForm({
         <Field label="Type">
           <Select value={v.typeId} onChange={(e) => set("typeId", e.target.value)}>
             <option value="">—</option>
-            {lookups.types.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
+            {lookups.types.map((ty) => (
+              <option key={ty.id} value={ty.id}>
+                {ty.name}
               </option>
             ))}
           </Select>
         </Field>
         <Field label="Subtype">
-          <input value={v.subtype} onChange={(e) => set("subtype", e.target.value)} placeholder={typeHint || "Explains the type"} className={fieldClass} />
+          <input value={v.subtype} onChange={(e) => set("subtype", e.target.value)} placeholder={typeHint || t("Explains the type")} className={fieldClass} />
         </Field>
         <Field label="Owner">
           <Select value={v.ownerId} onChange={(e) => set("ownerId", e.target.value)}>
@@ -182,8 +184,8 @@ export function EntryForm({
         </Field>
         <Field label="Generate">
           <Select value={v.generate} onChange={(e) => set("generate", e.target.value as EntryInput["generate"])}>
-            <option value="MANUAL">Manual</option>
-            <option value="SYSTEM">System</option>
+            <option value="MANUAL">{t("Manual")}</option>
+            <option value="SYSTEM">{t("System")}</option>
           </Select>
         </Field>
         <Field label="Invoice date *">
@@ -199,12 +201,12 @@ export function EntryForm({
             ))}
           </Select>
         </Field>
-        <Field label={`Amount (${v.currency}) *`}>
+        <Field label={`${t("Amount ({0})", v.currency)} *`}>
           <input inputMode="decimal" value={v.amount} onChange={(e) => set("amount", e.target.value)} className={cn(fieldClass, "tnum text-right")} />
         </Field>
         {nonUsd && (
           <div className="sm:col-span-2">
-            <Field label="USD equivalent" hint={`Suggested from the ${v.currency} rate in Settings. Overwrite it with the booked figure if it differs.`}>
+            <Field label="USD equivalent" hint={t("Suggested from the {0} rate in Settings. Overwrite it with the booked figure if it differs.", v.currency)}>
               <input
                 inputMode="decimal"
                 value={v.usdAmount}
@@ -220,7 +222,9 @@ export function EntryForm({
         <Field label="Status">
           <Select value={v.status} onChange={(e) => set("status", e.target.value as EntryInput["status"])}>
             {STATUSES.map((s) => (
-              <option key={s}>{s}</option>
+              <option key={s} value={s}>
+                {t(s)}
+              </option>
             ))}
           </Select>
         </Field>
@@ -228,7 +232,7 @@ export function EntryForm({
 
       {paid && (
         <div className="rounded-card border border-line/70 p-4">
-          <p className="mb-3 font-mono text-[11px] uppercase tracking-[0.16em] text-ink-soft">Payment</p>
+          <p className="mb-3 font-mono text-[11px] uppercase tracking-[0.16em] text-ink-soft">{t("Payment")}</p>
           <PaymentFields
             value={v}
             onChange={(key, value) => set(key, value)}
@@ -244,16 +248,16 @@ export function EntryForm({
       {!readOnly && (
         <div className="flex items-center gap-2">
           <Button onClick={save} loading={pending}>
-            {reuse ? "Save anyway" : id ? "Save changes" : "Add to ledger"}
+            {t(reuse ? "Save anyway" : id ? "Save changes" : "Add to ledger")}
           </Button>
           {onCancel && (
             <Button variant="secondary" onClick={onCancel} disabled={pending}>
-              Cancel
+              {t("Cancel")}
             </Button>
           )}
           {id && (
             <Button variant={confirmDelete ? "danger" : "ghost"} onClick={remove} disabled={pending} className="ml-auto">
-              {confirmDelete ? "Confirm delete" : "Delete"}
+              {t(confirmDelete ? "Confirm delete" : "Delete")}
             </Button>
           )}
         </div>
@@ -273,6 +277,7 @@ export function PaymentFields({
   onChange: (key: PaymentKeys, value: string) => void;
   defaultAmount: string;
 }) {
+  const { t } = useI18n();
   function setFee(fee: string) {
     onChange("fee", fee);
     const gross = Number(defaultAmount.replace(/,/g, ""));
@@ -308,7 +313,7 @@ export function PaymentFields({
           <input
             value={value.paymentNote}
             onChange={(e) => onChange("paymentNote", e.target.value)}
-            placeholder="e.g. Paid CNY 4,200, still owes USD 200"
+            placeholder={t("e.g. Paid CNY 4,200, still owes USD 200")}
             className={fieldClass}
           />
         </Field>

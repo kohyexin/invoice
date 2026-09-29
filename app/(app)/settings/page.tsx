@@ -15,7 +15,7 @@ export default async function SettingsPage() {
     prisma.invoiceItem.findMany({ orderBy: [{ sortOrder: "asc" }, { labelEn: "asc" }] }),
     prisma.user.findMany({
       orderBy: [{ active: "desc" }, { name: "asc" }],
-      select: { id: true, email: true, name: true, role: true, active: true, lastLoginAt: true },
+      select: { id: true, email: true, name: true, role: true, active: true, lastLoginAt: true, totpEnabledAt: true },
     }),
   ]);
 
@@ -45,7 +45,11 @@ export default async function SettingsPage() {
         owners={owners}
         types={types}
         items={items}
-        users={users.map((u) => ({ ...u, lastLoginAt: u.lastLoginAt?.toISOString() ?? null }))}
+        users={users.map((u) => ({
+          ...u,
+          lastLoginAt: u.lastLoginAt?.toISOString() ?? null,
+          totpEnabledAt: u.totpEnabledAt?.toISOString() ?? null,
+        }))}
         meId={me.id}
       />
     </>

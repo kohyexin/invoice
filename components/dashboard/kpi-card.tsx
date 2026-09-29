@@ -4,7 +4,7 @@ import { ArrowDownRight, ArrowUpRight, type LucideIcon } from "lucide-react";
 import { Area, AreaChart, ResponsiveContainer } from "recharts";
 import { cn } from "@/lib/utils";
 import { useChartTheme } from "./use-chart-theme";
-import { t } from "@/lib/i18n";
+import { useI18n } from "@/components/i18n/locale-provider";
 
 export function KpiCard({
   label,
@@ -30,6 +30,7 @@ export function KpiCard({
   live?: boolean;
 }) {
   const chart = useChartTheme();
+  const { t } = useI18n();
   const positive = delta !== undefined && delta >= 0;
   const goodDirection = invertDelta ? !positive : positive;
 
@@ -80,7 +81,7 @@ export function KpiCard({
         )}
       </div>
 
-      <p className="mt-4 text-sm font-medium text-ink-muted">{label}</p>
+      <p className="mt-4 text-sm font-medium text-ink-muted">{t(label)}</p>
       <p className="tnum mt-1 text-2xl font-bold tracking-tight text-ink">{value}</p>
 
       {spark && (

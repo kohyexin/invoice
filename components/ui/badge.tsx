@@ -1,6 +1,8 @@
+"use client";
+
 import * as React from "react";
 import { cn } from "@/lib/utils";
-import { t } from "@/lib/i18n";
+import { useI18n } from "@/components/i18n/locale-provider";
 
 type Tone = "neutral" | "success" | "danger" | "warning" | "brand" | "outline";
 
@@ -27,7 +29,7 @@ export function Badge({
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium",
+        "inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-medium",
         tones[tone],
         className
       )}
@@ -52,6 +54,7 @@ export function Badge({
 
 /** Invoice status pill. SENT is the unpaid state. */
 export function StatusBadge({ status }: { status: string }) {
+  const { t } = useI18n();
   const map: Record<string, Tone> = {
     PAID: "success",
     SENT: "warning",
@@ -67,9 +70,10 @@ export function StatusBadge({ status }: { status: string }) {
 }
 
 export function GenerateBadge({ generate }: { generate: string }) {
+  const { t } = useI18n();
   return (
     <Badge tone={generate === "SYSTEM" ? "brand" : "outline"}>
-      {generate === "SYSTEM" ? "System" : "Manual"}
+      {generate === "SYSTEM" ? t("System") : t("Manual")}
     </Badge>
   );
 }
