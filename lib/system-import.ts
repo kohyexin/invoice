@@ -165,7 +165,8 @@ export async function fetchMailbox(days = 40, actorId?: string) {
       const msg = await client.fetchOne(String(uid), { source: true, envelope: true }, { uid: true });
       if (!msg || !msg.source) continue;
       const subject = msg.envelope?.subject ?? "";
-      if (prefix && !subject.toLowerCase().startsWith(prefix)) continue;
+      const bare = subject.replace(/^(\s*(fwd?|fw|re)\s*:\s*)+/i, "").toLowerCase();
+      if (prefix && !bare.startsWith(prefix)) continue;
       const mail = await simpleParser(msg.source);
       const pdfs = mail.attachments.filter((a) => a.contentType === "application/pdf" || a.filename?.toLowerCase().endsWith(".pdf"));
       for (const a of pdfs) {
