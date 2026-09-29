@@ -1,11 +1,19 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { prisma } from "@/lib/db";
 import { authorize, requireRole } from "@/lib/session";
-import { importMailboxUids, importSystemPdf, listMailbox, type ImportOutcome, type MailboxScan } from "@/lib/system-import";
+import {
+  approveReview,
+  listMailbox,
+  rejectReview,
+  restoreReview,
+  stageMailboxUids,
+  stageSystemPdf,
+  type MailboxScan,
+  type StageOutcome,
+} from "@/lib/system-import";
 
-type Summary = { ok: true; outcomes: (ImportOutcome & { label: string })[] } | { ok: false; error: string };
+type Summary = { ok: true; outcomes: (StageOutcome & { label: string })[] } | { ok: false; error: string };
 
 function refresh() {
   revalidatePath("/imports");
@@ -16,7 +24,7 @@ function refresh() {
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : "Mailbox fetch failed.");
 
-/** Step 1 of a mailbox check: which emails still need importing. */
+/** Step 1 of a mailbox check: which emails are new, and which were handled before. */
 export async function scanMailbox(): Promise<({ ok: true } & MailboxScan) | { ok: false; error: string }> {
   const auth = await authorize("STAFF");
   if (!auth.ok) return auth;
@@ -28,11 +36,11 @@ export async function scanMailbox(): Promise<({ ok: true } & MailboxScan) | { ok
 }
 
 /** Step 2, called repeatedly by the page with a few emails at a time so no single request runs long. */
-export async function importMailboxBatch(uids: number[]): Promise<Summary> {
+export async function stageMailboxBatch(uids: number[]): Promise<Summary> {
   const auth = await authorize("STAFF");
   if (!auth.ok) return auth;
   try {
-    const outcomes = await importMailboxUids(uids.slice(0, 10), auth.user.id);
+    const outcomes = await stageMailboxUids(uids.slice(0, 10));
     return { ok: true, outcomes: outcomes.map((o) => ({ ...o, label: o.subject })) };
   } catch (e) {
     return { ok: false, error: errorText(e) };
@@ -49,37 +57,32 @@ export async function uploadPdfs(form: FormData): Promise<Summary> {
   if (!auth.ok) return auth;
   const files = form.getAll("files").filter((f): f is File => f instanceof File && f.size > 0);
   if (!files.length) return { ok: false, error: "Choose one or more PDF files." };
-  const outcomes: (ImportOutcome & { label: string })[] = [];
+  const outcomes: (StageOutcome & { label: string })[] = [];
   for (const f of files) {
-    const outcome = await importSystemPdf(
-      { data: new Uint8Array(await f.arrayBuffer()), filename: f.name, subject: f.name },
-      undefined,
-      auth.user.id
-    );
+    const outcome = await stageSystemPdf({ data: new Uint8Array(await f.arrayBuffer()), filename: f.name, subject: f.name });
     outcomes.push({ ...outcome, label: f.name });
   }
   refresh();
   return { ok: true, outcomes };
 }
 
-export async function resolveReview(id: string, clientId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+/** Approves one item. The page calls this once per item, so "approve all" can show progress. */
+export async function approveImport(id: string, clientId: string, refreshAfter = true): Promise<{ ok: true; number: string } | { ok: false; error: string }> {
   const auth = await authorize("STAFF");
   if (!auth.ok) return auth;
-  const row = await prisma.importReview.findUnique({ where: { id } });
-  if (!row?.pdf) return { ok: false, error: "The PDF for this item is missing." };
-  if (!clientId) return { ok: false, error: "Pick a client." };
-  const outcome = await importSystemPdf(
-    { data: new Uint8Array(row.pdf), filename: row.filename, messageId: row.messageId, subject: row.subject, receivedAt: row.receivedAt },
-    clientId,
-    auth.user.id
-  );
-  refresh();
-  if (outcome.status === "imported" || outcome.status === "duplicate") return { ok: true };
-  return { ok: false, error: outcome.reason };
+  const res = await approveReview(id, clientId, auth.user.id);
+  if (refreshAfter) refresh();
+  return res;
 }
 
-export async function dismissReview(id: string) {
+export async function rejectImport(id: string) {
+  const user = await requireRole("STAFF");
+  await rejectReview(id, user.id);
+  refresh();
+}
+
+export async function restoreImport(id: string) {
   await requireRole("STAFF");
-  await prisma.importReview.update({ where: { id }, data: { status: "DISMISSED" } });
+  await restoreReview(id);
   refresh();
 }

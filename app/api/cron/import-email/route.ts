@@ -6,7 +6,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-/** Called by the scheduler with `Authorization: Bearer $CRON_SECRET`. */
+/** Called by the scheduler with `Authorization: Bearer $CRON_SECRET`.
+ *  Files new invoice emails for approval; nothing is posted to the ledger here. */
 export async function GET(req: Request) {
   const secret = process.env.CRON_SECRET;
   if (!secret || req.headers.get("authorization") !== `Bearer ${secret}`) {
@@ -15,17 +16,16 @@ export async function GET(req: Request) {
   if (!mailboxConfigured()) return NextResponse.json({ error: "Mailbox not configured" }, { status: 503 });
 
   try {
-    const { outcomes, alreadyDone, remaining } = await fetchMailbox();
-    revalidatePath("/invoices");
+    const { outcomes, known, remaining } = await fetchMailbox();
     revalidatePath("/imports");
-    revalidatePath("/dashboard");
+    revalidatePath("/", "layout");
     const count = (s: string) => outcomes.filter((o) => o.status === s).length;
     return NextResponse.json({
-      imported: count("imported"),
+      queued: count("queued"),
       duplicate: count("duplicate"),
-      review: count("review"),
+      rejected: count("rejected"),
       skipped: count("skipped"),
-      alreadyDone,
+      known,
       remaining,
       outcomes,
     });

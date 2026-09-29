@@ -46,7 +46,7 @@ export async function loadShellAlerts(role: RoleName): Promise<ShellAlerts> {
       items: imports[1].map((r) => ({
         id: r.id,
         subject: r.subject,
-        reason: r.reason,
+        reason: r.reason || "Ready to approve.",
         at: (r.receivedAt ?? r.createdAt).toISOString(),
       })),
     },

@@ -1,7 +1,7 @@
 import "server-only";
 import { createHash } from "node:crypto";
 import { prisma } from "@/lib/db";
-import type { Currency } from "@/lib/generated/prisma/client";
+import type { Currency, ReviewStatus } from "@/lib/generated/prisma/client";
 import { CURRENCIES, parseDateInput } from "@/lib/utils";
 import { fxRates, toUsd } from "@/lib/rules";
 import { extractPdfText, parseSystemInvoiceText, type SystemInvoice } from "@/lib/system-invoice";
@@ -15,94 +15,145 @@ export type ImportSource = {
   receivedAt?: Date | null;
 };
 
-export type ImportOutcome =
-  | { status: "imported"; invoiceId: string; number: string; client: string }
-  | { status: "duplicate"; number: string }
-  | { status: "review"; reviewId: string; reason: string }
-  | { status: "skipped"; reason: string };
+/** What reading one PDF did. Reading never posts to the ledger; only approval does.
+ *  - queued: new, now waiting for approval
+ *  - waiting: already waiting for approval from an earlier check
+ *  - rejected: rejected before (same email, or same invoice number)
+ *  - imported: approved and posted before
+ *  - duplicate: the invoice number is already on the ledger */
+export type StageStatus = "queued" | "waiting" | "rejected" | "imported" | "duplicate" | "skipped";
+export type StageOutcome = { status: StageStatus; number?: string; client?: string; reason?: string };
+
+const STATUS_OF: Record<ReviewStatus, StageStatus> = {
+  PENDING: "waiting",
+  DISMISSED: "rejected",
+  IMPORTED: "imported",
+  DUPLICATE: "duplicate",
+};
 
 const norm = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, "");
 
-async function matchClient(inv: Partial<SystemInvoice>) {
+async function matchClient(inv: Partial<SystemInvoice>): Promise<{ id: string; name: string } | { reason: string }> {
   if (inv.reference) {
-    const byRef = await prisma.client.findMany({ where: { agreementNo: { equals: inv.reference, mode: "insensitive" } }, select: { id: true } });
-    if (byRef.length === 1) return { id: byRef[0].id };
+    const byRef = await prisma.client.findMany({ where: { agreementNo: { equals: inv.reference, mode: "insensitive" } }, select: { id: true, name: true } });
+    if (byRef.length === 1) return byRef[0];
     if (byRef.length > 1) return { reason: `Reference ${inv.reference} matches ${byRef.length} clients.` };
   }
   if (inv.clientName) {
     const key = norm(inv.clientName);
     const all = await prisma.client.findMany({ select: { id: true, alias: true, name: true } });
     const hits = all.filter((c) => (c.alias && norm(c.alias) === key) || norm(c.name) === key);
-    if (hits.length === 1) return { id: hits[0].id };
+    if (hits.length === 1) return hits[0];
     if (hits.length > 1) return { reason: `Client name ${inv.clientName} matches ${hits.length} clients.` };
   }
   return { reason: `No client with reference ${inv.reference || "—"} or alias ${inv.clientName || "—"}.` };
 }
 
-async function toReview(src: ImportSource, messageId: string, reason: string, parsed: Partial<SystemInvoice> | null): Promise<ImportOutcome> {
-  const row = await prisma.importReview.upsert({
-    where: { messageId },
-    update: { reason, parsed: parsed ?? undefined, status: "PENDING" },
-    create: {
-      messageId,
-      subject: src.subject ?? "",
-      receivedAt: src.receivedAt ?? null,
-      filename: src.filename,
-      pdf: Buffer.from(src.data),
-      parsed: parsed ?? undefined,
-      reason,
-    },
-  });
-  return { status: "review", reviewId: row.id, reason };
-}
-
-/** Posts one system-invoice PDF to the ledger, or parks it for review. */
-export async function importSystemPdf(src: ImportSource, forceClientId?: string, actorId?: string): Promise<ImportOutcome> {
+/** Reads one system-invoice PDF and files it for review. Never touches the ledger,
+ *  except to attach the PDF to an invoice that is already there. */
+export async function stageSystemPdf(src: ImportSource): Promise<StageOutcome> {
   const messageId = src.messageId ?? `upload:${createHash("sha256").update(src.data).digest("hex").slice(0, 32)}`;
 
-  if (!forceClientId) {
-    const [done, parked] = await Promise.all([
-      prisma.invoice.findUnique({ where: { sourceMessageId: messageId }, select: { number: true } }),
-      prisma.importReview.findUnique({ where: { messageId }, select: { status: true } }),
-    ]);
-    if (done) return { status: "duplicate", number: done.number };
-    if (parked && parked.status !== "PENDING") return { status: "skipped", reason: `Already ${parked.status.toLowerCase()}.` };
-  }
+  const [posted, known] = await Promise.all([
+    prisma.invoice.findUnique({ where: { sourceMessageId: messageId }, select: { number: true } }),
+    prisma.importReview.findUnique({ where: { messageId }, select: { status: true, invoiceNumber: true, reason: true } }),
+  ]);
+  if (posted) return { status: "imported", number: posted.number };
+  if (known) return { status: STATUS_OF[known.status], number: known.invoiceNumber ?? undefined, reason: known.reason || undefined };
+
+  const base = {
+    messageId,
+    subject: src.subject ?? "",
+    receivedAt: src.receivedAt ?? null,
+    filename: src.filename,
+    pdf: Buffer.from(src.data),
+  };
 
   let text: string;
   try {
     text = await extractPdfText(src.data);
   } catch {
-    return toReview(src, messageId, "The attachment could not be read as a PDF.", null);
+    const reason = "The attachment could not be read as a PDF.";
+    await prisma.importReview.create({ data: { ...base, reason } });
+    return { status: "queued", reason };
   }
   const parsed = parseSystemInvoiceText(text);
-  if (!parsed.ok) return toReview(src, messageId, parsed.error, parsed.partial);
+  if (!parsed.ok) {
+    await prisma.importReview.create({ data: { ...base, parsed: parsed.partial, invoiceNumber: parsed.partial.number || null, reason: parsed.error } });
+    return { status: "queued", number: parsed.partial.number || undefined, reason: parsed.error };
+  }
   const inv = parsed.invoice;
 
-  const existing = await prisma.invoice.findFirst({ where: { number: inv.number }, select: { id: true, document: { select: { id: true } } } });
-  if (existing) {
-    if (!existing.document) {
-      await prisma.invoiceDocument.create({ data: { invoiceId: existing.id, filename: src.filename, data: Buffer.from(src.data) } });
+  const [onLedger, earlier] = await Promise.all([
+    prisma.invoice.findFirst({ where: { number: inv.number }, select: { id: true, document: { select: { id: true } } } }),
+    prisma.importReview.findFirst({
+      where: { invoiceNumber: inv.number, status: { in: ["PENDING", "DISMISSED"] } },
+      orderBy: { createdAt: "desc" },
+      select: { status: true },
+    }),
+  ]);
+  const withInvoice = { ...base, parsed: inv, invoiceNumber: inv.number };
+
+  if (onLedger) {
+    if (!onLedger.document) {
+      await prisma.invoiceDocument.create({ data: { invoiceId: onLedger.id, filename: src.filename, data: Buffer.from(src.data) } });
     }
-    await prisma.importReview.updateMany({ where: { messageId, status: "PENDING" }, data: { status: "DISMISSED", reason: "Already in the ledger." } });
+    await prisma.importReview.create({ data: { ...withInvoice, status: "DUPLICATE", invoiceId: onLedger.id, reason: "Already in the ledger." } });
     return { status: "duplicate", number: inv.number };
   }
+  if (earlier?.status === "DISMISSED") {
+    const reason = "Rejected before (same invoice number).";
+    await prisma.importReview.create({ data: { ...withInvoice, status: "DISMISSED", reason } });
+    return { status: "rejected", number: inv.number, reason };
+  }
+  if (earlier?.status === "PENDING") {
+    const reason = "Same invoice as one already waiting for approval.";
+    await prisma.importReview.create({ data: { ...withInvoice, status: "DUPLICATE", reason } });
+    return { status: "waiting", number: inv.number, reason };
+  }
 
-  const match = forceClientId ? { id: forceClientId } : await matchClient(inv);
-  if (!("id" in match) || !match.id) return toReview(src, messageId, match.reason ?? "No client match.", inv);
+  const match = await matchClient(inv);
+  const client = "id" in match ? match : null;
+  const reason = client ? "" : (match as { reason: string }).reason;
+  await prisma.importReview.create({ data: { ...withInvoice, clientId: client?.id ?? null, reason } });
+  return { status: "queued", number: inv.number, client: client?.name, reason: reason || undefined };
+}
+
+/** Posts an approved review item to the ledger. */
+export async function approveReview(id: string, clientId: string, actorId: string): Promise<{ ok: true; number: string } | { ok: false; error: string }> {
+  const row = await prisma.importReview.findUnique({ where: { id } });
+  if (!row || row.status !== "PENDING") return { ok: false, error: "This item was already handled." };
+  if (!row.pdf) return { ok: false, error: "The PDF for this item is missing." };
+  if (!clientId) return { ok: false, error: "Pick a client." };
+
+  let parsed: ReturnType<typeof parseSystemInvoiceText>;
+  try {
+    parsed = parseSystemInvoiceText(await extractPdfText(new Uint8Array(row.pdf)));
+  } catch {
+    return { ok: false, error: "The attachment could not be read as a PDF." };
+  }
+  if (!parsed.ok) return { ok: false, error: parsed.error };
+  const inv = parsed.invoice;
+
+  const existing = await prisma.invoice.findFirst({ where: { number: inv.number }, select: { id: true } });
+  if (existing) {
+    await prisma.importReview.update({ where: { id }, data: { status: "DUPLICATE", invoiceId: existing.id, reason: "Already in the ledger." } });
+    return { ok: false, error: "This invoice number is already in the ledger." };
+  }
 
   const [client, last] = await Promise.all([
-    prisma.client.findUniqueOrThrow({ where: { id: match.id }, select: { id: true, name: true, alias: true, defaultOwnerId: true } }),
+    prisma.client.findUnique({ where: { id: clientId }, select: { id: true, name: true, alias: true, defaultOwnerId: true } }),
     prisma.invoice.findFirst({
-      where: { clientId: match.id, generate: "SYSTEM" },
+      where: { clientId, generate: "SYSTEM" },
       orderBy: { invoiceDate: "desc" },
       select: { typeId: true, subtype: true, ownerId: true },
     }),
   ]);
+  if (!client) return { ok: false, error: "Pick a client." };
 
   const currency: Currency = (CURRENCIES as readonly string[]).includes(inv.currency) ? (inv.currency as Currency) : "USD";
   const usdAmount = toUsd(inv.amount, currency, await fxRates());
-  if (usdAmount === null) return toReview(src, messageId, `No FX rate for ${currency}.`, inv);
+  if (usdAmount === null) return { ok: false, error: `No FX rate for ${currency}.` };
 
   const created = await prisma.invoice.create({
     data: {
@@ -123,16 +174,39 @@ export async function importSystemPdf(src: ImportSource, forceClientId?: string,
       amount: inv.amount,
       usdAmount,
       fxRate: currency === "USD" || inv.amount === 0 ? null : usdAmount / inv.amount,
-      sourceMessageId: messageId,
-      createdById: actorId ?? null,
-      updatedById: actorId ?? null,
-      document: { create: { filename: src.filename, data: Buffer.from(src.data) } },
+      sourceMessageId: row.messageId,
+      createdById: actorId,
+      updatedById: actorId,
+      document: { create: { filename: row.filename, data: Buffer.from(row.pdf) } },
     },
   });
-  await prisma.importReview.updateMany({ where: { messageId }, data: { status: "IMPORTED" } });
+  await prisma.importReview.update({
+    where: { id },
+    data: { status: "IMPORTED", invoiceId: created.id, clientId: client.id, reason: "", decidedAt: new Date(), decidedById: actorId },
+  });
   if (!client.alias) await prisma.client.update({ where: { id: client.id }, data: { alias: inv.clientName.toUpperCase() } });
 
-  return { status: "imported", invoiceId: created.id, number: inv.number, client: client.name };
+  return { ok: true, number: inv.number };
+}
+
+export async function rejectReview(id: string, actorId: string) {
+  await prisma.importReview.updateMany({ where: { id, status: "PENDING" }, data: { status: "DISMISSED", decidedAt: new Date(), decidedById: actorId } });
+}
+
+/** Puts a rejected item back in the approval queue. */
+export async function restoreReview(id: string) {
+  const row = await prisma.importReview.findUnique({ where: { id }, select: { status: true, parsed: true, clientId: true } });
+  if (!row || row.status !== "DISMISSED") return;
+  const inv = (row.parsed ?? {}) as Partial<SystemInvoice>;
+  let clientId = row.clientId;
+  let reason = "";
+  if (!inv.number) reason = "No invoice number found.";
+  else if (!clientId) {
+    const match = await matchClient(inv);
+    if ("id" in match) clientId = match.id;
+    else reason = match.reason;
+  }
+  await prisma.importReview.update({ where: { id }, data: { status: "PENDING", clientId, reason, decidedAt: null, decidedById: null } });
 }
 
 export function mailboxConfigured() {
@@ -140,7 +214,7 @@ export function mailboxConfigured() {
 }
 
 export type MailboxItem = { uid: number; subject: string };
-export type MailboxOutcome = ImportOutcome & { subject: string };
+export type MailboxOutcome = StageOutcome & { subject: string };
 
 const MAILBOX_DAYS = 40;
 
@@ -180,10 +254,18 @@ function subjectMatches(subject: string) {
   return !prefix || stripReplyPrefix(subject).startsWith(prefix);
 }
 
-/** Lists invoice emails from the last `days` days that haven't been processed yet.
- *  Reads envelopes only, so it stays fast even with a full inbox. */
-export type MailboxScan = { items: MailboxItem[]; alreadyDone: number; seen: number; otherSubjects: string[] };
+export type KnownCounts = { waiting: number; rejected: number; imported: number; duplicate: number };
+export type MailboxScan = {
+  items: MailboxItem[];
+  known: KnownCounts;
+  /** Emails in this check that were rejected before, so the reviewer sees them without re-approving. */
+  rejected: { subject: string; number: string | null }[];
+  seen: number;
+  otherSubjects: string[];
+};
 
+/** Lists invoice emails from the last `days` days and sorts out which ones are new.
+ *  Reads envelopes only, so it stays fast even with a full inbox. */
 export async function listMailbox(days = MAILBOX_DAYS): Promise<MailboxScan> {
   const since = new Date(Date.now() - days * 86_400_000);
   const { found, seen, otherSubjects } = await withMailbox(async (client) => {
@@ -198,21 +280,39 @@ export async function listMailbox(days = MAILBOX_DAYS): Promise<MailboxScan> {
     }
     return { found, seen: uids.length, otherSubjects: otherSubjects.slice(-5).reverse() };
   });
-  if (!found.length) return { items: [], alreadyDone: 0, seen, otherSubjects };
 
-  const [invoices, reviews] = await Promise.all([
+  const known: KnownCounts = { waiting: 0, rejected: 0, imported: 0, duplicate: 0 };
+  const rejected: MailboxScan["rejected"] = [];
+  if (!found.length) return { items: [], known, rejected, seen, otherSubjects };
+
+  const [posted, reviews] = await Promise.all([
     prisma.invoice.findMany({ where: { sourceMessageId: { not: null }, createdAt: { gte: since } }, select: { sourceMessageId: true } }),
-    prisma.importReview.findMany({ where: { status: { not: "PENDING" }, createdAt: { gte: since } }, select: { messageId: true } }),
+    prisma.importReview.findMany({ where: { createdAt: { gte: since } }, select: { messageId: true, status: true, invoiceNumber: true } }),
   ]);
-  const done = [...invoices.map((i) => i.sourceMessageId!), ...reviews.map((r) => r.messageId)];
-  const processed = (messageId: string) => done.some((d) => d.startsWith(`${messageId}:`));
 
-  const items = found.filter((f) => !processed(f.messageId)).map(({ uid, subject }) => ({ uid, subject }));
-  return { items, alreadyDone: found.length - items.length, seen, otherSubjects };
+  const items: MailboxItem[] = [];
+  for (const f of found) {
+    const key = `${f.messageId}:`;
+    const rows = reviews.filter((r) => r.messageId.startsWith(key));
+    const wasPosted = posted.some((p) => p.sourceMessageId!.startsWith(key));
+    if (!rows.length && !wasPosted) {
+      items.push({ uid: f.uid, subject: f.subject });
+    } else if (wasPosted || rows.some((r) => r.status === "IMPORTED")) {
+      known.imported++;
+    } else if (rows.some((r) => r.status === "DISMISSED")) {
+      known.rejected++;
+      rejected.push({ subject: f.subject, number: rows.find((r) => r.invoiceNumber)?.invoiceNumber ?? null });
+    } else if (rows.some((r) => r.status === "PENDING")) {
+      known.waiting++;
+    } else {
+      known.duplicate++;
+    }
+  }
+  return { items, known, rejected, seen, otherSubjects };
 }
 
-/** Downloads the given messages and imports their PDF attachments. */
-export async function importMailboxUids(uids: number[], actorId?: string): Promise<MailboxOutcome[]> {
+/** Downloads the given messages and files their PDF attachments for review. */
+export async function stageMailboxUids(uids: number[]): Promise<MailboxOutcome[]> {
   if (!uids.length) return [];
   const { simpleParser } = await import("mailparser");
   return withMailbox(async (client) => {
@@ -225,17 +325,13 @@ export async function importMailboxUids(uids: number[], actorId?: string): Promi
       const pdfs = mail.attachments.filter((a) => a.contentType === "application/pdf" || a.filename?.toLowerCase().endsWith(".pdf"));
       if (!pdfs.length) outcomes.push({ status: "skipped", reason: "No PDF attached.", subject });
       for (const a of pdfs) {
-        const outcome = await importSystemPdf(
-          {
-            data: new Uint8Array(a.content),
-            filename: a.filename ?? "invoice.pdf",
-            messageId: `${mail.messageId ?? `uid-${uid}`}:${a.filename ?? ""}`,
-            subject,
-            receivedAt: mail.date ?? null,
-          },
-          undefined,
-          actorId
-        );
+        const outcome = await stageSystemPdf({
+          data: new Uint8Array(a.content),
+          filename: a.filename ?? "invoice.pdf",
+          messageId: `${mail.messageId ?? `uid-${uid}`}:${a.filename ?? ""}`,
+          subject,
+          receivedAt: mail.date ?? null,
+        });
         outcomes.push({ ...outcome, subject });
       }
     }
@@ -243,16 +339,17 @@ export async function importMailboxUids(uids: number[], actorId?: string): Promi
   });
 }
 
-/** Scheduled run: imports as much as fits in `budgetMs`. Whatever is left is picked up next run. */
-export async function fetchMailbox(budgetMs = 45_000, actorId?: string) {
+/** Scheduled run: files as many new emails for review as fit in `budgetMs`.
+ *  Whatever is left is picked up next run. */
+export async function fetchMailbox(budgetMs = 45_000) {
   const started = Date.now();
-  const { items, alreadyDone } = await listMailbox();
+  const { items, known } = await listMailbox();
   const outcomes: MailboxOutcome[] = [];
   let next = 0;
   while (next < items.length && Date.now() - started < budgetMs) {
     const batch = items.slice(next, next + 5).map((i) => i.uid);
-    outcomes.push(...(await importMailboxUids(batch, actorId)));
+    outcomes.push(...(await stageMailboxUids(batch)));
     next += batch.length;
   }
-  return { outcomes, alreadyDone, remaining: items.length - next };
+  return { outcomes, known, remaining: items.length - next };
 }
