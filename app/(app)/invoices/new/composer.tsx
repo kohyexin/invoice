@@ -129,6 +129,30 @@ export function Composer({
   const [pending, start] = useTransition();
 
   const clientByName = useMemo(() => new Map(clients.map((c) => [c.name.toLowerCase(), c])), [clients]);
+  /** Alias -> client. An alias used by more than one client is left out rather than guessed. */
+  const clientByAlias = useMemo(() => {
+    const owners = new Map<string, Set<string>>();
+    const add = (alias: string, id: string) => {
+      const key = alias.trim().toLowerCase();
+      if (key) owners.set(key, (owners.get(key) ?? new Set()).add(id));
+    };
+    for (const c of clients) add(c.alias, c.id);
+    for (const [id, list] of Object.entries(aliases)) list.forEach((a) => add(a, id));
+    const byId = new Map(clients.map((c) => [c.id, c]));
+    const map = new Map<string, ClientOpt>();
+    owners.forEach((ids, key) => {
+      if (ids.size === 1 && byId.has([...ids][0])) map.set(key, byId.get([...ids][0])!);
+    });
+    return map;
+  }, [clients, aliases]);
+  const aliasOptions = useMemo(
+    () =>
+      [...clientByAlias.entries()]
+        .map(([key, c]) => ({ alias: [c.alias, ...(aliases[c.id] ?? [])].find((a) => a.toLowerCase() === key) ?? key.toUpperCase(), client: c }))
+        .filter((o) => o.alias.toLowerCase() !== o.client.name.toLowerCase())
+        .sort((a, b) => a.alias.localeCompare(b.alias)),
+    [clientByAlias, aliases]
+  );
   const itemById = useMemo(() => new Map(items.map((i) => [i.id, i])), [items]);
   const client = clients.find((c) => c.id === clientId);
   const payable = altCurrency || currency;
@@ -171,14 +195,22 @@ export function Composer({
     );
   }
 
+  /** Accepts the client's name or any alias it has used; an alias is also kept as this invoice's alias. */
   function pickClient(text: string) {
     setClientText(text);
-    const c = clientByName.get(text.trim().toLowerCase());
+    const key = text.trim().toLowerCase();
+    const byName = clientByName.get(key);
+    const c = byName ?? clientByAlias.get(key);
+    const typedAlias = !byName && c ? text.trim().toUpperCase() : "";
     setClientId(c?.id ?? "");
     if (!c) return;
+    if (c.id === clientId) {
+      if (typedAlias) setAlias(typedAlias);
+      return;
+    }
     setBillTo(billToFromClient(c));
     setReference(c.agreementNo);
-    setAlias(c.alias || aliases[c.id]?.[0] || "");
+    setAlias(typedAlias || c.alias || aliases[c.id]?.[0] || "");
     setOwnerId(c.defaultOwnerId ?? defaultOwnerId);
     setLines((prev) => prev.map((l) => withClientRate(l, c)));
     if (!editing) start(async () => setNumber(await nextNumber(c.id)));
@@ -346,17 +378,21 @@ export function Composer({
           <h2 className={title}>{t("Bill to")}</h2>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="sm:col-span-2">
-              <Field label="Client *">
+              <Field label="Client *" hint={client && clientText !== client.name ? t("Alias of {0}", client.name) : undefined}>
                 <input
                   list="composer-clients"
                   value={clientText}
                   onChange={(e) => pickClient(e.target.value)}
-                  placeholder={t("Type to search")}
+                  onBlur={() => client && clientText !== client.name && setClientText(client.name)}
+                  placeholder={t("Type the client name or alias")}
                   className={cn(fieldClass, clientText && !clientId && "border-amber-400/60")}
                 />
                 <datalist id="composer-clients">
                   {clients.map((c) => (
-                    <option key={c.id} value={c.name} />
+                    <option key={c.id} value={c.name} label={c.alias || undefined} />
+                  ))}
+                  {aliasOptions.map((o) => (
+                    <option key={`alias-${o.alias}`} value={o.alias} label={o.client.name} />
                   ))}
                 </datalist>
               </Field>

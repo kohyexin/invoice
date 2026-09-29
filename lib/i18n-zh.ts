@@ -717,4 +717,6 @@ export const ZH: Record<string, string> = {
   "Show preview": "显示预览",
   "Hide preview": "隐藏预览",
   Hide: "隐藏",
+  "Type the client name or alias": "输入客户名称或别名",
+  "Alias of {0}": "{0} 的别名",
 };
