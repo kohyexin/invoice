@@ -6,9 +6,9 @@ const nextConfig = {
     serverComponentsExternalPackages: ["@react-pdf/renderer", "exceljs", "pg", "unpdf", "imapflow", "mailparser"],
     // System-invoice PDFs are uploaded through a server action.
     serverActions: { bodySizeLimit: "20mb" },
-    // PDF routes read fonts and logos from disk at runtime.
+    // PDFs are rendered from routes, server actions and crons alike, reading fonts and logos from disk.
     outputFileTracingIncludes: {
-      "/api/invoices/**": ["./assets/fonts/**", "./public/logos/**"],
+      "/**": ["./assets/fonts/**", "./public/logos/**"],
     },
   },
 };
