@@ -30,7 +30,7 @@ export default async function ImportsPage() {
         subtitle="Invoices from the STAR SAAS billing system, read from the invoice mailbox or uploaded here, and posted to the ledger as System."
       />
       <ImportsView
-        mailbox={mailboxConfigured() ? { user: process.env.IMAP_USER ?? "", folder: process.env.IMAP_FOLDER || "INBOX" } : null}
+        mailbox={mailboxConfigured() ? { user: process.env.IMAP_USER ?? "", folder: process.env.IMAP_FOLDER || "INBOX", prefix: process.env.IMAP_SUBJECT_PREFIX ?? "Invoice on" } : null}
         clients={clients}
         pending={pending.map((p) => ({
           id: p.id,

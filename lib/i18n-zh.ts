@@ -373,6 +373,8 @@ export const ZH: Record<string, string> = {
   "The mailbox rejected the sign-in. Check IMAP_USER and the app password.": "邮箱拒绝登录。请检查 IMAP_USER 和应用专用密码。",
   "Couldn't connect to the mailbox.": "无法连接邮箱。",
   "No PDF attached.": "没有 PDF 附件。",
+  "{0} emails in the last 40 days, none with a subject starting with “{1}”.": "最近 40 天共有 {0} 封邮件，没有主题以“{1}”开头的邮件。",
+  "Latest subjects in the inbox:": "收件箱最新的邮件主题：",
   "Looking for new invoice emails…": "正在查找新的发票邮件…",
   "Importing {0} of {1} emails…": "正在导入第 {0} / {1} 封邮件…",
   Stop: "停止",

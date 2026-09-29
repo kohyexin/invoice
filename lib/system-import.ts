@@ -173,27 +173,32 @@ async function withMailbox<T>(fn: (client: import("imapflow").ImapFlow) => Promi
   }
 }
 
+const stripReplyPrefix = (s: string) => s.replace(/^(\s*(fwd?|fw|re)\s*:\s*)+/i, "").trim().toLowerCase();
+
 function subjectMatches(subject: string) {
-  const prefix = (process.env.IMAP_SUBJECT_PREFIX ?? "Invoice on").toLowerCase();
-  const bare = subject.replace(/^(\s*(fwd?|fw|re)\s*:\s*)+/i, "").toLowerCase();
-  return !prefix || bare.startsWith(prefix);
+  const prefix = stripReplyPrefix(process.env.IMAP_SUBJECT_PREFIX ?? "Invoice on");
+  return !prefix || stripReplyPrefix(subject).startsWith(prefix);
 }
 
 /** Lists invoice emails from the last `days` days that haven't been processed yet.
  *  Reads envelopes only, so it stays fast even with a full inbox. */
-export async function listMailbox(days = MAILBOX_DAYS): Promise<{ items: MailboxItem[]; alreadyDone: number }> {
+export type MailboxScan = { items: MailboxItem[]; alreadyDone: number; seen: number; otherSubjects: string[] };
+
+export async function listMailbox(days = MAILBOX_DAYS): Promise<MailboxScan> {
   const since = new Date(Date.now() - days * 86_400_000);
-  const found = await withMailbox(async (client) => {
+  const { found, seen, otherSubjects } = await withMailbox(async (client) => {
     const uids = (await client.search({ since }, { uid: true })) || [];
-    const out: (MailboxItem & { messageId: string })[] = [];
-    if (!uids.length) return out;
+    const found: (MailboxItem & { messageId: string })[] = [];
+    const otherSubjects: string[] = [];
+    if (!uids.length) return { found, seen: 0, otherSubjects };
     for await (const msg of client.fetch(uids, { envelope: true }, { uid: true })) {
       const subject = msg.envelope?.subject ?? "";
-      if (subjectMatches(subject)) out.push({ uid: msg.uid, subject, messageId: msg.envelope?.messageId ?? `uid-${msg.uid}` });
+      if (subjectMatches(subject)) found.push({ uid: msg.uid, subject, messageId: msg.envelope?.messageId ?? `uid-${msg.uid}` });
+      else otherSubjects.push(subject);
     }
-    return out;
+    return { found, seen: uids.length, otherSubjects: otherSubjects.slice(-5).reverse() };
   });
-  if (!found.length) return { items: [], alreadyDone: 0 };
+  if (!found.length) return { items: [], alreadyDone: 0, seen, otherSubjects };
 
   const [invoices, reviews] = await Promise.all([
     prisma.invoice.findMany({ where: { sourceMessageId: { not: null }, createdAt: { gte: since } }, select: { sourceMessageId: true } }),
@@ -203,7 +208,7 @@ export async function listMailbox(days = MAILBOX_DAYS): Promise<{ items: Mailbox
   const processed = (messageId: string) => done.some((d) => d.startsWith(`${messageId}:`));
 
   const items = found.filter((f) => !processed(f.messageId)).map(({ uid, subject }) => ({ uid, subject }));
-  return { items, alreadyDone: found.length - items.length };
+  return { items, alreadyDone: found.length - items.length, seen, otherSubjects };
 }
 
 /** Downloads the given messages and imports their PDF attachments. */

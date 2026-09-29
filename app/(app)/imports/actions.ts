@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { authorize, requireRole } from "@/lib/session";
-import { importMailboxUids, importSystemPdf, listMailbox, type ImportOutcome, type MailboxItem } from "@/lib/system-import";
+import { importMailboxUids, importSystemPdf, listMailbox, type ImportOutcome, type MailboxScan } from "@/lib/system-import";
 
 type Summary = { ok: true; outcomes: (ImportOutcome & { label: string })[] } | { ok: false; error: string };
 
@@ -17,7 +17,7 @@ function refresh() {
 const errorText = (e: unknown) => (e instanceof Error ? e.message : "Mailbox fetch failed.");
 
 /** Step 1 of a mailbox check: which emails still need importing. */
-export async function scanMailbox(): Promise<{ ok: true; items: MailboxItem[]; alreadyDone: number } | { ok: false; error: string }> {
+export async function scanMailbox(): Promise<({ ok: true } & MailboxScan) | { ok: false; error: string }> {
   const auth = await authorize("STAFF");
   if (!auth.ok) return auth;
   try {

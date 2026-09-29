@@ -25,7 +25,7 @@ export function ImportsView({
   pending,
   recent,
 }: {
-  mailbox: { user: string; folder: string } | null;
+  mailbox: { user: string; folder: string; prefix: string } | null;
   clients: { id: string; name: string; alias: string }[];
   pending: Pending[];
   recent: Recent[];
@@ -39,21 +39,25 @@ export function ImportsView({
   const [progress, setProgress] = useState<Progress | null>(null);
   const [alreadyDone, setAlreadyDone] = useState(0);
   const [stopped, setStopped] = useState(false);
+  const [unmatched, setUnmatched] = useState<{ seen: number; subjects: string[] } | null>(null);
   const stopRef = useRef(false);
   const { t } = useI18n();
   const busy = pending_ || progress !== null;
+  const prefix = mailbox?.prefix ?? "";
 
   async function checkMailbox() {
     setError(null);
     setOutcomes(null);
     setAlreadyDone(0);
     setStopped(false);
+    setUnmatched(null);
     stopRef.current = false;
     setProgress({ phase: "scanning", done: 0, total: 0 });
     try {
       const scan = await scanMailbox();
       if (!scan.ok) return setError(scan.error);
       setAlreadyDone(scan.alreadyDone);
+      if (!scan.items.length && !scan.alreadyDone) setUnmatched({ seen: scan.seen, subjects: scan.otherSubjects });
       const uids = scan.items.map((i) => i.uid);
       const all: Outcome[] = [];
       setOutcomes([]);
@@ -163,6 +167,23 @@ export function ImportsView({
         <section className={card}>
           <h2 className="text-base font-semibold text-ink">{t("Result")}</h2>
           <ResultSummary outcomes={outcomes} alreadyDone={alreadyDone} stopped={stopped} running={progress !== null} />
+          {unmatched && (
+            <div className="mt-2 text-[13px] text-ink-muted">
+              <p>{t("{0} emails in the last 40 days, none with a subject starting with “{1}”.", unmatched.seen, prefix)}</p>
+              {unmatched.subjects.length > 0 && (
+                <>
+                  <p className="mt-2 text-[12px] text-ink-soft">{t("Latest subjects in the inbox:")}</p>
+                  <ul className="mt-1 space-y-0.5 font-mono text-[12px]">
+                    {unmatched.subjects.map((s, i) => (
+                      <li key={i} className="truncate">
+                        {s || t("(no subject)")}
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </div>
+          )}
           <ul className="mt-3 max-h-[360px] space-y-1.5 overflow-y-auto text-[13px]">
             {outcomes.map((o, i) => (
               <li key={i} className="flex gap-3">
