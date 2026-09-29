@@ -25,6 +25,7 @@
     "dotenv": "^18.0.4",
     "exceljs": "^4.4.0",
     "geist": "^1.7.2",
+    "html-to-image": "^1.11.13",
     "imapflow": "^2.1.0",
     "jose": "^6.2.12",
     "lucide-react": "^0.456.0",

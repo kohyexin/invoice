@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { BarChart3, CalendarDays, CheckCircle2, Hourglass, Receipt, Trophy, Users, XCircle } from "lucide-react";
+import { toBlob, toPng } from "html-to-image";
+import { BarChart3, CalendarDays, Camera, Check, CheckCircle2, Hourglass, Receipt, Trophy, Users, XCircle } from "lucide-react";
 import { Bar, CartesianGrid, ComposedChart, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { useChartTheme } from "@/components/dashboard/use-chart-theme";
@@ -251,59 +252,161 @@ export function DashboardView({ data }: { data: DashboardData }) {
   );
 }
 
+type UnpaidRows = DashboardData["unpaid"];
+
 /** Excel-style pivot: one row per client, one column per invoice month. */
-function UnpaidByMonth({ rows, monthLabel }: { rows: DashboardData["unpaid"]; monthLabel: (m: string) => string }) {
+function UnpaidByMonth({ rows, monthLabel }: { rows: UnpaidRows; monthLabel: (m: string) => string }) {
+  const { t } = useI18n();
+  const captureRef = useRef<HTMLDivElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState<"copied" | "downloaded" | "failed" | null>(null);
+
+  if (rows.length === 0) return <p className="py-8 text-center text-[13px] text-ink-soft">{t("Nothing outstanding.")}</p>;
+
+  const flash = (s: typeof status) => {
+    setStatus(s);
+    window.setTimeout(() => setStatus(null), 2500);
+  };
+
+  const capture = async () => {
+    const node = captureRef.current;
+    if (!node || busy) return;
+    setBusy(true);
+    const opts = {
+      pixelRatio: 2,
+      backgroundColor: getComputedStyle(node).backgroundColor,
+      style: { position: "static", left: "0", top: "0" },
+    };
+    try {
+      if (typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
+        // Safari requires the ClipboardItem to be created synchronously inside the click, with a pending blob.
+        const blob = toBlob(node, opts).then((b) => {
+          if (!b) throw new Error("empty");
+          return b;
+        });
+        await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+        flash("copied");
+      } else {
+        throw new Error("no clipboard");
+      }
+    } catch {
+      try {
+        const url = await toPng(node, opts);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `unpaid-by-month-${new Date().toISOString().slice(0, 10)}.png`;
+        a.click();
+        flash("downloaded");
+      } catch {
+        flash("failed");
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const message =
+    status === "copied"
+      ? t("Copied. Paste it into an email or chat.")
+      : status === "downloaded"
+        ? t("Clipboard unavailable, so the image was downloaded.")
+        : status === "failed"
+          ? t("Couldn't capture the table.")
+          : null;
+
+  return (
+    <>
+      <div className="mt-3 flex items-center justify-end gap-3">
+        {message && (
+          <span className={cn("text-[12px]", status === "failed" ? "text-red-600 dark:text-red-300" : "text-ink-soft")} role="status">
+            {message}
+          </span>
+        )}
+        <button
+          type="button"
+          onClick={capture}
+          disabled={busy}
+          title={t("Copy as image")}
+          className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border border-line px-2.5 py-1.5 text-[12px] font-medium text-ink-muted transition hover:bg-surface-2 hover:text-ink disabled:opacity-60"
+        >
+          {status === "copied" ? <Check className="h-3.5 w-3.5" /> : <Camera className="h-3.5 w-3.5" />}
+          {busy ? t("Capturing…") : t("Copy as image")}
+        </button>
+      </div>
+
+      <div className="mt-2 max-h-[560px] overflow-auto">
+        <PivotTable rows={rows} monthLabel={monthLabel} interactive />
+      </div>
+
+      {/* Uncropped copy used for the image: no scroll box, no sticky cells, no truncation. */}
+      <div aria-hidden className="pointer-events-none fixed left-[-100000px] top-0">
+        <div ref={captureRef} className="inline-block bg-surface p-5 text-ink">
+          <div className="mb-3">
+            <div className="text-[15px] font-semibold">{t("Unpaid by client · by invoice month (USD)")}</div>
+            <div className="text-[12px] text-ink-soft">
+              {t("As of {0}", formatDate(new Date()))} · STAR SAAS
+            </div>
+          </div>
+          <PivotTable rows={rows} monthLabel={monthLabel} />
+        </div>
+      </div>
+    </>
+  );
+}
+
+function PivotTable({ rows, monthLabel, interactive = false }: { rows: UnpaidRows; monthLabel: (m: string) => string; interactive?: boolean }) {
   const { t } = useI18n();
   const months = Array.from(new Set(rows.flatMap((r) => Object.keys(r.byMonth)))).sort();
   const colTotal = (m: string) => rows.reduce((s, r) => s + (r.byMonth[m] ?? 0), 0);
   const grand = rows.reduce((s, r) => s + r.amount, 0);
-  const sticky = "sticky left-0 z-[1] bg-surface";
-
-  if (rows.length === 0) return <p className="py-8 text-center text-[13px] text-ink-soft">{t("Nothing outstanding.")}</p>;
+  const sticky = interactive ? "sticky left-0 z-[1] bg-surface" : "";
+  const stickyHead = interactive ? "z-[3]" : "";
 
   return (
-    <div className="mt-4 max-h-[560px] overflow-auto">
-      <table className="w-full whitespace-nowrap text-[13px]">
-        <thead className="sticky top-0 z-[2] bg-surface">
-          <tr className="border-b border-line text-left text-[11px] uppercase tracking-wider text-ink-soft">
-            <th className={cn(sticky, "z-[3] py-2 pr-4")}>{t("Client")}</th>
-            {months.map((m) => (
-              <th key={m} className="px-3 py-2 text-right">
-                {monthLabel(m)}
-              </th>
-            ))}
-            <th className="py-2 pl-3 text-right">{t("Total")}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.clientId} className="border-b border-line/60">
-              <td className={cn(sticky, "max-w-[260px] truncate py-2 pr-4")}>
+    <table className="w-full whitespace-nowrap text-[13px]">
+      <thead className={cn(interactive && "sticky top-0 z-[2] bg-surface")}>
+        <tr className="border-b border-line text-left text-[11px] uppercase tracking-wider text-ink-soft">
+          <th className={cn(sticky, stickyHead, "py-2 pr-4")}>{t("Client")}</th>
+          {months.map((m) => (
+            <th key={m} className="px-3 py-2 text-right">
+              {monthLabel(m)}
+            </th>
+          ))}
+          <th className="py-2 pl-3 text-right">{t("Total")}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((r) => (
+          <tr key={r.clientId} className="border-b border-line/60">
+            <td className={cn(sticky, "py-2 pr-4", interactive && "max-w-[260px] truncate")}>
+              {interactive ? (
                 <Link href={`/clients/${r.clientId}`} className="text-ink hover:text-brand-700 dark:hover:text-brand-200" title={r.name}>
                   {r.name}
                 </Link>
-              </td>
-              {months.map((m) => (
-                <td key={m} className="tnum px-3 py-2 text-right text-ink-muted">
-                  {r.byMonth[m] ? formatMoney(r.byMonth[m]) : ""}
-                </td>
-              ))}
-              <td className="tnum py-2 pl-3 text-right font-medium text-amber-600 dark:text-amber-300">{formatMoney(r.amount)}</td>
-            </tr>
-          ))}
-        </tbody>
-        <tfoot className="sticky bottom-0 z-[2] bg-surface">
-          <tr className="border-t border-line font-semibold text-ink">
-            <td className={cn(sticky, "z-[3] py-2 pr-4")}>{t("Total")}</td>
+              ) : (
+                r.name
+              )}
+            </td>
             {months.map((m) => (
-              <td key={m} className="tnum px-3 py-2 text-right">
-                {formatMoney(colTotal(m))}
+              <td key={m} className="tnum px-3 py-2 text-right text-ink-muted">
+                {r.byMonth[m] ? formatMoney(r.byMonth[m]) : ""}
               </td>
             ))}
-            <td className="tnum py-2 pl-3 text-right text-amber-600 dark:text-amber-300">{formatMoney(grand)}</td>
+            <td className="tnum py-2 pl-3 text-right font-medium text-amber-600 dark:text-amber-300">{formatMoney(r.amount)}</td>
           </tr>
-        </tfoot>
-      </table>
-    </div>
+        ))}
+      </tbody>
+      <tfoot className={cn(interactive && "sticky bottom-0 z-[2] bg-surface")}>
+        <tr className="border-t border-line font-semibold text-ink">
+          <td className={cn(sticky, stickyHead, "py-2 pr-4")}>{t("Total")}</td>
+          {months.map((m) => (
+            <td key={m} className="tnum px-3 py-2 text-right">
+              {formatMoney(colTotal(m))}
+            </td>
+          ))}
+          <td className="tnum py-2 pl-3 text-right text-amber-600 dark:text-amber-300">{formatMoney(grand)}</td>
+        </tr>
+      </tfoot>
+    </table>
   );
 }
