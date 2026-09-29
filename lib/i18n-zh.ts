@@ -691,7 +691,8 @@ export const ZH: Record<string, string> = {
   "Description printed on the invoice": "打印在发票上的描述",
   "Detail line": "明细行",
   "e.g. Monthly": "例如 Monthly",
-  "e.g. Monthly. {month} becomes the invoice month, e.g. SEPT 2026": "例如 Monthly。{month} 会替换为发票月份，例如 SEPT 2026",
+  "e.g. Monthly. {month} becomes the invoice month (SEPT 2026); {detail} the line detail after its label (Channel : Alipay gives Alipay)":
+    "例如 Monthly。{month} 会替换为发票月份（SEPT 2026）；{detail} 会替换为明细中标签之后的内容（Channel : Alipay 得到 Alipay）",
   "Edit invoice": "编辑发票",
   "Filled in as the invoice type when this is the first line": "当此项为第一行时，自动填为发票类型",
   "From the line item {0}": "来自明细项目 {0}",

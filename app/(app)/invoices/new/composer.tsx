@@ -229,9 +229,10 @@ export function Composer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialClientId]);
 
-  const leadItem = itemById.get(lines.find((l) => l.itemId)?.itemId ?? "");
+  const leadLine = lines.find((l) => l.itemId);
+  const leadItem = itemById.get(leadLine?.itemId ?? "");
   const suggestedType = leadItem?.typeId ?? "";
-  const suggestedSubtype = leadItem ? ledgerSubtype(leadItem.subtype, invoiceDate) : "";
+  const suggestedSubtype = leadItem ? ledgerSubtype(leadItem.subtype, invoiceDate, leadLine?.detail) : "";
   useEffect(() => {
     if (!typeTouched && suggestedType) setTypeId(suggestedType);
     if (!subtypeTouched && suggestedType) setSubtype(suggestedSubtype);

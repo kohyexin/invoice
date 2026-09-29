@@ -104,7 +104,7 @@ export const SETTINGS_ENTITIES = {
       { key: "detailHint", label: "Detail line hint", kind: "text", hint: "e.g. Month : or Channel :" },
       { key: "clientFee", label: "Client fee field", kind: "text", mono: true, hint: "Client DB column that prices this item, e.g. MAINTENANCE FEE" },
       { key: "typeId", label: "Ledger type", kind: "select", optionsFrom: "types", nullable: true, emptyLabel: "None", hint: "Filled in as the invoice type when this is the first line" },
-      { key: "subtype", label: "Ledger subtype", kind: "text", hint: "e.g. Monthly. {month} becomes the invoice month, e.g. SEPT 2026" },
+      { key: "subtype", label: "Ledger subtype", kind: "text", hint: "e.g. Monthly. {month} becomes the invoice month (SEPT 2026); {detail} the line detail after its label (Channel : Alipay gives Alipay)" },
       { key: "sortOrder", label: "Sort order", kind: "number" },
       { key: "active", label: "Active", kind: "checkbox" },
     ],
