@@ -65,7 +65,7 @@ const s = StyleSheet.create({
 
   billing: { flexDirection: "row", justifyContent: "space-between", marginTop: 4.9, height: 92.2 },
   billLine: rowText(BODY, 11.7),
-  bigAmount: { flexDirection: "row", justifyContent: "space-between", width: 122, marginTop: 13.2, paddingLeft: 3.8, paddingRight: 3.5 },
+  bigAmount: { flexDirection: "row", justifyContent: "space-between", width: 122, marginTop: 13.2, paddingLeft: 3.8, paddingRight: 2 },
   bigText: { fontSize: 18.33, fontWeight: 700 },
 
   metaBar: { flexDirection: "row", backgroundColor: "#000", height: 11.5 },
@@ -169,10 +169,7 @@ export function InvoicePdf({ data }: { data: InvoicePdfData }) {
             <Text style={[s.label, { paddingRight: 2 }]}>{L.amountDue(headline.currency)}</Text>
             <View style={s.bigAmount}>
               <Text style={s.bigText}>{SYMBOL[headline.currency] ?? headline.currency}</Text>
-              <Text style={s.bigText}>
-                {num(headline.amount)}
-                <Text style={{ color: "#FFF" }}>)</Text>
-              </Text>
+              <Text style={s.bigText}>{num(headline.amount)}</Text>
             </View>
           </View>
         </View>
