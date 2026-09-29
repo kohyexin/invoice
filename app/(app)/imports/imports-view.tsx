@@ -184,7 +184,7 @@ export function ImportsView({
 
       <section className={card}>
         <h2 className="text-base font-semibold text-ink">{t("Recently imported")}</h2>
-        <div className="mt-3 overflow-x-auto">
+        <div className="relative mt-3 overflow-x-auto">
           <table className="w-full text-[13px]">
             <thead>
               <tr className="border-b border-line text-left text-[11px] uppercase tracking-wider text-ink-soft">

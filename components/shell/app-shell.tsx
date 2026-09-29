@@ -36,7 +36,7 @@ export function AppShell({ children, alerts }: { children: React.ReactNode; aler
       <Sidebar collapsed={collapsed} onToggle={toggle} badges={badges} />
       <NavDrawer open={navOpen} onClose={() => setNavOpen(false)} badges={badges} />
 
-      <div className="relative z-10 flex min-w-0 flex-1 flex-col">
+      <div className="relative z-10 flex min-w-0 flex-1 flex-col overflow-x-clip">
         <Header alerts={alerts} onOpenNav={() => setNavOpen(true)} />
         <main className="flex-1 px-4 py-5 sm:px-6 sm:py-7 xl:px-10">
           <div className="mx-auto w-full max-w-[1400px]">{children}</div>

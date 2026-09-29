@@ -280,7 +280,7 @@ export function SettingsView(props: {
             </Button>
           </div>
         </div>
-        <div className="overflow-x-auto px-5 pb-2">
+        <div className="relative overflow-x-auto px-5 pb-2">
           <table className="tnum w-full text-sm">
             <thead>
               <tr className="border-b border-line">

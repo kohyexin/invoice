@@ -633,7 +633,7 @@ export function DataTable<T>({
       )}
 
       {/* -------------------------- Table -------------------------- */}
-      <div className={cn("overflow-x-auto", renderMobileCard && "hidden md:block")}>
+      <div className={cn("relative overflow-x-auto", renderMobileCard && "hidden md:block")}>
         <table
           key={locale}
           className="tnum w-full min-w-[680px] table-auto border-collapse text-sm"

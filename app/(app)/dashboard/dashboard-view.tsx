@@ -139,7 +139,7 @@ export function DashboardView({ data }: { data: DashboardData }) {
           {unpaidView === "months" ? (
             <UnpaidByMonth rows={data.unpaid} monthLabel={monthLabel} />
           ) : (
-          <div className="mt-4 overflow-x-auto">
+          <div className="relative mt-4 overflow-x-auto">
             <table className="w-full text-[13px]">
               <thead>
                 <tr className="border-b border-line text-left text-[11px] uppercase tracking-wider text-ink-soft">
