@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { FileDown, Loader2, Plus, Trash2 } from "lucide-react";
+import { Eye, FileDown, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Field, Segmented, Select, fieldClass } from "@/components/ui/form-controls";
 import { billToFromClient, type BillTo } from "@/lib/bill-to";
@@ -10,6 +10,7 @@ import { CURRENCIES, addDays, cn, formatMoney, ledgerSubtype, round2, toDateInpu
 import type { ComposerInput, ComposerLine } from "@/lib/composer";
 import { useI18n } from "@/components/i18n/locale-provider";
 import { FxRateNote, type FxState } from "@/components/invoices/fx-rate-note";
+import { PreviewDrawer } from "@/components/invoices/preview-drawer";
 import { createManualInvoice, nextNumber, updateManualInvoice } from "./actions";
 
 type Company = { id: string; code: string; name: string; defaultLang: "EN" | "ZH" };
@@ -124,6 +125,7 @@ export function Composer({
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [previewing, setPreviewing] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [pending, start] = useTransition();
 
   const clientByName = useMemo(() => new Map(clients.map((c) => [c.name.toLowerCase(), c])), [clients]);
@@ -322,7 +324,7 @@ export function Composer({
   const title = "mb-4 font-mono text-[11px] uppercase tracking-[0.16em] text-ink-soft";
 
   return (
-    <div className="grid gap-6 2xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+    <div className="mx-auto max-w-5xl pr-6">
       <div className="space-y-5">
         <section className={card}>
           <h2 className={title}>{t("Issuer")}</h2>
@@ -676,8 +678,12 @@ export function Composer({
             <FileDown className="h-4 w-4" />
             {t(reuse ? (editing ? "Save anyway" : "Issue anyway") : editing ? "Save changes" : "Save and download PDF")}
           </Button>
+          <Button size="lg" variant="secondary" onClick={() => setPreviewOpen(true)}>
+            <Eye className="h-4 w-4" />
+            {t("Preview")}
+          </Button>
           {editing && (
-            <Button size="lg" variant="secondary" onClick={() => router.push(`/invoices/${editing.id}`)} disabled={pending}>
+            <Button size="lg" variant="ghost" onClick={() => router.push(`/invoices/${editing.id}`)} disabled={pending}>
               {t("Cancel")}
             </Button>
           )}
@@ -687,22 +693,14 @@ export function Composer({
         </div>
       </div>
 
-      <div className="2xl:sticky 2xl:top-6 2xl:self-start">
-        <div className={cn(card, "p-3")}>
-          <div className="mb-2 flex items-center justify-between px-2">
-            <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-ink-soft">{t("Preview")}</span>
-            {previewing && <Loader2 className="h-4 w-4 animate-spin text-ink-soft" />}
-          </div>
-          {previewError && <p className="mx-2 mb-2 text-[13px] text-amber-700 dark:text-amber-200">{t(previewError)}</p>}
-          {previewUrl ? (
-            <iframe src={`${previewUrl}#toolbar=0&view=FitH`} title={t("Invoice preview")} className="h-[80vh] w-full rounded-control bg-white" />
-          ) : (
-            <div className="flex h-[50vh] items-center justify-center rounded-control border border-dashed border-overlay/15 text-center text-[13px] text-ink-soft">
-              {t("Pick a client and add a line to see the PDF.")}
-            </div>
-          )}
-        </div>
-      </div>
+      <PreviewDrawer
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+        url={previewUrl}
+        loading={previewing}
+        error={previewError}
+        emptyText="Pick a client and add a line to see the PDF."
+      />
     </div>
   );
 }

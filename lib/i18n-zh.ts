@@ -714,4 +714,7 @@ export const ZH: Record<string, string> = {
   "This invoice wasn't made in the app, so it has no lines to edit.": "此发票不是在系统内开具的，没有可编辑的明细。",
   "Updates the ledger and replaces the PDF. Status and payment stay as they are.": "更新台账并替换 PDF。状态和收款信息保持不变。",
   "Write the {0}": "填写{0}",
+  "Show preview": "显示预览",
+  "Hide preview": "隐藏预览",
+  Hide: "隐藏",
 };
