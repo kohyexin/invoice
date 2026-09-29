@@ -27,5 +27,5 @@ export async function middleware(req: NextRequest) {
 
 export const config = {
   // Everything except the auth API, the cron endpoint, static assets and fonts.
-  matcher: ["/((?!api/auth|api/cron|_next|logos|fonts|favicon.ico).*)"],
+  matcher: ["/((?!api/auth|api/cron|_next|logos|brand|fonts|favicon.ico).*)"],
 };
