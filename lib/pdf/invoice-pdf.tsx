@@ -34,54 +34,74 @@ export type InvoicePdfData = {
   extraAccounts: PdfAccount[];
 };
 
+// Geometry mirrors the Excel template's Letter export, in points.
 const SYMBOL: Record<string, string> = { USD: "$", HKD: "HK$", CNY: "¥", EUR: "€", SGD: "S$" };
-const INK = "#1F2937";
-const MUTED = "#6B7280";
-const RULE = "#D1D5DB";
-const ACCENT = "#1E40AF";
+const BLUE = "#4285F4";
+const FONT = ["Helvetica", "NotoSansSC"];
+const ROW = 11.4;
+const BODY = 9.22;
+const LABEL = 8.26;
+const COL = { rate: 88.8, qty: 38.4, total: 91.1 };
+// Excel bottom-aligns text: every row's baseline sits 8.8pt below its top. react-pdf puts it at
+// top + 0.9 × font size, so each style pads the difference and shortens its line box to match.
+const rowText = (size: number, row = ROW) => {
+  const pad = 8.8 - size * 0.9;
+  return { fontSize: size, paddingTop: pad, lineHeight: (row - pad) / size };
+};
 
 const num = (n: number, digits = 2) =>
   new Intl.NumberFormat("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(n);
 
-/** Accounting style: negatives in parentheses, zero as a dash. */
-function acc(n: number, digits = 2) {
-  if (Math.abs(n) < 0.005) return "-";
-  return n < 0 ? `(${num(-n, digits)})` : num(n, digits);
-}
-
 const s = StyleSheet.create({
-  page: { fontFamily: "NotoSansSC", fontSize: 9, color: INK, paddingTop: 36, paddingBottom: 40, paddingHorizontal: 44, lineHeight: 1.35 },
-  head: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
-  issuerName: { fontSize: 13, fontWeight: 700, lineHeight: 1.5, marginBottom: 2 },
-  muted: { color: MUTED },
-  logo: { width: 150, height: 48, objectFit: "contain", objectPositionX: "right" } as never,
-  label: { color: MUTED, fontSize: 8.5 },
-  bold: { fontWeight: 700 },
-  row: { flexDirection: "row" },
-  meta: { flexDirection: "row", marginTop: 26 },
-  due: { fontSize: 20, fontWeight: 700, color: ACCENT, textAlign: "right", lineHeight: 1.4 },
-  tableHead: { flexDirection: "row", borderTopWidth: 2, borderTopColor: ACCENT, marginTop: 26, paddingTop: 5, paddingBottom: 4 },
-  line: { flexDirection: "row", paddingVertical: 6, borderBottomWidth: 0.5, borderBottomColor: RULE },
-  cDesc: { flex: 1, paddingRight: 8 },
-  cRate: { width: 90, textAlign: "right" },
-  cQty: { width: 50, textAlign: "right" },
-  cTotal: { width: 95, textAlign: "right" },
-  totals: { alignSelf: "flex-end", width: 250, marginTop: 10 },
-  totalRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 2.5 },
-  dueRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 4, marginTop: 3, borderTopWidth: 1, borderTopColor: INK },
-  section: { marginTop: 22 },
-  sectionTitle: { fontWeight: 700, fontSize: 10, marginBottom: 4 },
-  kv: { flexDirection: "row", paddingVertical: 1.5 },
-  kvKey: { width: 110, color: MUTED },
-  kvVal: { flex: 1 },
-  compact: { marginTop: 12, padding: 8, borderWidth: 0.5, borderColor: RULE, borderRadius: 3, width: 260 },
+  page: { fontFamily: FONT as never, fontSize: BODY, color: "#000", paddingTop: 36, paddingBottom: 36, paddingLeft: 61.6, paddingRight: 79 },
+  body: rowText(BODY),
+  label: { ...rowText(LABEL), fontWeight: 700, color: BLUE },
+  row: { flexDirection: "row", minHeight: ROW },
+  cell: { paddingHorizontal: 1.3 },
+
+  head: { flexDirection: "row", justifyContent: "space-between", height: 90 },
+  logo: { width: 251, height: 44.2, objectFit: "contain", objectPositionX: 0, marginLeft: 0.2, marginTop: 8.1 } as never,
+  issuer: { fontSize: 9.58, lineHeight: 12 / 9.58, textAlign: "right", paddingRight: 2 },
+
+  billing: { flexDirection: "row", justifyContent: "space-between", marginTop: 4.9, height: 92.2 },
+  billLine: rowText(BODY, 11.7),
+  bigAmount: { flexDirection: "row", justifyContent: "space-between", width: 122, marginTop: 13.2, paddingLeft: 3.8, paddingRight: 3.5 },
+  bigText: { fontSize: 18.33, fontWeight: 700 },
+
+  metaBar: { flexDirection: "row", backgroundColor: "#000", height: 11.5 },
+  metaCell: { justifyContent: "flex-end" },
+  metaHead: { ...rowText(LABEL), fontWeight: 700, color: "#FFF", textAlign: "center" },
+  metaValue: { ...rowText(LABEL), fontWeight: 700, color: BLUE, textAlign: "center" },
+
+  tableHead: { flexDirection: "row", backgroundColor: "#F2F2F2", height: 11.5, marginTop: 14.9 },
+  lines: { minHeight: 159.9, paddingTop: ROW, borderBottomWidth: 0.84, borderBottomColor: "#000" },
+  line: { flexDirection: "row", paddingBottom: ROW },
+  desc: { flex: 1, paddingLeft: 1.3, paddingRight: 6 },
+
+  totals: { marginTop: 11 },
+  totalLabel: { width: COL.rate, textAlign: "right", paddingRight: 1.8 },
+  totalsRule: { marginLeft: 217.9, borderTopWidth: 0.84, borderTopColor: "#A6A6A6", marginTop: 11, marginBottom: 11 },
+
+  terms: { marginTop: 45.6 },
+  payBar: { backgroundColor: "#D9D9D9", width: 218, height: 11.5, marginTop: 11.4 },
+  kvKey: { width: 95.6, paddingLeft: 1.3 },
+  box: { borderWidth: 0.84, borderColor: BLUE, width: 126.5, paddingLeft: 5.8, paddingRight: 4, paddingTop: 2.7, paddingBottom: 8.4, marginBottom: 8 },
+  boxTitle: { fontSize: 8.28, lineHeight: 10.6 / 8.28, fontWeight: 700, color: BLUE, marginBottom: 10.7 },
+  boxText: { fontSize: 9.16, lineHeight: 10.6 / 9.16 },
 });
 
-function Money({ value, currency, bold }: { value: number; currency: string; bold?: boolean }) {
+/** Excel accounting format: symbol flush left, negatives in parentheses, zero as a dash. */
+function Accounting({ value, currency, width, symbolPad, rightPad, size = BODY, bold }: { value: number; currency: string; width: number; symbolPad: number; rightPad: number; size?: number; bold?: boolean }) {
+  const text = { ...rowText(size), fontWeight: bold ? 700 : 400 } as const;
+  const zero = Math.abs(value) < 0.005;
   return (
-    <Text style={bold ? s.bold : undefined}>
-      {SYMBOL[currency] ?? currency} {acc(value)}
-    </Text>
+    <View style={{ width, flexDirection: "row", justifyContent: "space-between", paddingLeft: symbolPad, paddingRight: rightPad }}>
+      <Text style={text}>{SYMBOL[currency] ?? currency}</Text>
+      <Text style={text}>
+        {zero ? "-" : value < 0 ? `(${num(-value)})` : num(value)}
+        <Text style={{ color: "#FFF" }}>{zero ? "00)" : value < 0 ? "" : ")"}</Text>
+      </Text>
+    </View>
   );
 }
 
@@ -101,141 +121,147 @@ export function InvoicePdf({ data }: { data: InvoicePdfData }) {
       [L.swiftCode, a.swiftCode],
       [L.accountLocation, a.accountLocation],
     ].filter(([, v]) => v);
+  const meta = [
+    [L.invoiceNumber, data.number, 128.1],
+    [L.reference, data.reference, 125],
+    [L.dateOfIssue, data.invoiceDate, 127.2],
+    [L.dueDate, data.dueDate, 91.1],
+  ] as const;
+  const totalRow = (label: string, value: number, currency: string, strong = false) => (
+    <View style={s.row} key={label}>
+      <View style={{ flex: 1 }} />
+      <Text style={[strong ? s.label : s.body, s.totalLabel]}>{label}</Text>
+      <View style={{ width: COL.qty }} />
+      <Accounting value={value} currency={currency} width={COL.total} symbolPad={5.8} rightPad={2} />
+    </View>
+  );
 
   return (
     <Document title={`Invoice ${data.number}`} author={data.issuer.name}>
-      <Page size="A4" style={s.page}>
+      <Page size="LETTER" style={s.page}>
         <View style={s.head}>
-          <View style={{ maxWidth: 300 }}>
-            <Text style={s.issuerName}>{data.issuer.name}</Text>
+          <View>
+            {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image has no alt */}
+            {data.issuer.logo && <Image src={data.issuer.logo} style={s.logo} />}
+          </View>
+          <View style={{ maxWidth: 260, marginTop: 2.3, alignItems: "flex-end" }}>
+            <Text style={[s.issuer, { fontWeight: 700 }]}>{data.issuer.name}</Text>
             {data.issuer.addressLines.map((l, i) => (
-              <Text key={i} style={s.muted}>
+              <Text key={i} style={s.issuer}>
                 {l}
               </Text>
             ))}
           </View>
-          {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image has no alt */}
-          {data.issuer.logo && <Image src={data.issuer.logo} style={s.logo} />}
         </View>
 
-        <View style={s.meta}>
-          <View style={{ flex: 1.3, paddingRight: 12 }}>
+        <View style={s.billing}>
+          <View style={[s.cell, { maxWidth: 300 }]}>
             <Text style={s.label}>{L.billedTo}</Text>
-            <Text style={s.bold}>{data.billTo.name}</Text>
-            {data.billTo.attention ? <Text>{data.billTo.attention}</Text> : null}
+            <Text style={s.billLine}>{data.billTo.name}</Text>
+            {data.billTo.attention ? <Text style={s.billLine}>{data.billTo.attention}</Text> : null}
             {data.billTo.lines.map((l, i) => (
-              <Text key={i}>{l}</Text>
+              <Text key={i} style={s.billLine}>
+                {l}
+              </Text>
             ))}
           </View>
-          <View style={{ flex: 1, paddingRight: 12 }}>
-            <Text style={s.label}>{L.invoiceNumber}</Text>
-            <Text style={[s.bold, { marginBottom: 6 }]}>{data.number}</Text>
-            {data.reference ? (
-              <>
-                <Text style={s.label}>{L.reference}</Text>
-                <Text>{data.reference}</Text>
-              </>
-            ) : null}
+          <View style={{ alignItems: "flex-end" }}>
+            <Text style={[s.label, { paddingRight: 2 }]}>{L.amountDue(headline.currency)}</Text>
+            <View style={s.bigAmount}>
+              <Text style={s.bigText}>{SYMBOL[headline.currency] ?? headline.currency}</Text>
+              <Text style={s.bigText}>
+                {num(headline.amount)}
+                <Text style={{ color: "#FFF" }}>)</Text>
+              </Text>
+            </View>
           </View>
-          <View style={{ flex: 0.9, paddingRight: 12 }}>
-            <Text style={s.label}>{L.dateOfIssue}</Text>
-            <Text style={{ marginBottom: 6 }}>{data.invoiceDate}</Text>
-            {data.dueDate ? (
-              <>
-                <Text style={s.label}>{L.dueDate}</Text>
-                <Text>{data.dueDate}</Text>
-              </>
-            ) : null}
-          </View>
-          <View style={{ flex: 1.2 }}>
-            <Text style={[s.label, { textAlign: "right" }]}>{L.amountDue(headline.currency)}</Text>
-            <Text style={s.due}>
-              {SYMBOL[headline.currency] ?? headline.currency}
-              {num(headline.amount)}
+        </View>
+
+        <View style={s.metaBar}>
+          {meta.map(([label, , width]) => (
+            <View key={label} style={[s.metaCell, { width }]}>
+              <Text style={s.metaHead}>{label}</Text>
+            </View>
+          ))}
+        </View>
+        <View style={s.row}>
+          {meta.map(([label, value, width]) => (
+            <Text key={label} style={[s.metaValue, { width }]}>
+              {value}
             </Text>
-          </View>
+          ))}
         </View>
 
         <View style={s.tableHead}>
-          <Text style={[s.cDesc, s.label]}>{L.description}</Text>
-          <Text style={[s.cRate, s.label]}>{L.rate}</Text>
-          <Text style={[s.cQty, s.label]}>{L.qty}</Text>
-          <Text style={[s.cTotal, s.label]}>{L.lineTotal}</Text>
+          <Text style={[s.label, s.desc]}>{L.description}</Text>
+          <Text style={[s.label, { width: COL.rate, textAlign: "center" }]}>{L.rate}</Text>
+          <Text style={[s.label, { width: COL.qty, textAlign: "center" }]}>{L.qty}</Text>
+          <Text style={[s.label, { width: COL.total, textAlign: "center" }]}>{L.lineTotal}</Text>
         </View>
-        {data.lines.map((l, i) => (
-          <View key={i} style={s.line} wrap={false}>
-            <View style={s.cDesc}>
-              <Text style={s.bold}>{l.description}</Text>
-              {l.detail ? <Text style={s.muted}>{l.detail}</Text> : null}
-            </View>
-            <View style={s.cRate}>
-              <Money value={l.rate} currency={data.currency} />
-            </View>
-            <Text style={s.cQty}>{num(l.quantity, 3)}</Text>
-            <View style={s.cTotal}>
-              <Money value={l.amount} currency={data.currency} />
-            </View>
-          </View>
-        ))}
-
-        <View style={s.totals} wrap={false}>
-          {(
-            [
-              [L.subtotal, data.subtotal],
-              [L.tax, data.tax],
-              [L.total, data.total],
-              [L.amountPaid, data.amountPaid],
-            ] as const
-          ).map(([k, v]) => (
-            <View key={k} style={s.totalRow}>
-              <Text style={s.muted}>{k}</Text>
-              <Money value={v} currency={data.currency} />
+        <View style={s.lines}>
+          {data.lines.map((l, i) => (
+            <View key={i} style={s.line} wrap={false}>
+              <View style={s.desc}>
+                <Text style={s.body}>{l.description}</Text>
+                <Text style={s.body}>{l.detail || " "}</Text>
+              </View>
+              <Accounting value={l.rate} currency={data.currency} width={COL.rate} symbolPad={3.8} rightPad={1.9} />
+              <Text style={[s.body, { width: COL.qty, textAlign: "right", paddingRight: 4.1 }]}>{num(l.quantity, 3)}</Text>
+              <Accounting value={l.amount} currency={data.currency} width={COL.total} symbolPad={5.8} rightPad={2} />
             </View>
           ))}
-          <View style={s.dueRow}>
-            <Text style={s.bold}>{L.amountDue(data.currency)}</Text>
-            <Money value={amountDue} currency={data.currency} bold />
-          </View>
-          {data.alt && (
-            <View style={s.totalRow}>
-              <Text style={s.bold}>{L.amountDue(data.alt.currency)}</Text>
-              <Money value={data.alt.amount} currency={data.alt.currency} bold />
-            </View>
-          )}
+        </View>
+
+        <View style={s.totals} wrap={false}>
+          {totalRow(L.subtotal, data.subtotal, data.currency)}
+          {totalRow(L.tax, data.tax, data.currency)}
+          <View style={s.totalsRule} />
+          {totalRow(L.total, data.total, data.currency)}
+          {totalRow(L.amountPaid, data.amountPaid, data.currency)}
+          <View style={{ height: ROW }} />
+          {totalRow(L.amountDue(data.currency), amountDue, data.currency, true)}
+          {data.alt && totalRow(L.amountDue(data.alt.currency), data.alt.amount, data.alt.currency, true)}
         </View>
 
         {data.terms.length > 0 && (
-          <View style={s.section} wrap={false}>
-            <Text style={s.sectionTitle}>{L.terms}</Text>
+          <View style={s.terms} wrap={false}>
+            <Text style={[s.label, s.cell]}>{L.terms}</Text>
             {data.terms.map((t, i) => (
-              <Text key={i}>{t}</Text>
+              <Text key={i} style={[s.body, s.cell]}>
+                {/^[•·-]/.test(t) ? t : `• ${t}`}
+              </Text>
             ))}
           </View>
         )}
 
         {(data.account || data.extraAccounts.length > 0) && (
-          <View style={s.section} wrap={false}>
-            <Text style={s.sectionTitle}>{L.paymentDetails}</Text>
-            {data.account &&
-              accountRows(data.account).map(([k, v]) => (
-                <View key={k} style={s.kv}>
-                  <Text style={s.kvKey}>{k}</Text>
-                  <Text style={s.kvVal}>{v}</Text>
+          <View style={{ flexDirection: "row", justifyContent: "space-between" }} wrap={false}>
+            <View style={{ width: 280 }}>
+              {data.account && (
+                <>
+                  <View style={s.payBar}>
+                    <Text style={[s.label, s.cell]}>{L.paymentDetails}</Text>
+                  </View>
+                  {accountRows(data.account).map(([k, v]) => (
+                    <View key={k} style={s.row}>
+                      <Text style={[s.body, s.kvKey]}>{k}</Text>
+                      <Text style={[s.body, { flex: 1 }]}>{v}</Text>
+                    </View>
+                  ))}
+                </>
+              )}
+            </View>
+            <View style={{ marginTop: 24.6, marginRight: 16 }}>
+              {data.extraAccounts.map((a) => (
+                <View key={a.label} style={s.box}>
+                  <Text style={s.boxTitle}>{L.compactTitle(a.label)}</Text>
+                  <Text style={s.boxText}>{L.compactNumber}</Text>
+                  <Text style={[s.boxText, { marginBottom: 10.5 }]}>{a.accountNumber}</Text>
+                  <Text style={s.boxText}>{L.compactName}</Text>
+                  <Text style={s.boxText}>{a.accountName}</Text>
                 </View>
               ))}
-            {data.extraAccounts.map((a) => (
-              <View key={a.label} style={s.compact}>
-                <Text style={[s.bold, { marginBottom: 3 }]}>{L.compactTitle(a.label)}</Text>
-                <View style={s.kv}>
-                  <Text style={{ width: 90, color: MUTED }}>{L.compactNumber}</Text>
-                  <Text>{a.accountNumber}</Text>
-                </View>
-                <View style={s.kv}>
-                  <Text style={{ width: 90, color: MUTED }}>{L.compactName}</Text>
-                  <Text>{a.accountName}</Text>
-                </View>
-              </View>
-            ))}
+            </View>
           </View>
         )}
       </Page>

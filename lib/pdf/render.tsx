@@ -7,20 +7,28 @@ import { billToFromClient, type BillTo } from "@/lib/bill-to";
 import { formatDate, round2 } from "@/lib/utils";
 import { InvoicePdf, type InvoicePdfData, type PdfAccount } from "./invoice-pdf";
 
-let fontsReady = false;
+let fontsReady: Promise<void> | null = null;
 function ensureFonts() {
-  if (fontsReady) return;
-  const dir = path.join(process.cwd(), "assets", "fonts");
-  Font.register({
-    family: "NotoSansSC",
-    fonts: [
-      { src: path.join(dir, "NotoSansSC-Regular.ttf"), fontWeight: 400 },
-      { src: path.join(dir, "NotoSansSC-Bold.ttf"), fontWeight: 700 },
-    ],
-  });
-  // Latin words stay whole; CJK runs may break between any two characters.
-  Font.registerHyphenationCallback((word) => (/[\u3000-\u9fff\uff00-\uffef]/.test(word) ? Array.from(word) : [word]));
-  fontsReady = true;
+  fontsReady ??= (async () => {
+    const dir = path.join(process.cwd(), "assets", "fonts");
+    Font.register({
+      family: "NotoSansSC",
+      fonts: [
+        { src: path.join(dir, "NotoSansSC-Regular.ttf"), fontWeight: 400 },
+        { src: path.join(dir, "NotoSansSC-Bold.ttf"), fontWeight: 700 },
+      ],
+    });
+    // Latin words stay whole; CJK runs may break between any two characters.
+    Font.registerHyphenationCallback((word) => (/[\u3000-\u9fff\uff00-\uffef]/.test(word) ? Array.from(word) : [word]));
+    // react-pdf sets each line's baseline at its tallest font's ascent. Noto's is ~30% taller than
+    // Helvetica's, so without this any line containing Chinese sits lower than its row.
+    for (const fontWeight of [400, 700]) {
+      const source = Font.getFont({ fontFamily: "NotoSansSC", fontWeight });
+      await source?.load();
+      if (source?.data) Object.defineProperty(source.data, "ascent", { value: source.data.unitsPerEm * 0.9 });
+    }
+  })();
+  return fontsReady;
 }
 
 /** Everything needed to print an invoice, saved or not. */
@@ -108,7 +116,7 @@ export async function pdfDataFromDraft(d: InvoiceDraft): Promise<InvoicePdfData>
 }
 
 export async function renderInvoicePdf(data: InvoicePdfData) {
-  ensureFonts();
+  await ensureFonts();
   return renderToBuffer(<InvoicePdf data={data} />);
 }
 
