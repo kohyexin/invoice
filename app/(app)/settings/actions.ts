@@ -69,9 +69,11 @@ export async function saveSetting(entity: SettingsEntity, id: string | null, inp
       case "paymentRule":
         await (id ? prisma.paymentRule.update({ where: { id }, data: data as never }) : prisma.paymentRule.create({ data: data as never }));
         break;
-      case "owner":
-        await (id ? prisma.owner.update({ where: { id }, data: data as never }) : prisma.owner.create({ data: data as never }));
+      case "owner": {
+        const saved = await (id ? prisma.owner.update({ where: { id }, data: data as never }) : prisma.owner.create({ data: data as never }));
+        if (data.isDefault) await prisma.owner.updateMany({ where: { NOT: { id: saved.id } }, data: { isDefault: false } });
         break;
+      }
       case "invoiceType":
         await (id ? prisma.invoiceType.update({ where: { id }, data: data as never }) : prisma.invoiceType.create({ data: data as never }));
         break;

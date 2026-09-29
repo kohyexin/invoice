@@ -159,6 +159,8 @@ model FxRate {
 model Owner {
   id        String    @id @default(cuid())
   name      String    @unique
+  /// Used on new invoices when the client has no default owner.
+  isDefault Boolean   @default(false)
   sortOrder Int       @default(0)
   active    Boolean   @default(true)
   clients   Client[]
@@ -173,6 +175,7 @@ model InvoiceType {
   sortOrder   Int       @default(0)
   active      Boolean   @default(true)
   invoices    Invoice[]
+  items       InvoiceItem[]
 }
 
 model InvoiceItem {
@@ -183,6 +186,11 @@ model InvoiceItem {
   detailHint  String?
   /// Client fee field (Jotform header) that prices this item, if any.
   clientFee   String?
+  /// Ledger type an invoice gets when this is its first line.
+  typeId      String?
+  type        InvoiceType?  @relation(fields: [typeId], references: [id], onDelete: SetNull)
+  /// Default subtype; {month} becomes the invoice month, e.g. SEPT 2026.
+  subtype     String        @default("")
   sortOrder   Int           @default(0)
   active      Boolean       @default(true)
   lines       InvoiceLine[]

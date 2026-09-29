@@ -91,9 +91,11 @@ export function SettingsView(props: {
     () => ({
       companies: props.companies.map((c) => ({ value: c.id, label: String(c.legalName) })),
       bankAccounts: props.bankAccounts.map((b) => ({ value: b.id, label: String(b.label) })),
+      types: props.types.map((ty) => ({ value: ty.id, label: String(ty.name) })),
     }),
-    [props.companies, props.bankAccounts]
+    [props.companies, props.bankAccounts, props.types]
   );
+  const typeName = useMemo(() => new Map(props.types.map((ty) => [ty.id, String(ty.name)])), [props.types]);
 
   const tabs: Tab[] = [
     {
@@ -186,9 +188,18 @@ export function SettingsView(props: {
       id: "owner",
       label: "Owners",
       icon: UserRound,
-      description: "Account owners assigned to clients and invoices.",
+      description: "Account owners assigned to clients and invoices. New invoices use the client's default owner, or the default owner here when the client has none.",
       rows: props.owners,
-      columns: [{ label: "Name", render: (r) => <span className="flex items-center gap-2">{String(r.name)} {inactive(r)}</span> }],
+      columns: [
+        {
+          label: "Name",
+          render: (r) => (
+            <span className="flex items-center gap-2">
+              {String(r.name)} {r.isDefault ? <Badge tone="brand">{t("Default")}</Badge> : null} {inactive(r)}
+            </span>
+          ),
+        },
+      ],
     },
     {
       id: "invoiceType",
@@ -205,11 +216,24 @@ export function SettingsView(props: {
       id: "invoiceItem",
       label: "Invoice items",
       icon: ListChecks,
-      description: "Line items for manual invoices, with the English and Chinese label printed for each language.",
+      description:
+        "Line items for manual invoices, with the English and Chinese label printed for each language. The ledger type and subtype fill in the invoice's type when the item is its first line.",
       rows: props.items,
       columns: [
         { label: "English", render: (r) => <span className="flex items-center gap-2">{String(r.labelEn)} {inactive(r)}</span> },
         { label: "Chinese", render: (r) => (r.labelZh ? String(r.labelZh) : <span className="text-ink-soft">{t("Uses English")}</span>) },
+        {
+          label: "Ledger type",
+          render: (r) =>
+            r.typeId ? (
+              <span>
+                {typeName.get(String(r.typeId)) ?? "—"}
+                {r.subtype ? <span className="text-ink-soft"> · {String(r.subtype)}</span> : null}
+              </span>
+            ) : (
+              <span className="text-ink-soft">—</span>
+            ),
+        },
         { label: "Detail hint", render: (r) => (r.detailHint ? String(r.detailHint) : "—") },
         { label: "Client fee", render: (r) => (r.clientFee ? String(r.clientFee) : "—"), mono: true },
       ],

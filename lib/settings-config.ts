@@ -12,9 +12,11 @@ export type FieldDef = {
   /** Static options; dynamic ones (companies, accounts) are supplied by the UI. */
   options?: { value: string; label: string }[];
   /** Name of a dynamic option list the UI fills in. */
-  optionsFrom?: "companies" | "bankAccounts";
+  optionsFrom?: "companies" | "bankAccounts" | "types";
   /** Empty select means null (e.g. "any company"). */
   nullable?: boolean;
+  /** Label of the empty choice on a nullable select; defaults to "Any". */
+  emptyLabel?: string;
   mono?: boolean;
 };
 
@@ -80,6 +82,7 @@ export const SETTINGS_ENTITIES = {
     title: "Owner",
     fields: [
       { key: "name", label: "Name", kind: "text", required: true },
+      { key: "isDefault", label: "Default owner (used when the client has none)", kind: "checkbox" },
       { key: "sortOrder", label: "Sort order", kind: "number" },
       { key: "active", label: "Active", kind: "checkbox" },
     ],
@@ -100,6 +103,8 @@ export const SETTINGS_ENTITIES = {
       { key: "labelZh", label: "Chinese label", kind: "text", hint: "Blank prints the English label" },
       { key: "detailHint", label: "Detail line hint", kind: "text", hint: "e.g. Month : or Channel :" },
       { key: "clientFee", label: "Client fee field", kind: "text", mono: true, hint: "Client DB column that prices this item, e.g. MAINTENANCE FEE" },
+      { key: "typeId", label: "Ledger type", kind: "select", optionsFrom: "types", nullable: true, emptyLabel: "None", hint: "Filled in as the invoice type when this is the first line" },
+      { key: "subtype", label: "Ledger subtype", kind: "text", hint: "e.g. Monthly. {month} becomes the invoice month, e.g. SEPT 2026" },
       { key: "sortOrder", label: "Sort order", kind: "number" },
       { key: "active", label: "Active", kind: "checkbox" },
     ],

@@ -61,7 +61,7 @@ function refresh(id?: string) {
 /** Defaults for a new ledger row once a client is picked. */
 export async function entryDefaults(clientId: string) {
   await requireRole("STAFF");
-  const [client, number, last] = await Promise.all([
+  const [client, number, last, fallbackOwner, usedAlias] = await Promise.all([
     prisma.client.findUnique({ where: { id: clientId }, select: { alias: true, defaultOwnerId: true } }),
     suggestInvoiceNumber(clientId),
     prisma.invoice.findFirst({
@@ -69,11 +69,13 @@ export async function entryDefaults(clientId: string) {
       orderBy: { invoiceDate: "desc" },
       select: { typeId: true, subtype: true, currency: true },
     }),
+    prisma.owner.findFirst({ where: { isDefault: true, active: true }, select: { id: true } }),
+    prisma.invoice.findFirst({ where: { clientId, alias: { not: "" } }, orderBy: { invoiceDate: "desc" }, select: { alias: true } }),
   ]);
   return {
     number,
-    alias: client?.alias ?? "",
-    ownerId: client?.defaultOwnerId ?? "",
+    alias: client?.alias || usedAlias?.alias || "",
+    ownerId: client?.defaultOwnerId ?? fallbackOwner?.id ?? "",
     typeId: last?.typeId ?? "",
     subtype: last?.subtype ?? "",
     currency: last?.currency ?? "USD",
@@ -93,7 +95,7 @@ export async function saveEntry(id: string | null, input: EntryInput, confirmReu
   if (amount === null || !currency) return { ok: false, error: "Amount and currency are required." };
   if (!(STATUSES as readonly string[]).includes(input.status)) return { ok: false, error: "Unknown status." };
 
-  let usdAmount = money(input.usdAmount);
+  let usdAmount = currency === "USD" ? amount : money(input.usdAmount);
   if (usdAmount === null) usdAmount = toUsd(amount, currency, await fxRates());
   if (usdAmount === null) return { ok: false, error: `No FX rate for ${currency}. Enter the USD amount or add a rate in Settings.` };
 
@@ -135,6 +137,16 @@ export async function saveEntry(id: string | null, input: EntryInput, confirmReu
     notes: input.notes.trim(),
     updatedById: auth.user.id,
   };
+
+  const composed = id ? await prisma.invoice.findFirst({ where: { id, companyId: { not: null }, lines: { some: {} } }, select: { id: true } }) : null;
+  if (composed) {
+    for (const key of ["clientId", "number", "invoiceDate", "dueDate", "currency", "amount", "usdAmount", "fxRate"] as const) delete (data as Partial<typeof data>)[key];
+    const cur = await prisma.invoice.findUniqueOrThrow({ where: { id: composed.id }, select: { currency: true, amount: true } });
+    if (cur.currency !== "USD") {
+      const booked = money(input.usdAmount);
+      if (booked !== null) Object.assign(data, { usdAmount: booked, fxRate: Number(cur.amount) ? booked / Number(cur.amount) : null });
+    }
+  }
 
   try {
     const row = id

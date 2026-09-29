@@ -6,11 +6,11 @@ import { FileDown, Loader2, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Field, Segmented, Select, fieldClass } from "@/components/ui/form-controls";
 import { billToFromClient, type BillTo } from "@/lib/bill-to";
-import { CURRENCIES, addDays, cn, formatMoney, round2, toDateInput } from "@/lib/utils";
+import { CURRENCIES, addDays, cn, formatMoney, ledgerSubtype, round2, toDateInput } from "@/lib/utils";
 import type { ComposerInput, ComposerLine } from "@/lib/composer";
 import { useI18n } from "@/components/i18n/locale-provider";
 import { FxRateNote, type FxState } from "@/components/invoices/fx-rate-note";
-import { createManualInvoice, nextNumber } from "./actions";
+import { createManualInvoice, nextNumber, updateManualInvoice } from "./actions";
 
 type Company = { id: string; code: string; name: string; defaultLang: "EN" | "ZH" };
 type Account = { id: string; label: string; currency: string; compact: boolean };
@@ -29,7 +29,7 @@ type ClientOpt = {
   defaultOwnerId: string | null;
   fees: Record<string, unknown>;
 };
-type Item = { id: string; labelEn: string; labelZh: string; detailHint: string; clientFee: string };
+type Item = { id: string; labelEn: string; labelZh: string; detailHint: string; clientFee: string; typeId: string; subtype: string };
 
 type Line = ComposerLine & { key: number };
 
@@ -63,8 +63,11 @@ export function Composer({
   items,
   types,
   owners,
+  defaultOwnerId,
+  aliases,
   rates,
   ratesUpdatedAt,
+  editing,
 }: {
   initialClientId: string;
   companies: Company[];
@@ -74,39 +77,46 @@ export function Composer({
   items: Item[];
   types: { id: string; name: string; subtypeHint: string }[];
   owners: { id: string; name: string }[];
+  defaultOwnerId: string;
+  /** Aliases each client's invoices have used, most used first. */
+  aliases: Record<string, string[]>;
   rates: Record<string, number>;
   ratesUpdatedAt: string | null;
+  editing?: { id: string; input: ComposerInput; clientName: string };
 }) {
   const router = useRouter();
   const { t } = useI18n();
   const today = new Date();
-  const keyRef = useRef(1);
+  const init = editing?.input;
+  const keyRef = useRef(init?.lines.length ?? 1);
 
-  const [companyId, setCompanyId] = useState(companies[0]?.id ?? "");
-  const [language, setLanguage] = useState<"EN" | "ZH">(companies[0]?.defaultLang ?? "EN");
-  const [clientText, setClientText] = useState("");
-  const [clientId, setClientId] = useState("");
-  const [billTo, setBillTo] = useState<BillTo>({ name: "", attention: "", lines: [] });
-  const [number, setNumber] = useState("");
-  const [reference, setReference] = useState("");
-  const [invoiceDate, setInvoiceDate] = useState(toDateInput(today));
-  const [dueDate, setDueDate] = useState(toDateInput(addDays(today, 7)));
-  const [currency, setCurrency] = useState<ComposerInput["currency"]>("USD");
-  const [lines, setLines] = useState<Line[]>([blankLine(0)]);
-  const [taxAmount, setTaxAmount] = useState("");
-  const [amountPaid, setAmountPaid] = useState("");
-  const [altCurrency, setAltCurrency] = useState("");
-  const [altAmount, setAltAmount] = useState("");
-  const [altTouched, setAltTouched] = useState(false);
-  const [bankAccountId, setBankAccountId] = useState("");
-  const [bankTouched, setBankTouched] = useState(false);
-  const [extraAccountIds, setExtraAccountIds] = useState<string[]>([]);
-  const [typeId, setTypeId] = useState("");
-  const [subtype, setSubtype] = useState("");
-  const [ownerId, setOwnerId] = useState("");
-  const [alias, setAlias] = useState("");
-  const [usdAmount, setUsdAmount] = useState("");
-  const [usdTouched, setUsdTouched] = useState(false);
+  const [companyId, setCompanyId] = useState(init?.companyId ?? companies[0]?.id ?? "");
+  const [language, setLanguage] = useState<"EN" | "ZH">(init?.language ?? companies[0]?.defaultLang ?? "EN");
+  const [clientText, setClientText] = useState(editing?.clientName ?? "");
+  const [clientId, setClientId] = useState(init?.clientId ?? "");
+  const [billTo, setBillTo] = useState<BillTo>(init?.billTo ?? { name: "", attention: "", lines: [] });
+  const [number, setNumber] = useState(init?.number ?? "");
+  const [reference, setReference] = useState(init?.reference ?? "");
+  const [invoiceDate, setInvoiceDate] = useState(init?.invoiceDate ?? toDateInput(today));
+  const [dueDate, setDueDate] = useState(init ? init.dueDate : toDateInput(addDays(today, 7)));
+  const [currency, setCurrency] = useState<ComposerInput["currency"]>(init?.currency ?? "USD");
+  const [lines, setLines] = useState<Line[]>(init ? init.lines.map((l, key) => ({ ...l, key })) : [blankLine(0)]);
+  const [taxAmount, setTaxAmount] = useState(init?.taxAmount ?? "");
+  const [amountPaid, setAmountPaid] = useState(init?.amountPaid ?? "");
+  const [altCurrency, setAltCurrency] = useState(init?.altCurrency ?? "");
+  const [altAmount, setAltAmount] = useState(init?.altAmount ?? "");
+  const [altTouched, setAltTouched] = useState(Boolean(init?.altCurrency));
+  const [bankAccountId, setBankAccountId] = useState(init?.bankAccountId ?? "");
+  const [bankTouched, setBankTouched] = useState(Boolean(init));
+  const [extraAccountIds, setExtraAccountIds] = useState<string[]>(init?.extraAccountIds ?? []);
+  const [typeId, setTypeId] = useState(init?.typeId ?? "");
+  const [typeTouched, setTypeTouched] = useState(Boolean(init?.typeId));
+  const [subtype, setSubtype] = useState(init?.subtype ?? "");
+  const [subtypeTouched, setSubtypeTouched] = useState(Boolean(init?.subtype));
+  const [ownerId, setOwnerId] = useState(init?.ownerId || clients.find((c) => c.id === init?.clientId)?.defaultOwnerId || defaultOwnerId);
+  const [alias, setAlias] = useState(init?.alias ?? "");
+  const [usdAmount, setUsdAmount] = useState(init?.usdAmount ?? "");
+  const [usdTouched, setUsdTouched] = useState(Boolean(init && init.currency !== "USD"));
   const [fx, setFx] = useState<FxState>({ rates, updatedAt: ratesUpdatedAt });
 
   const [error, setError] = useState<string | null>(null);
@@ -166,10 +176,10 @@ export function Composer({
     if (!c) return;
     setBillTo(billToFromClient(c));
     setReference(c.agreementNo);
-    setAlias(c.alias);
-    setOwnerId(c.defaultOwnerId ?? "");
+    setAlias(c.alias || aliases[c.id]?.[0] || "");
+    setOwnerId(c.defaultOwnerId ?? defaultOwnerId);
     setLines((prev) => prev.map((l) => withClientRate(l, c)));
-    start(async () => setNumber(await nextNumber(c.id)));
+    if (!editing) start(async () => setNumber(await nextNumber(c.id)));
   }
 
   function withClientRate(l: Line, c: ClientOpt | undefined): Line {
@@ -184,6 +194,14 @@ export function Composer({
     if (c) pickClient(c.name);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialClientId]);
+
+  const leadItem = itemById.get(lines.find((l) => l.itemId)?.itemId ?? "");
+  const suggestedType = leadItem?.typeId ?? "";
+  const suggestedSubtype = leadItem ? ledgerSubtype(leadItem.subtype, invoiceDate) : "";
+  useEffect(() => {
+    if (!typeTouched && suggestedType) setTypeId(suggestedType);
+    if (!subtypeTouched && suggestedType) setSubtype(suggestedSubtype);
+  }, [suggestedType, suggestedSubtype, typeTouched, subtypeTouched]);
 
   function setLine(key: number, patch: Partial<Line>) {
     setLines((prev) => prev.map((l) => (l.key === key ? { ...l, ...patch } : l)));
@@ -263,9 +281,14 @@ export function Composer({
   function save() {
     setError(null);
     start(async () => {
-      const res = await createManualInvoice(input, Boolean(reuse));
+      const res = editing ? await updateManualInvoice(editing.id, input, Boolean(reuse)) : await createManualInvoice(input, Boolean(reuse));
       if (!res.ok) return setError(res.error);
       if (res.reuse) return setReuse(res.reuse);
+      if (editing) {
+        router.push(`/invoices/${res.id}`);
+        router.refresh();
+        return;
+      }
       const a = document.createElement("a");
       a.href = `/api/invoices/${res.id}/pdf`;
       a.click();
@@ -276,6 +299,25 @@ export function Composer({
   const mainAccounts = accounts.filter((a) => !a.compact);
   const compactAccounts = accounts.filter((a) => a.compact);
   const type = types.find((ty) => ty.id === typeId);
+  const clientAliases = [...new Set([client?.alias ?? "", ...(aliases[clientId] ?? [])].filter(Boolean))];
+  const ownerFromClient = Boolean(client?.defaultOwnerId) && ownerId === client?.defaultOwnerId;
+  const ownerHint = !ownerId
+    ? ""
+    : ownerFromClient
+      ? t("The client's default owner")
+      : ownerId === defaultOwnerId && !client?.defaultOwnerId
+        ? t("Default owner. Saved to the client when you issue.")
+        : "";
+  const aliasHint = !client
+    ? ""
+    : client.alias
+      ? alias.trim().toUpperCase() === client.alias
+        ? t("The client's alias")
+        : t("The client's alias is {0}", client.alias)
+      : alias.trim()
+        ? t("Saved to the client as its alias when you issue.")
+        : t("No alias saved for this client yet.");
+  const typeHint = typeId && typeId === suggestedType && !typeTouched && leadItem ? t("From the line item {0}", leadItem.labelEn) : "";
   const card = "glass-panel neon-edge rounded-card p-5";
   const title = "mb-4 font-mono text-[11px] uppercase tracking-[0.16em] text-ink-soft";
 
@@ -338,151 +380,179 @@ export function Composer({
 
         <section className={card}>
           <h2 className={title}>{t("Invoice")}</h2>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Field label="Invoice no. *">
-              <input value={number} onChange={(e) => { setNumber(e.target.value); setReuse(null); }} className={cn(fieldClass, "font-mono")} />
-            </Field>
-            <Field label="Reference">
-              <input value={reference} onChange={(e) => setReference(e.target.value)} className={cn(fieldClass, "font-mono")} />
-            </Field>
-            <Field label="Date of issue *">
-              <input
-                type="date"
-                value={invoiceDate}
-                onChange={(e) => {
-                  setInvoiceDate(e.target.value);
-                  if (e.target.value) setDueDate(toDateInput(addDays(new Date(`${e.target.value}T00:00:00Z`), 7)));
-                }}
-                className={fieldClass}
-              />
-            </Field>
-            <Field label="Due date">
-              <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className={fieldClass} />
-            </Field>
-            <Field label="Currency">
-              <Select value={currency} onChange={(e) => setCurrency(e.target.value as ComposerInput["currency"])}>
-                {CURRENCIES.map((c) => (
-                  <option key={c}>{c}</option>
-                ))}
-              </Select>
-            </Field>
+          <div className="grid gap-4 sm:grid-cols-6">
+            <div className="sm:col-span-3">
+              <Field label="Invoice no. *">
+                <input value={number} onChange={(e) => { setNumber(e.target.value); setReuse(null); }} className={cn(fieldClass, "font-mono")} />
+              </Field>
+            </div>
+            <div className="sm:col-span-3">
+              <Field label="Reference">
+                <input value={reference} onChange={(e) => setReference(e.target.value)} placeholder={t("Agreement no.")} className={cn(fieldClass, "font-mono")} />
+              </Field>
+            </div>
+            <div className="sm:col-span-2">
+              <Field label="Date of issue *">
+                <input
+                  type="date"
+                  value={invoiceDate}
+                  onChange={(e) => {
+                    setInvoiceDate(e.target.value);
+                    if (e.target.value) setDueDate(toDateInput(addDays(new Date(`${e.target.value}T00:00:00Z`), 7)));
+                  }}
+                  className={fieldClass}
+                />
+              </Field>
+            </div>
+            <div className="sm:col-span-2">
+              <Field label="Due date">
+                <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className={fieldClass} />
+              </Field>
+            </div>
+            <div className="sm:col-span-2">
+              <Field label="Currency">
+                <Select value={currency} onChange={(e) => setCurrency(e.target.value as ComposerInput["currency"])}>
+                  {CURRENCIES.map((c) => (
+                    <option key={c}>{c}</option>
+                  ))}
+                </Select>
+              </Field>
+            </div>
           </div>
           <FxRateNote className="mt-3" currencies={[currency, altCurrency]} fx={fx} onChange={setFx} />
         </section>
 
         <section className={card}>
-          <div className="mb-4 flex items-center justify-between">
+          <div className="mb-3 flex items-center justify-between">
             <h2 className="font-mono text-[11px] uppercase tracking-[0.16em] text-ink-soft">{t("Lines")}</h2>
-            <Button size="sm" variant="secondary" onClick={() => setLines((p) => [...p, blankLine(keyRef.current++)])}>
-              <Plus className="h-3.5 w-3.5" />
-              {t("Add line")}
-            </Button>
+            <span className="text-[12px] text-ink-soft">{t("Use a negative rate for adjustments; it prints in parentheses.")}</span>
           </div>
-          <div className="space-y-3">
-            {lines.map((l) => (
-              <div key={l.key} className="rounded-card border border-line/70 p-3">
-                <div className="grid gap-2 sm:grid-cols-[180px_minmax(0,1fr)_36px]">
+
+          <div className="hidden gap-2 border-b border-line pb-2 text-[11px] font-semibold uppercase tracking-wider text-ink-soft md:grid md:grid-cols-[minmax(0,1fr)_112px_72px_112px_36px]">
+            <span>{t("Item and description")}</span>
+            <span className="text-right">{t("Rate")}</span>
+            <span className="text-right">{t("Qty")}</span>
+            <span className="text-right">{t("Amount")}</span>
+            <span />
+          </div>
+          {lines.map((l, i) => (
+            <div key={l.key} className="grid gap-2 border-b border-line/60 py-3 md:grid-cols-[minmax(0,1fr)_112px_72px_112px_36px] md:items-start">
+              <div className="min-w-0 space-y-2">
+                <div className="grid gap-2 sm:grid-cols-[200px_minmax(0,1fr)]">
                   <Select value={l.itemId} onChange={(e) => pickItem(l.key, e.target.value)} aria-label={t("Item")}>
                     <option value="">{t("Custom line")}</option>
-                    {items.map((i) => (
-                      <option key={i.id} value={i.id}>
-                        {i.labelEn}
+                    {items.map((it) => (
+                      <option key={it.id} value={it.id}>
+                        {it.labelEn}
                       </option>
                     ))}
                   </Select>
                   <input
                     value={l.description}
                     onChange={(e) => setLine(l.key, { description: e.target.value })}
-                    placeholder={t("Description")}
+                    placeholder={t("Description printed on the invoice")}
+                    aria-label={t("Description")}
                     className={cn(fieldClass, "font-medium")}
                   />
-                  <button
-                    onClick={() => setLines((p) => (p.length > 1 ? p.filter((x) => x.key !== l.key) : [blankLine(keyRef.current++)]))}
-                    aria-label={t("Remove line")}
-                    className="flex h-10 items-center justify-center rounded-control text-ink-soft hover:bg-overlay/[0.06] hover:text-rose-600 dark:hover:text-rose-300"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
                 </div>
-                <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,1fr)_120px_90px_120px]">
-                  <input
-                    value={l.detail}
-                    onChange={(e) => setLine(l.key, { detail: e.target.value })}
-                    placeholder={t("Detail line (optional), e.g. month, channel, website")}
-                    className={cn(fieldClass, "text-[13px]")}
-                  />
-                  <input
-                    inputMode="decimal"
-                    value={l.rate}
-                    onChange={(e) => setLine(l.key, { rate: e.target.value })}
-                    placeholder={t("Rate")}
-                    className={cn(fieldClass, "tnum text-right")}
-                  />
-                  <input
-                    inputMode="decimal"
-                    value={l.quantity}
-                    onChange={(e) => setLine(l.key, { quantity: e.target.value })}
-                    placeholder={t("Qty")}
-                    className={cn(fieldClass, "tnum text-right")}
-                  />
-                  <div className="tnum flex h-10 items-center justify-end px-1 text-sm text-ink">
-                    {formatMoney(round2(num(l.rate) * (num(l.quantity) || 1)))}
-                  </div>
-                </div>
+                <input
+                  value={l.detail}
+                  onChange={(e) => setLine(l.key, { detail: e.target.value })}
+                  placeholder={t(itemById.get(l.itemId)?.detailHint || "Detail line (optional), e.g. month, channel, website")}
+                  aria-label={t("Detail line")}
+                  className={cn(fieldClass, "h-9 text-[13px]")}
+                />
               </div>
-            ))}
-          </div>
-          <p className="mt-2 text-[12px] text-ink-soft">{t("Use a negative rate for adjustments; it prints in parentheses.")}</p>
+              <div className="grid grid-cols-[minmax(0,1fr)_72px_minmax(0,1fr)_36px] gap-2 md:contents">
+                <input
+                  inputMode="decimal"
+                  value={l.rate}
+                  onChange={(e) => setLine(l.key, { rate: e.target.value })}
+                  placeholder="0.00"
+                  aria-label={t("Rate")}
+                  className={cn(fieldClass, "tnum text-right")}
+                />
+                <input
+                  inputMode="decimal"
+                  value={l.quantity}
+                  onChange={(e) => setLine(l.key, { quantity: e.target.value })}
+                  placeholder="1"
+                  aria-label={t("Qty")}
+                  className={cn(fieldClass, "tnum text-right")}
+                />
+                <div className="tnum flex h-10 items-center justify-end text-sm font-medium text-ink">
+                  {formatMoney(round2(num(l.rate) * (num(l.quantity) || 1)))}
+                </div>
+                <button
+                  onClick={() => setLines((p) => (p.length > 1 ? p.filter((x) => x.key !== l.key) : [blankLine(keyRef.current++)]))}
+                  aria-label={t("Remove line {0}", i + 1)}
+                  className="flex h-10 items-center justify-center rounded-control text-ink-soft hover:bg-overlay/[0.06] hover:text-rose-600 dark:hover:text-rose-300"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          ))}
+          <Button size="sm" variant="ghost" className="mt-2" onClick={() => setLines((p) => [...p, blankLine(keyRef.current++)])}>
+            <Plus className="h-3.5 w-3.5" />
+            {t("Add line")}
+          </Button>
 
-          <div className="mt-5 ml-auto grid max-w-sm gap-2 text-sm">
-            <div className="flex justify-between text-ink-muted">
+          <div className="ml-auto mt-4 w-full max-w-sm space-y-2.5 rounded-card border border-line/70 bg-overlay/[0.02] p-4 text-sm">
+            <div className="flex h-9 items-center justify-between text-ink-muted">
               <span>{t("Subtotal")}</span>
-              <span className="tnum text-ink">{formatMoney(subtotal)}</span>
+              <span className="tnum font-medium text-ink">{formatMoney(subtotal)}</span>
             </div>
             <div className="flex items-center justify-between gap-3 text-ink-muted">
               <span>{t("Tax")}</span>
-              <input inputMode="decimal" value={taxAmount} onChange={(e) => setTaxAmount(e.target.value)} placeholder="0.00" className={cn(fieldClass, "tnum h-8 w-32 text-right")} />
+              <input inputMode="decimal" value={taxAmount} onChange={(e) => setTaxAmount(e.target.value)} placeholder="0.00" className={cn(fieldClass, "tnum h-9 w-36 text-right")} />
             </div>
             <div className="flex items-center justify-between gap-3 text-ink-muted">
               <span>{t("Amount paid")}</span>
-              <input inputMode="decimal" value={amountPaid} onChange={(e) => setAmountPaid(e.target.value)} placeholder="0.00" className={cn(fieldClass, "tnum h-8 w-32 text-right")} />
+              <input inputMode="decimal" value={amountPaid} onChange={(e) => setAmountPaid(e.target.value)} placeholder="0.00" className={cn(fieldClass, "tnum h-9 w-36 text-right")} />
             </div>
-            <div className="flex justify-between border-t border-line pt-2 font-semibold text-ink">
+            <div className="flex items-center justify-between border-t border-line pt-3 text-base font-semibold text-ink">
               <span>{t("Amount due ({0})", currency)}</span>
               <span className="tnum">{formatMoney(due)}</span>
             </div>
             <div className="flex items-center justify-between gap-3 text-ink-muted">
+              <span>{t("Also due in")}</span>
               <Select
                 value={altCurrency}
                 onChange={(e) => {
                   setAltCurrency(e.target.value);
                   setAltTouched(false);
                 }}
-                className="h-8 w-44 text-[13px]"
+                className="h-9 w-36 text-[13px]"
               >
-                <option value="">{t("No second amount")}</option>
+                <option value="">{t("None")}</option>
                 {CURRENCIES.filter((c) => c !== currency).map((c) => (
                   <option key={c} value={c}>
-                    {t("Also due in {0}", c)}
+                    {c}
                   </option>
                 ))}
               </Select>
-              {altCurrency && (
-                <input
-                  inputMode="decimal"
-                  value={altAmount}
-                  onChange={(e) => {
-                    setAltTouched(true);
-                    setAltAmount(e.target.value);
-                  }}
-                  className={cn(fieldClass, "tnum h-8 w-32 text-right")}
-                />
-              )}
             </div>
-            {altCurrency && altRate && (
-              <p className="text-right text-[12px] text-ink-soft">
-                {t("At {0} {1} per {2}. Overwrite to use the agreed figure.", round2(altRate * 10000) / 10000, altCurrency, currency)}
-              </p>
+            {altCurrency && (
+              <>
+                <div className="flex items-center justify-between gap-3 text-ink-muted">
+                  <span>{t("Amount due ({0})", altCurrency)}</span>
+                  <input
+                    inputMode="decimal"
+                    value={altAmount}
+                    onChange={(e) => {
+                      setAltTouched(true);
+                      setAltAmount(e.target.value);
+                    }}
+                    className={cn(fieldClass, "tnum h-9 w-36 text-right")}
+                  />
+                </div>
+                {altRate && (
+                  <p className="text-right text-[12px] text-ink-soft">
+                    {t("At {0} {1} per {2}. Overwrite to use the agreed figure.", round2(altRate * 10000) / 10000, altCurrency, currency)}
+                  </p>
+                )}
+              </>
             )}
           </div>
         </section>
@@ -532,8 +602,14 @@ export function Composer({
         <section className={card}>
           <h2 className={title}>{t("Ledger")}</h2>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Type">
-              <Select value={typeId} onChange={(e) => setTypeId(e.target.value)}>
+            <Field label="Type" hint={typeHint}>
+              <Select
+                value={typeId}
+                onChange={(e) => {
+                  setTypeTouched(true);
+                  setTypeId(e.target.value);
+                }}
+              >
                 <option value="">—</option>
                 {types.map((ty) => (
                   <option key={ty.id} value={ty.id}>
@@ -542,10 +618,18 @@ export function Composer({
                 ))}
               </Select>
             </Field>
-            <Field label="Subtype">
-              <input value={subtype} onChange={(e) => setSubtype(e.target.value)} placeholder={type?.subtypeHint || t("Explains the type")} className={fieldClass} />
+            <Field label="Subtype" hint={type?.subtypeHint ? t("Write the {0}", type.subtypeHint.toLowerCase()) : undefined}>
+              <input
+                value={subtype}
+                onChange={(e) => {
+                  setSubtypeTouched(true);
+                  setSubtype(e.target.value);
+                }}
+                placeholder={type?.subtypeHint || t("e.g. Monthly")}
+                className={fieldClass}
+              />
             </Field>
-            <Field label="Owner">
+            <Field label="Owner" hint={ownerHint}>
               <Select value={ownerId} onChange={(e) => setOwnerId(e.target.value)}>
                 <option value="">—</option>
                 {owners.map((o) => (
@@ -555,8 +639,19 @@ export function Composer({
                 ))}
               </Select>
             </Field>
-            <Field label="Alias">
-              <input value={alias} onChange={(e) => setAlias(e.target.value)} className={cn(fieldClass, "font-mono uppercase")} />
+            <Field label="Alias" hint={aliasHint}>
+              <input
+                list="composer-aliases"
+                value={alias}
+                onChange={(e) => setAlias(e.target.value)}
+                placeholder={t("Short name, e.g. CIRCLEPAYMENT")}
+                className={cn(fieldClass, "font-mono uppercase", client && !alias.trim() && "border-amber-400/60")}
+              />
+              <datalist id="composer-aliases">
+                {clientAliases.map((a) => (
+                  <option key={a} value={a} />
+                ))}
+              </datalist>
             </Field>
             {currency !== "USD" && (
               <Field label="USD equivalent" hint="Booked on the ledger. Suggested from the exchange rate shown under Currency.">
@@ -579,9 +674,16 @@ export function Composer({
         <div className="flex items-center gap-2 pb-4">
           <Button size="lg" onClick={save} loading={pending}>
             <FileDown className="h-4 w-4" />
-            {t(reuse ? "Issue anyway" : "Save and download PDF")}
+            {t(reuse ? (editing ? "Save anyway" : "Issue anyway") : editing ? "Save changes" : "Save and download PDF")}
           </Button>
-          <span className="text-[13px] text-ink-soft">{t("Adds the invoice to the ledger as Manual, status Sent.")}</span>
+          {editing && (
+            <Button size="lg" variant="secondary" onClick={() => router.push(`/invoices/${editing.id}`)} disabled={pending}>
+              {t("Cancel")}
+            </Button>
+          )}
+          <span className="text-[13px] text-ink-soft">
+            {t(editing ? "Updates the ledger and replaces the PDF. Status and payment stay as they are." : "Adds the invoice to the ledger as Manual, status Sent.")}
+          </span>
         </div>
       </div>
 

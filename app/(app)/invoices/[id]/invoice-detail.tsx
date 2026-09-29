@@ -19,11 +19,13 @@ const QUICK: { status: InvoiceStatus; label: string }[] = [
 export function InvoiceDetail({
   id,
   status,
+  composed,
   initial,
   lookups,
 }: {
   id: string;
   status: string;
+  composed: boolean;
   initial: EntryInput;
   lookups: Lookups;
 }) {
@@ -60,6 +62,7 @@ export function InvoiceDetail({
         initial={initial}
         lookups={lookups}
         readOnly={!canEdit}
+        printedLocked={composed}
         onDone={(saved) => (saved ? router.refresh() : router.push("/invoices"))}
       />
     </section>

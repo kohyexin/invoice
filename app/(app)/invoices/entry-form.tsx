@@ -48,6 +48,7 @@ export function EntryForm({
   onDone,
   onCancel,
   readOnly = false,
+  printedLocked = false,
 }: {
   id: string | null;
   initial: EntryInput;
@@ -55,6 +56,8 @@ export function EntryForm({
   onDone: (id: string | null) => void;
   onCancel?: () => void;
   readOnly?: boolean;
+  /** Invoice made in the app: fields printed on its PDF are changed through Edit invoice instead. */
+  printedLocked?: boolean;
 }) {
   const { t } = useI18n();
   const [v, setV] = useState<EntryInput>(initial);
@@ -79,7 +82,8 @@ export function EntryForm({
     setReuse(null);
     setV((prev) => {
       const next = { ...prev, [key]: value };
-      if ((key === "amount" || key === "currency") && !usdTouched) next.usdAmount = suggestedUsd(next.amount, next.currency);
+      if (next.currency === "USD") next.usdAmount = next.amount;
+      else if ((key === "amount" || key === "currency") && !usdTouched) next.usdAmount = suggestedUsd(next.amount, next.currency);
       if (key === "status" && value === "PAID") {
         next.receivedDate ||= toDateInput(new Date());
         next.receivedAmount ||= next.currency === "USD" ? next.amount : next.usdAmount;
@@ -138,6 +142,11 @@ export function EntryForm({
     <fieldset disabled={readOnly} className="min-w-0 space-y-5">
       {error && <p className="rounded-control border border-danger/30 bg-danger/10 px-3 py-2 text-[13px] text-rose-700 dark:text-rose-200">{t(error)}</p>}
       {reuse && <p className="rounded-control border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-[13px] text-amber-700 dark:text-amber-200">{t(reuse)}</p>}
+      {printedLocked && !readOnly && (
+        <p className="rounded-control border border-brand-500/25 bg-brand-500/10 px-3 py-2 text-[13px] text-ink">
+          {t("This invoice was made in the app. Client, number, dates, currency and amount are printed on its PDF, so change them with Edit invoice at the top. The PDF is then updated too.")}
+        </p>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="sm:col-span-2">
@@ -145,6 +154,7 @@ export function EntryForm({
             <input
               list="entry-clients"
               value={clientText}
+              disabled={printedLocked}
               onChange={(e) => pickClient(e.target.value)}
               placeholder={t("Type to search")}
               className={cn(fieldClass, clientText && !v.clientId && "border-amber-400/60")}
@@ -157,7 +167,7 @@ export function EntryForm({
           </Field>
         </div>
         <Field label="Invoice no. *">
-          <input value={v.number} onChange={(e) => set("number", e.target.value)} className={cn(fieldClass, "font-mono")} />
+          <input value={v.number} disabled={printedLocked} onChange={(e) => set("number", e.target.value)} className={cn(fieldClass, "font-mono")} />
         </Field>
         <Field label="Alias">
           <input value={v.alias} onChange={(e) => set("alias", e.target.value)} className={cn(fieldClass, "font-mono uppercase")} />
@@ -192,20 +202,20 @@ export function EntryForm({
           </Select>
         </Field>
         <Field label="Invoice date *">
-          <input type="date" value={v.invoiceDate} onChange={(e) => set("invoiceDate", e.target.value)} className={fieldClass} />
+          <input type="date" value={v.invoiceDate} disabled={printedLocked} onChange={(e) => set("invoiceDate", e.target.value)} className={fieldClass} />
         </Field>
         <Field label="Due date">
-          <input type="date" value={v.dueDate} onChange={(e) => set("dueDate", e.target.value)} className={fieldClass} />
+          <input type="date" value={v.dueDate} disabled={printedLocked} onChange={(e) => set("dueDate", e.target.value)} className={fieldClass} />
         </Field>
         <Field label="Currency">
-          <Select value={v.currency} onChange={(e) => set("currency", e.target.value as EntryInput["currency"])}>
+          <Select value={v.currency} disabled={printedLocked} onChange={(e) => set("currency", e.target.value as EntryInput["currency"])}>
             {CURRENCIES.map((c) => (
               <option key={c}>{c}</option>
             ))}
           </Select>
         </Field>
         <Field label={`${t("Amount ({0})", v.currency)} *`}>
-          <input inputMode="decimal" value={v.amount} onChange={(e) => set("amount", e.target.value)} className={cn(fieldClass, "tnum text-right")} />
+          <input inputMode="decimal" value={v.amount} disabled={printedLocked} onChange={(e) => set("amount", e.target.value)} className={cn(fieldClass, "tnum text-right")} />
         </Field>
         {nonUsd && (
           <div className="sm:col-span-2">

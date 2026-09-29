@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { FileDown } from "lucide-react";
+import { FileDown, PencilLine } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { GenerateBadge, StatusBadge } from "@/components/ui/badge";
 import { prisma } from "@/lib/db";
@@ -36,6 +36,7 @@ export default async function InvoicePage({ params }: { params: { id: string } }
   });
 
   const dec = (v: unknown) => (v === null || v === undefined ? "" : String(Number(v)));
+  const composed = Boolean(inv.companyId && inv.lines.length > 0);
 
   return (
     <>
@@ -48,7 +49,16 @@ export default async function InvoicePage({ params }: { params: { id: string } }
           <div className="flex items-center gap-2">
             <GenerateBadge generate={inv.generate} />
             <StatusBadge status={inv.status} />
-            {(inv.document || (inv.companyId && inv.lines.length > 0)) && (
+            {composed && (
+              <Link
+                href={`/invoices/${inv.id}/edit`}
+                className="inline-flex h-9 items-center gap-2 rounded-control bg-brand px-3.5 text-sm font-medium text-white hover:bg-brand/90"
+              >
+                <PencilLine className="h-4 w-4" />
+                {t("Edit invoice")}
+              </Link>
+            )}
+            {(inv.document || composed) && (
               <a
                 href={`/api/invoices/${inv.id}/pdf`}
                 className="inline-flex h-9 items-center gap-2 rounded-control border border-overlay/10 bg-overlay/[0.04] px-3.5 text-sm font-medium text-ink hover:bg-overlay/[0.08]"
@@ -64,6 +74,7 @@ export default async function InvoicePage({ params }: { params: { id: string } }
         <InvoiceDetail
           id={inv.id}
           status={inv.status}
+          composed={composed}
           lookups={lookups}
           initial={{
             clientId: inv.clientId,

@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 import { useI18n } from "@/components/i18n/locale-provider";
 
 export const fieldClass =
-  "h-10 w-full rounded-control border border-overlay/10 bg-overlay/[0.04] px-3 text-sm text-ink placeholder:text-ink-soft focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/25";
+  "h-10 w-full rounded-control border border-overlay/10 bg-overlay/[0.04] px-3 text-sm text-ink placeholder:text-ink-soft focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/25 disabled:cursor-not-allowed disabled:opacity-60";
 
 /* Native <select> with the browser arrow removed and a single, consistently
  * positioned chevron — keeps dropdowns visually aligned with the custom

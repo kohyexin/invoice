@@ -120,7 +120,7 @@ export function RecordPanel({
             return (
               <Field key={f.key} label={label} hint={f.hint}>
                 <Select value={String(value ?? "")} onChange={(e) => set(f.key, e.target.value)}>
-                  {(f.nullable || !f.required) && <option value="">{f.nullable ? t("Any") : "—"}</option>}
+                  {(f.nullable || !f.required) && <option value="">{f.nullable ? t(f.emptyLabel ?? "Any") : "—"}</option>}
                   {!f.nullable && f.required && !value && <option value="">{t("Choose…")}</option>}
                   {opts.map((o) => (
                     <option key={o.value} value={o.value}>

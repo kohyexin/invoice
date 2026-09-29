@@ -81,6 +81,15 @@ export function addDays(d: Date, days: number) {
   return next;
 }
 
+const LEDGER_MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEPT", "OCT", "NOV", "DEC"];
+
+/** Fills {month} in an item's default subtype with the invoice month as the ledger writes it, e.g. SEPT 2026. */
+export function ledgerSubtype(template: string, invoiceDate: string) {
+  const d = new Date(`${invoiceDate}T00:00:00Z`);
+  if (!template.includes("{month}") || Number.isNaN(d.getTime())) return template;
+  return template.replaceAll("{month}", `${LEDGER_MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`);
+}
+
 export function todayUtc() {
   const now = new Date();
   return new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
