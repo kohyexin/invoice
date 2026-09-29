@@ -57,7 +57,7 @@ async function toReview(src: ImportSource, messageId: string, reason: string, pa
 }
 
 /** Posts one system-invoice PDF to the ledger, or parks it for review. */
-export async function importSystemPdf(src: ImportSource, forceClientId?: string): Promise<ImportOutcome> {
+export async function importSystemPdf(src: ImportSource, forceClientId?: string, actorId?: string): Promise<ImportOutcome> {
   const messageId = src.messageId ?? `upload:${createHash("sha256").update(src.data).digest("hex").slice(0, 32)}`;
 
   if (!forceClientId) {
@@ -124,6 +124,8 @@ export async function importSystemPdf(src: ImportSource, forceClientId?: string)
       usdAmount,
       fxRate: currency === "USD" || inv.amount === 0 ? null : usdAmount / inv.amount,
       sourceMessageId: messageId,
+      createdById: actorId ?? null,
+      updatedById: actorId ?? null,
       document: { create: { filename: src.filename, data: Buffer.from(src.data) } },
     },
   });
@@ -139,7 +141,7 @@ export function mailboxConfigured() {
 
 /** Reads recent messages from the invoice mailbox and imports PDF attachments.
  *  Dedupe is by Message-ID, so re-reading the same window is safe. */
-export async function fetchMailbox(days = 40) {
+export async function fetchMailbox(days = 40, actorId?: string) {
   if (!mailboxConfigured()) throw new Error("Mailbox is not configured. Set IMAP_HOST, IMAP_USER and IMAP_PASSWORD.");
   const { ImapFlow } = await import("imapflow");
   const { simpleParser } = await import("mailparser");
@@ -173,7 +175,7 @@ export async function fetchMailbox(days = 40) {
           messageId: `${mail.messageId ?? `uid-${uid}`}:${a.filename ?? ""}`,
           subject,
           receivedAt: mail.date ?? null,
-        });
+        }, undefined, actorId);
         outcomes.push({ ...outcome, subject });
       }
     }

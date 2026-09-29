@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
 import { draftFromInput, type ComposerInput } from "@/lib/composer";
 import { pdfDataFromDraft, renderInvoicePdf } from "@/lib/pdf/render";
+import { apiDenied } from "@/lib/session";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
+  const denied = await apiDenied("STAFF");
+  if (denied) return denied;
   const input = (await req.json()) as ComposerInput;
   const res = draftFromInput(input);
   if (!res.ok) return NextResponse.json({ error: res.error }, { status: 400 });

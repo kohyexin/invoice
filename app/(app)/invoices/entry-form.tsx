@@ -44,12 +44,14 @@ export function EntryForm({
   lookups,
   onDone,
   onCancel,
+  readOnly = false,
 }: {
   id: string | null;
   initial: EntryInput;
   lookups: Lookups;
   onDone: (id: string | null) => void;
   onCancel?: () => void;
+  readOnly?: boolean;
 }) {
   const [v, setV] = useState<EntryInput>(initial);
   const [clientText, setClientText] = useState(() => lookups.clients.find((c) => c.id === initial.clientId)?.name ?? "");
@@ -128,7 +130,7 @@ export function EntryForm({
   const nonUsd = v.currency !== "USD";
 
   return (
-    <div className="space-y-5">
+    <fieldset disabled={readOnly} className="min-w-0 space-y-5">
       {error && <p className="rounded-control border border-danger/30 bg-danger/10 px-3 py-2 text-[13px] text-rose-200">{error}</p>}
       {reuse && <p className="rounded-control border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-[13px] text-amber-200">{reuse}</p>}
 
@@ -239,22 +241,24 @@ export function EntryForm({
         <textarea value={v.notes} onChange={(e) => set("notes", e.target.value)} rows={2} className={cn(fieldClass, "h-auto py-2")} />
       </Field>
 
-      <div className="flex items-center gap-2">
-        <Button onClick={save} loading={pending}>
-          {reuse ? "Save anyway" : id ? "Save changes" : "Add to ledger"}
-        </Button>
-        {onCancel && (
-          <Button variant="secondary" onClick={onCancel} disabled={pending}>
-            Cancel
+      {!readOnly && (
+        <div className="flex items-center gap-2">
+          <Button onClick={save} loading={pending}>
+            {reuse ? "Save anyway" : id ? "Save changes" : "Add to ledger"}
           </Button>
-        )}
-        {id && (
-          <Button variant={confirmDelete ? "danger" : "ghost"} onClick={remove} disabled={pending} className="ml-auto">
-            {confirmDelete ? "Confirm delete" : "Delete"}
-          </Button>
-        )}
-      </div>
-    </div>
+          {onCancel && (
+            <Button variant="secondary" onClick={onCancel} disabled={pending}>
+              Cancel
+            </Button>
+          )}
+          {id && (
+            <Button variant={confirmDelete ? "danger" : "ghost"} onClick={remove} disabled={pending} className="ml-auto">
+              {confirmDelete ? "Confirm delete" : "Delete"}
+            </Button>
+          )}
+        </div>
+      )}
+    </fieldset>
   );
 }
 

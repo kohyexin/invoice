@@ -19,6 +19,8 @@ export default async function InvoicePage({ params }: { params: { id: string } }
         document: { select: { id: true } },
         company: { select: { code: true } },
         bankAccount: { select: { label: true } },
+        createdBy: { select: { name: true } },
+        updatedBy: { select: { name: true } },
       },
     }),
     loadLookups(),
@@ -111,6 +113,14 @@ export default async function InvoicePage({ params }: { params: { id: string } }
             </div>
           )}
 
+          <div className="glass-panel neon-edge rounded-card p-5">
+            <h2 className="font-mono text-[11px] uppercase tracking-[0.16em] text-ink-soft">History</h2>
+            <dl className="mt-3 space-y-1.5 text-[13px]">
+              <Row label="Created" value={`${formatDateTime(inv.createdAt)} · ${inv.createdBy?.name ?? originLabel(inv)}`} />
+              <Row label="Last changed" value={`${formatDateTime(inv.updatedAt)} · ${inv.updatedBy?.name ?? originLabel(inv)}`} />
+            </dl>
+          </div>
+
           {siblings.length > 0 && (
             <div className="glass-panel neon-edge rounded-card p-5">
               <h2 className="font-mono text-[11px] uppercase tracking-[0.16em] text-ink-soft">Same number</h2>
@@ -137,6 +147,19 @@ export default async function InvoicePage({ params }: { params: { id: string } }
       </div>
     </>
   );
+}
+
+/** Who to credit when no user is recorded: rows from before user accounts. */
+function originLabel(inv: { legacyNo: number | null; sourceMessageId: string | null }) {
+  if (inv.legacyNo !== null) return "Excel import";
+  if (inv.sourceMessageId) return "Mailbox import";
+  return "Unknown";
+}
+
+function formatDateTime(d: Date) {
+  return d
+    .toLocaleString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Hong_Kong" })
+    .replace(",", "");
 }
 
 function Row({ label, value }: { label: string; value: string }) {

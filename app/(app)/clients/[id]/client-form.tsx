@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FilePlus2, Plus, Trash2 } from "lucide-react";
+import { useCan } from "@/components/shell/user-context";
 import { Button } from "@/components/ui/button";
 import { GenerateBadge, StatusBadge } from "@/components/ui/badge";
 import { Field, Select, fieldClass } from "@/components/ui/form-controls";
@@ -54,6 +55,7 @@ export function ClientForm({
   unpaid: number;
 }) {
   const router = useRouter();
+  const canEdit = useCan("STAFF");
   const [values, setValues] = useState<ClientInput>(initial);
   const [fees, setFees] = useState<[string, string][]>(Object.entries(initial.fees));
   const [error, setError] = useState<string | null>(null);
@@ -99,7 +101,7 @@ export function ClientForm({
 
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
-      <div className="space-y-6">
+      <fieldset disabled={!canEdit} className="min-w-0 space-y-6">
         <section className="glass-panel neon-edge rounded-card p-5">
           <h2 className="font-mono text-[11px] uppercase tracking-[0.16em] text-ink-soft">Profile</h2>
           {error && <p className="mt-4 rounded-control border border-danger/30 bg-danger/10 px-3 py-2 text-[13px] text-rose-200">{error}</p>}
@@ -144,10 +146,12 @@ export function ClientForm({
         <section className="glass-panel neon-edge rounded-card p-5">
           <div className="flex items-center justify-between">
             <h2 className="font-mono text-[11px] uppercase tracking-[0.16em] text-ink-soft">Fee schedule</h2>
-            <Button variant="secondary" size="sm" onClick={() => setFees((f) => [...f, ["", ""]])}>
-              <Plus className="h-3.5 w-3.5" />
-              Add fee
-            </Button>
+            {canEdit && (
+              <Button variant="secondary" size="sm" onClick={() => setFees((f) => [...f, ["", ""]])}>
+                <Plus className="h-3.5 w-3.5" />
+                Add fee
+              </Button>
+            )}
           </div>
           <p className="mt-1 text-[13px] text-ink-muted">
             From the Jotform agreement. When an invoice item is linked to one of these fields, its amount is suggested as the rate.
@@ -179,18 +183,20 @@ export function ClientForm({
           </div>
         </section>
 
-        <div className="flex items-center gap-2.5">
-          <Button onClick={save} loading={pending}>
-            {id ? "Save changes" : "Create client"}
-          </Button>
-          {saved && <span className="text-[13px] text-emerald-300">Saved.</span>}
-          {id && (
-            <Button variant={confirmDelete ? "danger" : "ghost"} onClick={remove} disabled={pending} className="ml-auto">
-              {confirmDelete ? "Confirm delete" : "Delete client"}
+        {canEdit && (
+          <div className="flex items-center gap-2.5">
+            <Button onClick={save} loading={pending}>
+              {id ? "Save changes" : "Create client"}
             </Button>
-          )}
-        </div>
-      </div>
+            {saved && <span className="text-[13px] text-emerald-300">Saved.</span>}
+            {id && (
+              <Button variant={confirmDelete ? "danger" : "ghost"} onClick={remove} disabled={pending} className="ml-auto">
+                {confirmDelete ? "Confirm delete" : "Delete client"}
+              </Button>
+            )}
+          </div>
+        )}
+      </fieldset>
 
       {id && (
         <aside className="space-y-4">
@@ -198,13 +204,13 @@ export function ClientForm({
             <p className="text-sm font-medium text-ink-muted">Unpaid</p>
             <p className="tnum mt-1 text-2xl font-bold text-ink">USD {formatMoney(unpaid)}</p>
             <p className="mt-1 text-[13px] text-ink-soft">{invoices.length} invoices in total</p>
-            <Link
+            {canEdit && <Link
               href={`/invoices/new?client=${id}`}
               className="mt-4 inline-flex h-9 items-center gap-2 rounded-control bg-gradient-to-r from-brand-600 to-brand-400 px-3.5 text-sm font-medium text-white shadow-glow-brand hover:brightness-110"
             >
               <FilePlus2 className="h-4 w-4" />
               New invoice
-            </Link>
+            </Link>}
           </div>
           <div className="glass-panel neon-edge rounded-card p-5">
             <h2 className="font-mono text-[11px] uppercase tracking-[0.16em] text-ink-soft">Invoices</h2>

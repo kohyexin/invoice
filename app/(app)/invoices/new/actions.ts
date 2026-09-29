@@ -4,15 +4,19 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { draftFromInput, draftTotal, type ComposerInput } from "@/lib/composer";
 import { fxRates, suggestInvoiceNumber, toUsd } from "@/lib/rules";
+import { authorize, requireRole } from "@/lib/session";
 import { round2 } from "@/lib/utils";
 
 type Result<T = object> = ({ ok: true } & T) | { ok: false; error: string };
 
 export async function nextNumber(clientId: string) {
+  await requireRole("STAFF");
   return suggestInvoiceNumber(clientId);
 }
 
 export async function createManualInvoice(input: ComposerInput, confirmReuse = false): Promise<Result<{ id: string; reuse?: string }>> {
+  const auth = await authorize("STAFF");
+  if (!auth.ok) return auth;
   const res = draftFromInput(input);
   if (!res.ok) return res;
   const d = res.draft;
@@ -55,6 +59,8 @@ export async function createManualInvoice(input: ComposerInput, confirmReuse = f
         language: d.language,
         bankAccountId: d.bankAccountId,
         extraAccountIds: d.extraAccountIds,
+        createdById: auth.user.id,
+        updatedById: auth.user.id,
         lines: {
           create: d.lines.map((l, i) => ({
             itemId: input.lines.filter((x) => x.description.trim())[i]?.itemId || null,

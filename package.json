@@ -14,7 +14,7 @@
     "db:studio": "prisma studio",
     "db:generate": "prisma generate",
     "import:workbook": "tsx scripts/import-workbook.ts",
-    "hash-password": "tsx scripts/hash-password.ts"
+    "user:create": "tsx scripts/create-user.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.10.0",

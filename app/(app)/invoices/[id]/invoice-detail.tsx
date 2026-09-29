@@ -2,6 +2,7 @@
 
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useCan } from "@/components/shell/user-context";
 import { Button } from "@/components/ui/button";
 import type { InvoiceStatus } from "@/lib/generated/prisma/enums";
 import { setStatus, type EntryInput } from "../actions";
@@ -26,34 +27,37 @@ export function InvoiceDetail({
   lookups: Lookups;
 }) {
   const router = useRouter();
+  const canEdit = useCan("STAFF");
   const [pending, start] = useTransition();
 
   return (
     <section className="glass-panel neon-edge rounded-card p-5">
       <div className="mb-5 flex flex-wrap items-center gap-2">
         <h2 className="mr-auto font-mono text-[11px] uppercase tracking-[0.16em] text-ink-soft">Ledger entry</h2>
-        {QUICK.filter((q) => q.status !== status).map((q) => (
-          <Button
-            key={q.status}
-            size="sm"
-            variant="ghost"
-            disabled={pending}
-            onClick={() =>
-              start(async () => {
-                await setStatus(id, q.status);
-                router.refresh();
-              })
-            }
-          >
-            {q.label}
-          </Button>
-        ))}
+        {canEdit &&
+          QUICK.filter((q) => q.status !== status).map((q) => (
+            <Button
+              key={q.status}
+              size="sm"
+              variant="ghost"
+              disabled={pending}
+              onClick={() =>
+                start(async () => {
+                  await setStatus(id, q.status);
+                  router.refresh();
+                })
+              }
+            >
+              {q.label}
+            </Button>
+          ))}
       </div>
       <EntryForm
         key={`${status}-${initial.receivedDate}`}
         id={id}
         initial={initial}
         lookups={lookups}
+        readOnly={!canEdit}
         onDone={(saved) => (saved ? router.refresh() : router.push("/invoices"))}
       />
     </section>

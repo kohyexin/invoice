@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Papa from "papaparse";
 import { FileUp, Plus, Search } from "lucide-react";
+import { useCan } from "@/components/shell/user-context";
 import { Button } from "@/components/ui/button";
 import { DataTable, type Column, type FilterDef } from "@/components/ui/data-table";
 import { SidePanel } from "@/components/ui/side-panel";
@@ -27,6 +28,7 @@ type Row = {
 
 export function ClientsView({ rows }: { rows: Row[] }) {
   const router = useRouter();
+  const canEdit = useCan("STAFF");
   const [query, setQuery] = useState("");
   const [importOpen, setImportOpen] = useState(false);
 
@@ -82,7 +84,7 @@ export function ClientsView({ rows }: { rows: Row[] }) {
             className={cn(fieldClass, "pl-9")}
           />
         </div>
-        <div className="ml-auto flex gap-2">
+        <div className={cn("ml-auto flex gap-2", !canEdit && "hidden")}>
           <Button variant="secondary" onClick={() => setImportOpen(true)}>
             <FileUp className="h-4 w-4" />
             Import Jotform CSV

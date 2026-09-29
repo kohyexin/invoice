@@ -1,9 +1,11 @@
 import { PageHeader } from "@/components/ui/page-header";
 import { prisma } from "@/lib/db";
+import { requirePageRole } from "@/lib/session";
 import { fxRates } from "@/lib/rules";
 import { Composer } from "./composer";
 
 export default async function NewInvoicePage({ searchParams }: { searchParams: { client?: string } }) {
+  await requirePageRole("STAFF");
   const [companies, accounts, rules, clients, items, types, owners, rates] = await Promise.all([
     prisma.company.findMany({ where: { active: true }, orderBy: [{ sortOrder: "asc" }, { code: "asc" }] }),
     prisma.bankAccount.findMany({ where: { active: true }, orderBy: [{ sortOrder: "asc" }, { label: "asc" }] }),

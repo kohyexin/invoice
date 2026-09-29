@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
+import { authorize } from "@/lib/session";
 import { SETTINGS_ENTITIES, type FieldDef, type SettingsEntity } from "@/lib/settings-config";
 
 type Result = { ok: true } | { ok: false; error: string };
@@ -54,6 +55,8 @@ function friendly(e: unknown) {
 }
 
 export async function saveSetting(entity: SettingsEntity, id: string | null, input: Record<string, unknown>): Promise<Result> {
+  const auth = await authorize("ADMIN");
+  if (!auth.ok) return auth;
   try {
     const data = build(entity, input);
     switch (entity) {
@@ -95,6 +98,8 @@ export async function saveSetting(entity: SettingsEntity, id: string | null, inp
 }
 
 export async function deleteSetting(entity: SettingsEntity, id: string): Promise<Result> {
+  const auth = await authorize("ADMIN");
+  if (!auth.ok) return auth;
   try {
     switch (entity) {
       case "company":

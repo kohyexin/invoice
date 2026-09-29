@@ -1,11 +1,13 @@
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/ui/page-header";
 import { prisma } from "@/lib/db";
+import { requirePageRole } from "@/lib/session";
 import { toDateInput } from "@/lib/utils";
 import { ClientForm } from "./client-form";
 
 export default async function ClientPage({ params }: { params: { id: string } }) {
   const isNew = params.id === "new";
+  if (isNew) await requirePageRole("STAFF");
   const [client, owners] = await Promise.all([
     isNew
       ? null

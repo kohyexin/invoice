@@ -1,37 +1,35 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import { SESSION_COOKIE, SESSION_MAX_AGE, createSessionToken } from "@/lib/auth";
+import { prisma } from "@/lib/db";
+import { SESSION_COOKIE, createSessionToken, sessionCookieOptions } from "@/lib/auth";
+
+export const runtime = "nodejs";
+
+// Compared against when the email is unknown, so both paths take the same time.
+let dummyHash: string | undefined;
+const getDummyHash = () => (dummyHash ??= bcrypt.hashSync("unknown-user", 12));
 
 export async function POST(req: Request) {
-  const { email, password } = (await req.json().catch(() => ({}))) as {
-    email?: string;
-    password?: string;
-  };
+  const { email, password } = (await req.json().catch(() => ({}))) as { email?: string; password?: string };
+  const normalized = email?.trim().toLowerCase() ?? "";
 
-  const expectedEmail = process.env.APP_LOGIN_EMAIL?.trim().toLowerCase();
-  const hash = process.env.APP_PASSWORD_HASH;
-  if (!expectedEmail || !hash) {
-    return NextResponse.json(
-      { error: "Sign-in is not configured. Set APP_LOGIN_EMAIL and APP_PASSWORD_HASH in .env." },
-      { status: 500 }
-    );
-  }
+  const user = normalized
+    ? await prisma.user.findUnique({
+        where: { email: normalized },
+        select: { id: true, passwordHash: true, active: true, sessionVersion: true },
+      })
+    : null;
+  const ok = typeof password === "string" && (await bcrypt.compare(password, user?.passwordHash ?? getDummyHash())) && Boolean(user);
 
-  const ok =
-    email?.trim().toLowerCase() === expectedEmail &&
-    typeof password === "string" &&
-    (await bcrypt.compare(password, hash));
-  if (!ok) {
+  if (!ok || !user) {
     return NextResponse.json({ error: "Email or password is incorrect." }, { status: 401 });
   }
+  if (!user.active) {
+    return NextResponse.json({ error: "This account has been disabled. Ask an admin to re-enable it." }, { status: 403 });
+  }
 
+  await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
   const res = NextResponse.json({ ok: true });
-  res.cookies.set(SESSION_COOKIE, await createSessionToken(expectedEmail), {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: SESSION_MAX_AGE,
-  });
+  res.cookies.set(SESSION_COOKIE, await createSessionToken(user.id, user.sessionVersion), sessionCookieOptions);
   return res;
 }

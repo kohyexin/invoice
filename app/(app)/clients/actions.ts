@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { clientData, toClientDraft } from "@/lib/client-import";
+import { authorize } from "@/lib/session";
 import { parseDateInput } from "@/lib/utils";
 
 type Result<T = object> = ({ ok: true } & T) | { ok: false; error: string };
@@ -10,6 +11,8 @@ type Result<T = object> = ({ ok: true } & T) | { ok: false; error: string };
 export async function importJotformRows(
   rows: Record<string, string>[]
 ): Promise<Result<{ created: number; updated: number; skipped: number }>> {
+  const auth = await authorize("STAFF");
+  if (!auth.ok) return auth;
   let created = 0;
   let updated = 0;
   let skipped = 0;
@@ -66,6 +69,8 @@ export type ClientInput = {
 };
 
 export async function saveClient(id: string | null, input: ClientInput): Promise<Result<{ id: string }>> {
+  const auth = await authorize("STAFF");
+  if (!auth.ok) return auth;
   const name = input.name.trim();
   if (!name) return { ok: false, error: "Client name is required." };
   const fees = Object.fromEntries(
@@ -107,6 +112,8 @@ export async function saveClient(id: string | null, input: ClientInput): Promise
 }
 
 export async function deleteClient(id: string): Promise<Result> {
+  const auth = await authorize("STAFF");
+  if (!auth.ok) return auth;
   const count = await prisma.invoice.count({ where: { clientId: id } });
   if (count > 0) return { ok: false, error: `This client has ${count} invoice(s). Delete or move them first.` };
   await prisma.client.delete({ where: { id } });

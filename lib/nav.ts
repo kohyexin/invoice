@@ -7,8 +7,9 @@ import {
   Users,
   type LucideIcon,
 } from "lucide-react";
+import type { RoleName } from "@/lib/roles";
 
-export type NavItem = { label: string; href: string; icon: LucideIcon };
+export type NavItem = { label: string; href: string; icon: LucideIcon; minRole?: RoleName };
 export type NavGroup = { label?: string; items: NavItem[] };
 
 export const navGroups: NavGroup[] = [
@@ -19,15 +20,15 @@ export const navGroups: NavGroup[] = [
     label: "Invoicing",
     items: [
       { label: "Invoices", href: "/invoices", icon: FileText },
-      { label: "New invoice", href: "/invoices/new", icon: FilePlus2 },
-      { label: "System imports", href: "/imports", icon: Inbox },
+      { label: "New invoice", href: "/invoices/new", icon: FilePlus2, minRole: "STAFF" },
+      { label: "System imports", href: "/imports", icon: Inbox, minRole: "STAFF" },
     ],
   },
   {
     label: "Records",
     items: [
       { label: "Clients", href: "/clients", icon: Users },
-      { label: "Settings", href: "/settings", icon: Settings },
+      { label: "Settings", href: "/settings", icon: Settings, minRole: "ADMIN" },
     ],
   },
 ];

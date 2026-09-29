@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { GenerateBadge, StatusBadge } from "@/components/ui/badge";
 import { DataTable, type Column, type FilterDef } from "@/components/ui/data-table";
 import { KpiCard } from "@/components/dashboard/kpi-card";
+import { useCan } from "@/components/shell/user-context";
 import { SidePanel } from "@/components/ui/side-panel";
 import { fieldClass } from "@/components/ui/form-controls";
 import { addDays, cn, formatDate, formatMoney, toDateInput } from "@/lib/utils";
@@ -41,6 +42,7 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 
 export function LedgerView({ rows, lookups }: { rows: LedgerRow[]; lookups: Lookups }) {
   const router = useRouter();
+  const canEdit = useCan("STAFF");
   const [query, setQuery] = useState("");
   const [adding, setAdding] = useState(false);
   const [paying, setPaying] = useState<LedgerRow | null>(null);
@@ -153,12 +155,14 @@ export function LedgerView({ rows, lookups }: { rows: LedgerRow[]; lookups: Look
             className={cn(fieldClass, "pl-9")}
           />
         </div>
-        <div className="ml-auto flex gap-2">
-          <Button variant="secondary" onClick={() => setAdding(true)}>
-            <Plus className="h-4 w-4" />
-            Record invoice
-          </Button>
-        </div>
+        {canEdit && (
+          <div className="ml-auto flex gap-2">
+            <Button variant="secondary" onClick={() => setAdding(true)}>
+              <Plus className="h-4 w-4" />
+              Record invoice
+            </Button>
+          </div>
+        )}
       </div>
 
       <DataTable
@@ -170,7 +174,7 @@ export function LedgerView({ rows, lookups }: { rows: LedgerRow[]; lookups: Look
         exportName="invoices"
         defaultPageSize={50}
         rowActions={(r) =>
-          r.status === "SENT" ? (
+          canEdit && r.status === "SENT" ? (
             <Button size="sm" variant="secondary" onClick={() => setPaying(r)}>
               Mark paid
             </Button>

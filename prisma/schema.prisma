@@ -37,6 +37,34 @@ enum InvoiceStatus {
   WAIVED
 }
 
+/* ------------------------------- Users ------------------------------- */
+
+/// ADMIN: everything incl. users and settings. STAFF: invoices, clients,
+/// imports. VIEWER: read-only.
+enum Role {
+  ADMIN
+  STAFF
+  VIEWER
+}
+
+model User {
+  id              String    @id @default(cuid())
+  email           String    @unique
+  name            String
+  role            Role      @default(STAFF)
+  passwordHash    String
+  active          Boolean   @default(true)
+  /// Bumped on password change or deactivation; sessions carrying an older
+  /// value are rejected, which signs the user out everywhere.
+  sessionVersion  Int       @default(0)
+  lastLoginAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  invoicesCreated Invoice[] @relation("InvoiceCreatedBy")
+  invoicesUpdated Invoice[] @relation("InvoiceUpdatedBy")
+}
+
 /* ----------------------------- Settings ----------------------------- */
 
 /// Issuer on the letterhead (SPARK PSP, STAR SAAS, 厦门星知付).
@@ -225,6 +253,11 @@ model Invoice {
   /// Row number in the Excel Invoice List, for tracing imported rows.
   legacyNo         Int?          @unique
   sourceMessageId  String?       @unique
+  /// Null on rows from the workbook import or the scheduled mailbox import.
+  createdById      String?
+  createdBy        User?         @relation("InvoiceCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedById      String?
+  updatedBy        User?         @relation("InvoiceUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
 

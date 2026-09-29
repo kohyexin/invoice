@@ -4,6 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { navGroups } from "@/lib/nav";
+import { hasRole } from "@/lib/roles";
+import { useCurrentUser } from "./user-context";
 
 function isActive(pathname: string, href: string) {
   if (href === "/invoices") return pathname === "/invoices" || /^\/invoices\/(?!new)/.test(pathname);
@@ -20,10 +22,14 @@ export function SidebarNav({
   badges?: Record<string, number>;
 }) {
   const pathname = usePathname();
+  const { role } = useCurrentUser();
+  const groups = navGroups
+    .map((g) => ({ ...g, items: g.items.filter((i) => !i.minRole || hasRole(role, i.minRole)) }))
+    .filter((g) => g.items.length > 0);
 
   return (
     <nav className="flex-1 overflow-y-auto px-3 pb-4">
-      {navGroups.map((group, gi) => (
+      {groups.map((group, gi) => (
         <div key={gi} className="mb-1">
           {group.label && !collapsed && (
             <p className="px-2.5 pb-1.5 pt-3 text-[11px] font-semibold uppercase tracking-wide text-ink-soft">

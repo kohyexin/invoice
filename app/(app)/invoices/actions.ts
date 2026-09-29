@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import type { Currency, Generate, InvoiceStatus } from "@/lib/generated/prisma/client";
 import { CURRENCIES, STATUSES, parseDateInput, round2 } from "@/lib/utils";
 import { fxRates, suggestInvoiceNumber, toUsd } from "@/lib/rules";
+import { authorize, requireRole } from "@/lib/session";
 
 type Result<T = object> = ({ ok: true } & T) | { ok: false; error: string };
 
@@ -58,6 +59,7 @@ function refresh(id?: string) {
 
 /** Defaults for a new ledger row once a client is picked. */
 export async function entryDefaults(clientId: string) {
+  await requireRole("STAFF");
   const [client, number, last] = await Promise.all([
     prisma.client.findUnique({ where: { id: clientId }, select: { alias: true, defaultOwnerId: true } }),
     suggestInvoiceNumber(clientId),
@@ -78,6 +80,8 @@ export async function entryDefaults(clientId: string) {
 }
 
 export async function saveEntry(id: string | null, input: EntryInput, confirmReuse = false): Promise<Result<{ id: string; reuse?: string }>> {
+  const auth = await authorize("STAFF");
+  if (!auth.ok) return auth;
   const number = input.number.trim();
   const invoiceDate = parseDateInput(input.invoiceDate);
   const amount = money(input.amount);
@@ -128,10 +132,13 @@ export async function saveEntry(id: string | null, input: EntryInput, confirmReu
     fee: money(input.fee),
     paymentNote: input.paymentNote.trim(),
     notes: input.notes.trim(),
+    updatedById: auth.user.id,
   };
 
   try {
-    const row = id ? await prisma.invoice.update({ where: { id }, data }) : await prisma.invoice.create({ data });
+    const row = id
+      ? await prisma.invoice.update({ where: { id }, data })
+      : await prisma.invoice.create({ data: { ...data, createdById: auth.user.id } });
     refresh(row.id);
     return { ok: true, id: row.id };
   } catch (e) {
@@ -140,6 +147,8 @@ export async function saveEntry(id: string | null, input: EntryInput, confirmReu
 }
 
 export async function markPaid(id: string, input: PaymentInput): Promise<Result> {
+  const auth = await authorize("STAFF");
+  if (!auth.ok) return auth;
   const receivedDate = parseDateInput(input.receivedDate);
   const receivedAmount = money(input.receivedAmount);
   if (!receivedDate) return { ok: false, error: "Received date is required." };
@@ -154,6 +163,7 @@ export async function markPaid(id: string, input: PaymentInput): Promise<Result>
         receivedCurrency: currencyOrNull(input.receivedCurrency),
         fee: money(input.fee),
         paymentNote: input.paymentNote.trim(),
+        updatedById: auth.user.id,
       },
     });
     refresh(id);
@@ -164,16 +174,21 @@ export async function markPaid(id: string, input: PaymentInput): Promise<Result>
 }
 
 export async function setStatus(id: string, status: InvoiceStatus): Promise<Result> {
+  const auth = await authorize("STAFF");
+  if (!auth.ok) return auth;
   if (!(STATUSES as readonly string[]).includes(status)) return { ok: false, error: "Unknown status." };
+  const cleared = status === "SENT" ? { receivedDate: null, receivedAmount: null, receivedCurrency: null, fee: null } : {};
   await prisma.invoice.update({
     where: { id },
-    data: status === "SENT" ? { status, receivedDate: null, receivedAmount: null, receivedCurrency: null, fee: null } : { status },
+    data: { status, ...cleared, updatedById: auth.user.id },
   });
   refresh(id);
   return { ok: true };
 }
 
 export async function deleteEntry(id: string): Promise<Result> {
+  const auth = await authorize("STAFF");
+  if (!auth.ok) return auth;
   await prisma.invoice.delete({ where: { id } });
   refresh();
   return { ok: true };

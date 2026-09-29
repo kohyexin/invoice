@@ -7,9 +7,16 @@ import { LogOut, Menu, PanelLeftClose, PanelLeftOpen, Plus, X } from "lucide-rea
 import { cn } from "@/lib/utils";
 import { AppBackdrop } from "./app-backdrop";
 import { BrandLogo } from "./brand-logo";
+import { hasRole, ROLE_LABEL } from "@/lib/roles";
 import { SidebarNav } from "./sidebar-nav";
+import { useCurrentUser } from "./user-context";
 
 const COLLAPSE_KEY = "inv-sidebar-collapsed";
+
+function initials(name: string) {
+  const parts = name.trim().split(/\s+/);
+  return ((parts[0]?.[0] ?? "") + (parts.length > 1 ? parts[parts.length - 1][0] : "")).toUpperCase() || "?";
+}
 
 export function AppShell({
   children,
@@ -21,6 +28,8 @@ export function AppShell({
   const [collapsed, setCollapsed] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const pathname = usePathname();
+  const user = useCurrentUser();
+  const canEdit = hasRole(user.role, "STAFF");
 
   useEffect(() => {
     setCollapsed(window.localStorage.getItem(COLLAPSE_KEY) === "1");
@@ -42,6 +51,25 @@ export function AppShell({
 
   const footer = (isCollapsed: boolean) => (
     <div className="border-t border-line p-3">
+      <Link
+        href="/account"
+        title={isCollapsed ? `${user.name} · ${ROLE_LABEL[user.role]}` : "My account"}
+        className={cn(
+          "mb-2 flex items-center gap-2.5 rounded-control px-2 py-1.5 transition-colors hover:bg-overlay/[0.05]",
+          isCollapsed && "justify-center px-0",
+          pathname === "/account" && "bg-brand-500/15"
+        )}
+      >
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-500/20 text-[13px] font-semibold text-brand-200">
+          {initials(user.name)}
+        </span>
+        {!isCollapsed && (
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-[13px] font-medium text-ink">{user.name}</span>
+            <span className="block truncate text-[11px] text-ink-soft">{ROLE_LABEL[user.role]}</span>
+          </span>
+        )}
+      </Link>
       <div className={cn("flex items-center gap-2", isCollapsed ? "flex-col" : "justify-between")}>
         <BrandLogo collapsed={isCollapsed} />
         <div className={cn("flex items-center gap-1", isCollapsed && "flex-col")}>
@@ -75,7 +103,7 @@ export function AppShell({
           collapsed ? "w-[76px]" : "w-[248px]"
         )}
       >
-        <div className="p-3">
+        <div className={cn("p-3", !canEdit && "hidden")}>
           <Link
             href="/invoices/new"
             title="New invoice"

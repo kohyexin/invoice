@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { draftForInvoice, pdfDataFromDraft, pdfFilename, renderInvoicePdf } from "@/lib/pdf/render";
+import { apiDenied } from "@/lib/session";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request, { params }: { params: { id: string } }) {
+  const denied = await apiDenied("VIEWER");
+  if (denied) return denied;
   const inv = await prisma.invoice.findUnique({
     where: { id: params.id },
     select: { alias: true, number: true, document: { select: { filename: true, contentType: true, data: true } } },

@@ -2,20 +2,50 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Building2, Coins, Landmark, ListChecks, Plus, Route, Tags, UserRound } from "lucide-react";
+import { Building2, Coins, KeyRound, Landmark, ListChecks, Plus, Route, ShieldCheck, Tags, UserRound, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { RecordPanel } from "@/components/ui/record-panel";
+import { ROLE_HELP, ROLE_LABEL, type RoleName } from "@/lib/roles";
 import { SETTINGS_ENTITIES, type FieldDef, type SettingsEntity } from "@/lib/settings-config";
 import { cn, formatDate } from "@/lib/utils";
 import { deleteSetting, saveSetting } from "./actions";
+import { saveUser } from "./users-actions";
 
 type Row = Record<string, unknown> & { id: string };
 
 type Column = { label: string; render: (r: Row) => React.ReactNode; mono?: boolean; align?: "right" };
 
+type TabId = SettingsEntity | "user";
+
+const ROLE_OPTIONS = (["ADMIN", "STAFF", "VIEWER"] as RoleName[]).map((r) => ({ value: r, label: `${ROLE_LABEL[r]}: ${ROLE_HELP[r]}` }));
+
+const USER_FIELDS: FieldDef[] = [
+  { key: "name", label: "Name", kind: "text", required: true },
+  { key: "email", label: "Email", kind: "text", required: true, hint: "Used to sign in" },
+  { key: "role", label: "Role", kind: "select", required: true, options: ROLE_OPTIONS },
+];
+const NEW_USER_FIELDS: FieldDef[] = [
+  ...USER_FIELDS,
+  {
+    key: "password",
+    label: "Password",
+    kind: "text",
+    mono: true,
+    hint: "Leave blank to generate one. Either way it is shown once after saving so you can pass it on; they can change it under My account.",
+  },
+  { key: "active", label: "Active", kind: "checkbox" },
+];
+const EDIT_USER_FIELDS: FieldDef[] = [
+  ...USER_FIELDS,
+  { key: "active", label: "Active (untick to block sign-in and sign them out)", kind: "checkbox" },
+  { key: "resetPassword", label: "Generate a new password and sign them out everywhere", kind: "checkbox" },
+];
+
+const ROLE_TONE: Record<RoleName, "brand" | "outline" | "neutral"> = { ADMIN: "brand", STAFF: "outline", VIEWER: "neutral" };
+
 type Tab = {
-  id: SettingsEntity;
+  id: TabId;
   label: string;
   icon: React.ElementType;
   description: string;
@@ -34,10 +64,13 @@ export function SettingsView(props: {
   owners: Row[];
   types: Row[];
   items: Row[];
+  users: Row[];
+  meId: string;
 }) {
   const router = useRouter();
-  const [tabId, setTabId] = useState<SettingsEntity>("company");
-  const [editing, setEditing] = useState<{ entity: SettingsEntity; row: Row | null } | null>(null);
+  const [tabId, setTabId] = useState<TabId>("user");
+  const [editing, setEditing] = useState<{ entity: TabId; row: Row | null } | null>(null);
+  const [issued, setIssued] = useState<{ email: string; password: string } | null>(null);
 
   const options = useMemo(
     () => ({
@@ -48,6 +81,33 @@ export function SettingsView(props: {
   );
 
   const tabs: Tab[] = [
+    {
+      id: "user",
+      label: "Users",
+      icon: ShieldCheck,
+      description:
+        "Who can sign in. Admin: everything, including users and settings. Staff: invoices, clients, payments and imports. Viewer: read-only. Disable people instead of deleting them so their name stays on the invoices they touched.",
+      rows: props.users,
+      columns: [
+        {
+          label: "Name",
+          render: (r) => (
+            <span className="flex items-center gap-2">
+              {String(r.name)}
+              {r.id === props.meId && <Badge tone="outline">You</Badge>}
+              {r.active === false && <Badge tone="danger">Disabled</Badge>}
+            </span>
+          ),
+        },
+        { label: "Email", render: (r) => String(r.email) },
+        { label: "Role", render: (r) => <Badge tone={ROLE_TONE[r.role as RoleName]}>{ROLE_LABEL[r.role as RoleName]}</Badge> },
+        {
+          label: "Last sign-in",
+          render: (r) => (r.lastLoginAt ? formatDate(String(r.lastLoginAt)) : <span className="text-ink-soft">Never</span>),
+          align: "right",
+        },
+      ],
+    },
     {
       id: "company",
       label: "Companies",
@@ -135,7 +195,11 @@ export function SettingsView(props: {
   ];
 
   const tab = tabs.find((t) => t.id === tabId)!;
-  const config = editing ? SETTINGS_ENTITIES[editing.entity] : null;
+  const config = !editing
+    ? null
+    : editing.entity === "user"
+      ? { title: "User", fields: editing.row ? EDIT_USER_FIELDS : NEW_USER_FIELDS }
+      : SETTINGS_ENTITIES[editing.entity];
 
   return (
     <div className="grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
@@ -162,6 +226,23 @@ export function SettingsView(props: {
       </nav>
 
       <section className="glass-panel neon-edge rounded-card">
+        {issued && (
+          <div className="flex items-start gap-3 border-b border-line bg-brand-500/10 px-5 py-3.5">
+            <KeyRound className="mt-0.5 h-4 w-4 shrink-0 text-brand-300" />
+            <div className="min-w-0 flex-1 text-[13px] text-ink">
+              Password for <span className="font-medium">{issued.email}</span>:{" "}
+              <code className="rounded bg-overlay/10 px-1.5 py-0.5 font-mono text-[13px] text-brand-200 select-all">{issued.password}</code>
+              <p className="mt-1 text-ink-muted">Copy it now; it won&apos;t be shown again. They can change it under My account after signing in.</p>
+            </div>
+            <button
+              onClick={() => setIssued(null)}
+              aria-label="Dismiss"
+              className="flex h-7 w-7 items-center justify-center rounded-control text-ink-soft hover:bg-overlay/[0.06] hover:text-ink"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        )}
         <div className="flex items-start justify-between gap-4 border-b border-line px-5 py-4">
           <div>
             <h2 className="text-[15px] font-semibold text-ink">{tab.label}</h2>
@@ -231,15 +312,22 @@ export function SettingsView(props: {
           options={options}
           onClose={() => setEditing(null)}
           onSave={async (values) => {
+            if (editing.entity === "user") {
+              const res = await saveUser(editing.row?.id ?? null, values);
+              if (!res.ok) return res.error;
+              if (res.password) setIssued({ email: String(values.email).trim().toLowerCase(), password: res.password });
+              router.refresh();
+              return null;
+            }
             const res = await saveSetting(editing.entity, editing.entity === "fxRate" ? null : editing.row?.id ?? null, values);
             if (!res.ok) return res.error;
             router.refresh();
             return null;
           }}
           onDelete={
-            editing.row
+            editing.row && editing.entity !== "user"
               ? async () => {
-                  const res = await deleteSetting(editing.entity, editing.row!.id);
+                  const res = await deleteSetting(editing.entity as SettingsEntity, editing.row!.id);
                   if (!res.ok) return res.error;
                   router.refresh();
                   return null;

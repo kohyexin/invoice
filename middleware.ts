@@ -6,9 +6,10 @@ export async function middleware(req: NextRequest) {
   const token = req.cookies.get(SESSION_COOKIE)?.value;
   const session = token ? await verifySessionToken(token) : null;
 
-  if (pathname === "/login") {
-    return session ? NextResponse.redirect(new URL("/dashboard", req.url)) : NextResponse.next();
-  }
+  // A validly signed cookie may still belong to a disabled or signed-out user
+  // (checked against the database in lib/session.ts), so the login page
+  // decides for itself whether to bounce to the dashboard.
+  if (pathname === "/login") return NextResponse.next();
 
   if (pathname.startsWith("/api/")) {
     return session
