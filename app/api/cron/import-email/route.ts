@@ -15,7 +15,7 @@ export async function GET(req: Request) {
   if (!mailboxConfigured()) return NextResponse.json({ error: "Mailbox not configured" }, { status: 503 });
 
   try {
-    const outcomes = await fetchMailbox();
+    const { outcomes, alreadyDone, remaining } = await fetchMailbox();
     revalidatePath("/invoices");
     revalidatePath("/imports");
     revalidatePath("/dashboard");
@@ -25,6 +25,8 @@ export async function GET(req: Request) {
       duplicate: count("duplicate"),
       review: count("review"),
       skipped: count("skipped"),
+      alreadyDone,
+      remaining,
       outcomes,
     });
   } catch (e) {

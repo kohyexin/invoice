@@ -9,13 +9,15 @@ import { useI18n } from "@/components/i18n/locale-provider";
 import { StatusBadge } from "@/components/ui/badge";
 import { fieldClass } from "@/components/ui/form-controls";
 import { cn, formatDate, formatMoney } from "@/lib/utils";
-import { checkMailbox, dismissReview, resolveReview, uploadPdfs } from "./actions";
+import { dismissReview, finishMailboxCheck, importMailboxBatch, resolveReview, scanMailbox, uploadPdfs } from "./actions";
 
 type Outcome = { status: string; label: string; number?: string; client?: string; reason?: string; invoiceId?: string };
 type Pending = { id: string; subject: string; filename: string; receivedAt: string; reason: string; parsed: Record<string, string | number | null> };
+type Progress = { phase: "scanning" | "importing"; done: number; total: number };
 type Recent = { id: string; number: string; client: string; invoiceDate: string; usdAmount: number; status: string; importedAt: string };
 
 const card = "glass-panel neon-edge rounded-card p-5";
+const BATCH = 5;
 
 export function ImportsView({
   mailbox,
@@ -34,11 +36,56 @@ export function ImportsView({
   const [error, setError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const [pending_, start] = useTransition();
+  const [progress, setProgress] = useState<Progress | null>(null);
+  const [alreadyDone, setAlreadyDone] = useState(0);
+  const [stopped, setStopped] = useState(false);
+  const stopRef = useRef(false);
   const { t } = useI18n();
+  const busy = pending_ || progress !== null;
+
+  async function checkMailbox() {
+    setError(null);
+    setOutcomes(null);
+    setAlreadyDone(0);
+    setStopped(false);
+    stopRef.current = false;
+    setProgress({ phase: "scanning", done: 0, total: 0 });
+    try {
+      const scan = await scanMailbox();
+      if (!scan.ok) return setError(scan.error);
+      setAlreadyDone(scan.alreadyDone);
+      const uids = scan.items.map((i) => i.uid);
+      const all: Outcome[] = [];
+      setOutcomes([]);
+      setProgress({ phase: "importing", done: 0, total: uids.length });
+      for (let i = 0; i < uids.length; i += BATCH) {
+        if (stopRef.current) {
+          setStopped(true);
+          break;
+        }
+        const res = await importMailboxBatch(uids.slice(i, i + BATCH));
+        if (!res.ok) {
+          setError(res.error);
+          break;
+        }
+        all.push(...res.outcomes);
+        setOutcomes([...all]);
+        setProgress({ phase: "importing", done: Math.min(i + BATCH, uids.length), total: uids.length });
+      }
+      await finishMailboxCheck();
+      router.refresh();
+    } catch {
+      setError("The mailbox check was interrupted. Run it again to continue; finished invoices are kept.");
+    } finally {
+      setProgress(null);
+    }
+  }
 
   function run(fn: () => Promise<{ ok: true; outcomes: Outcome[] } | { ok: false; error: string }>) {
     setError(null);
     setOutcomes(null);
+    setAlreadyDone(0);
+    setStopped(false);
     start(async () => {
       const res = await fn();
       if (!res.ok) return setError(res.error);
@@ -76,16 +123,18 @@ export function ImportsView({
               )}
             </div>
           </div>
-          <Button className="mt-4" variant="secondary" onClick={() => run(checkMailbox)} disabled={!mailbox} loading={pending_}>
+          <Button className="mt-4" variant="secondary" onClick={checkMailbox} disabled={!mailbox || busy} loading={progress !== null}>
             <RefreshCw className="h-4 w-4" />
             {t("Check mailbox now")}
           </Button>
+          {progress && <MailboxProgress progress={progress} onStop={() => (stopRef.current = true)} />}
         </section>
 
         <section className={card}>
           <button
             type="button"
             onClick={() => fileRef.current?.click()}
+            disabled={busy}
             onDragOver={(e) => {
               e.preventDefault();
               setDragging(true);
@@ -113,8 +162,8 @@ export function ImportsView({
       {outcomes && (
         <section className={card}>
           <h2 className="text-base font-semibold text-ink">{t("Result")}</h2>
-          {outcomes.length === 0 && <p className="mt-2 text-[13px] text-ink-muted">{t("No new invoice emails found.")}</p>}
-          <ul className="mt-3 space-y-1.5 text-[13px]">
+          <ResultSummary outcomes={outcomes} alreadyDone={alreadyDone} stopped={stopped} running={progress !== null} />
+          <ul className="mt-3 max-h-[360px] space-y-1.5 overflow-y-auto text-[13px]">
             {outcomes.map((o, i) => (
               <li key={i} className="flex gap-3">
                 <span
@@ -278,6 +327,73 @@ function ReviewRow({ item, clients }: { item: Pending; clients: { id: string; na
         </Button>
         {error && <span className="text-[12px] text-rose-600 dark:text-rose-300">{t(error)}</span>}
       </div>
+    </div>
+  );
+}
+
+function MailboxProgress({ progress, onStop }: { progress: Progress; onStop: () => void }) {
+  const { t } = useI18n();
+  const [stopping, setStopping] = useState(false);
+  const scanning = progress.phase === "scanning";
+  const pct = progress.total ? Math.round((progress.done / progress.total) * 100) : 0;
+
+  return (
+    <div className="mt-4" role="status" aria-live="polite">
+      <div className="flex items-center justify-between gap-3 text-[12px] text-ink-muted">
+        <span>
+          {scanning
+            ? t("Looking for new invoice emails…")
+            : progress.total === 0
+              ? t("No new invoice emails found.")
+              : t("Importing {0} of {1} emails…", progress.done, progress.total)}
+        </span>
+        {!scanning && progress.total > 0 && (
+          <span className="flex items-center gap-3">
+            <span className="tnum">{pct}%</span>
+            <button
+              type="button"
+              onClick={() => {
+                setStopping(true);
+                onStop();
+              }}
+              disabled={stopping}
+              className="rounded px-1.5 py-0.5 text-ink-soft hover:bg-overlay/[0.06] hover:text-ink disabled:opacity-60"
+            >
+              {stopping ? t("Stopping…") : t("Stop")}
+            </button>
+          </span>
+        )}
+      </div>
+      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-overlay/[0.08]">
+        <div
+          className={cn("h-full rounded-full bg-brand-500 transition-[width] duration-300", scanning && "w-1/3 animate-pulse")}
+          style={scanning ? undefined : { width: `${pct}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function ResultSummary({ outcomes, alreadyDone, stopped, running }: { outcomes: Outcome[]; alreadyDone: number; stopped: boolean; running: boolean }) {
+  const { t } = useI18n();
+  const count = (s: string) => outcomes.filter((o) => o.status === s).length;
+  const parts = (
+    [
+      ["imported", "Imported {0}"],
+      ["duplicate", "Duplicate {0}"],
+      ["review", "Needs review {0}"],
+      ["skipped", "Skipped {0}"],
+    ] as const
+  )
+    .filter(([s]) => count(s) > 0)
+    .map(([s, label]) => t(label, count(s)));
+
+  return (
+    <div className="mt-2 space-y-1 text-[13px] text-ink-muted">
+      {outcomes.length === 0 && !running && <p>{t("No new invoice emails found.")}</p>}
+      {parts.length > 0 && <p className="font-medium text-ink">{parts.join(" … ")}</p>}
+      {alreadyDone > 0 && <p>{t("{0} emails were imported earlier and skipped.", alreadyDone)}</p>}
+      {stopped && <p className="text-amber-700 dark:text-amber-200">{t("Stopped. Run the check again to import the rest.")}</p>}
     </div>
   );
 }

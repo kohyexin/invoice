@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { authorize, requireRole } from "@/lib/session";
-import { fetchMailbox, importSystemPdf, type ImportOutcome } from "@/lib/system-import";
+import { importMailboxUids, importSystemPdf, listMailbox, type ImportOutcome, type MailboxItem } from "@/lib/system-import";
 
 type Summary = { ok: true; outcomes: (ImportOutcome & { label: string })[] } | { ok: false; error: string };
 
@@ -14,16 +14,34 @@ function refresh() {
   revalidatePath("/", "layout");
 }
 
-export async function checkMailbox(): Promise<Summary> {
+const errorText = (e: unknown) => (e instanceof Error ? e.message : "Mailbox fetch failed.");
+
+/** Step 1 of a mailbox check: which emails still need importing. */
+export async function scanMailbox(): Promise<{ ok: true; items: MailboxItem[]; alreadyDone: number } | { ok: false; error: string }> {
   const auth = await authorize("STAFF");
   if (!auth.ok) return auth;
   try {
-    const outcomes = await fetchMailbox(40, auth.user.id);
-    refresh();
+    return { ok: true, ...(await listMailbox()) };
+  } catch (e) {
+    return { ok: false, error: errorText(e) };
+  }
+}
+
+/** Step 2, called repeatedly by the page with a few emails at a time so no single request runs long. */
+export async function importMailboxBatch(uids: number[]): Promise<Summary> {
+  const auth = await authorize("STAFF");
+  if (!auth.ok) return auth;
+  try {
+    const outcomes = await importMailboxUids(uids.slice(0, 10), auth.user.id);
     return { ok: true, outcomes: outcomes.map((o) => ({ ...o, label: o.subject })) };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Mailbox fetch failed." };
+    return { ok: false, error: errorText(e) };
   }
+}
+
+export async function finishMailboxCheck() {
+  await requireRole("STAFF");
+  refresh();
 }
 
 export async function uploadPdfs(form: FormData): Promise<Summary> {

@@ -4,6 +4,8 @@ import { requirePageRole } from "@/lib/session";
 import { mailboxConfigured } from "@/lib/system-import";
 import { ImportsView } from "./imports-view";
 
+export const maxDuration = 60;
+
 export default async function ImportsPage() {
   await requirePageRole("STAFF");
   const [pending, recent, clients] = await Promise.all([

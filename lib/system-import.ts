@@ -139,50 +139,115 @@ export function mailboxConfigured() {
   return Boolean(process.env.IMAP_HOST && process.env.IMAP_USER && process.env.IMAP_PASSWORD);
 }
 
-/** Reads recent messages from the invoice mailbox and imports PDF attachments.
- *  Dedupe is by Message-ID, so re-reading the same window is safe. */
-export async function fetchMailbox(days = 40, actorId?: string) {
+export type MailboxItem = { uid: number; subject: string };
+export type MailboxOutcome = ImportOutcome & { subject: string };
+
+const MAILBOX_DAYS = 40;
+
+/** Opens the invoice mailbox, runs `fn`, and always releases the lock and logs out. */
+async function withMailbox<T>(fn: (client: import("imapflow").ImapFlow) => Promise<T>): Promise<T> {
   if (!mailboxConfigured()) throw new Error("Mailbox is not configured. Set IMAP_HOST, IMAP_USER and IMAP_PASSWORD.");
   const { ImapFlow } = await import("imapflow");
-  const { simpleParser } = await import("mailparser");
-  const prefix = (process.env.IMAP_SUBJECT_PREFIX ?? "Invoice on").toLowerCase();
-
   const client = new ImapFlow({
     host: process.env.IMAP_HOST!,
     port: Number(process.env.IMAP_PORT ?? 993),
     secure: (process.env.IMAP_PORT ?? "993") === "993",
-    auth: { user: process.env.IMAP_USER!, pass: process.env.IMAP_PASSWORD! },
+    // Google displays app passwords in groups of four; the spaces are not part of the password.
+    auth: { user: process.env.IMAP_USER!, pass: process.env.IMAP_PASSWORD!.replace(/\s+/g, "") },
     logger: false,
   });
-
-  const outcomes: (ImportOutcome & { subject: string })[] = [];
-  await client.connect();
+  client.on("error", () => undefined);
+  try {
+    await client.connect();
+  } catch (e) {
+    const err = e as { authenticationFailed?: boolean; responseText?: string; message?: string };
+    if (err.authenticationFailed) throw new Error("The mailbox rejected the sign-in. Check IMAP_USER and the app password.");
+    throw new Error(err.responseText || err.message || "Couldn't connect to the mailbox.");
+  }
   const lock = await client.getMailboxLock(process.env.IMAP_FOLDER || "INBOX");
   try {
-    const since = new Date(Date.now() - days * 86_400_000);
-    const uids = (await client.search({ since }, { uid: true })) || [];
-    for (const uid of uids) {
-      const msg = await client.fetchOne(String(uid), { source: true, envelope: true }, { uid: true });
-      if (!msg || !msg.source) continue;
-      const subject = msg.envelope?.subject ?? "";
-      const bare = subject.replace(/^(\s*(fwd?|fw|re)\s*:\s*)+/i, "").toLowerCase();
-      if (prefix && !bare.startsWith(prefix)) continue;
-      const mail = await simpleParser(msg.source);
-      const pdfs = mail.attachments.filter((a) => a.contentType === "application/pdf" || a.filename?.toLowerCase().endsWith(".pdf"));
-      for (const a of pdfs) {
-        const outcome = await importSystemPdf({
-          data: new Uint8Array(a.content),
-          filename: a.filename ?? "invoice.pdf",
-          messageId: `${mail.messageId ?? `uid-${uid}`}:${a.filename ?? ""}`,
-          subject,
-          receivedAt: mail.date ?? null,
-        }, undefined, actorId);
-        outcomes.push({ ...outcome, subject });
-      }
-    }
+    return await fn(client);
   } finally {
     lock.release();
     await client.logout().catch(() => undefined);
   }
-  return outcomes;
+}
+
+function subjectMatches(subject: string) {
+  const prefix = (process.env.IMAP_SUBJECT_PREFIX ?? "Invoice on").toLowerCase();
+  const bare = subject.replace(/^(\s*(fwd?|fw|re)\s*:\s*)+/i, "").toLowerCase();
+  return !prefix || bare.startsWith(prefix);
+}
+
+/** Lists invoice emails from the last `days` days that haven't been processed yet.
+ *  Reads envelopes only, so it stays fast even with a full inbox. */
+export async function listMailbox(days = MAILBOX_DAYS): Promise<{ items: MailboxItem[]; alreadyDone: number }> {
+  const since = new Date(Date.now() - days * 86_400_000);
+  const found = await withMailbox(async (client) => {
+    const uids = (await client.search({ since }, { uid: true })) || [];
+    const out: (MailboxItem & { messageId: string })[] = [];
+    if (!uids.length) return out;
+    for await (const msg of client.fetch(uids, { envelope: true }, { uid: true })) {
+      const subject = msg.envelope?.subject ?? "";
+      if (subjectMatches(subject)) out.push({ uid: msg.uid, subject, messageId: msg.envelope?.messageId ?? `uid-${msg.uid}` });
+    }
+    return out;
+  });
+  if (!found.length) return { items: [], alreadyDone: 0 };
+
+  const [invoices, reviews] = await Promise.all([
+    prisma.invoice.findMany({ where: { sourceMessageId: { not: null }, createdAt: { gte: since } }, select: { sourceMessageId: true } }),
+    prisma.importReview.findMany({ where: { status: { not: "PENDING" }, createdAt: { gte: since } }, select: { messageId: true } }),
+  ]);
+  const done = [...invoices.map((i) => i.sourceMessageId!), ...reviews.map((r) => r.messageId)];
+  const processed = (messageId: string) => done.some((d) => d.startsWith(`${messageId}:`));
+
+  const items = found.filter((f) => !processed(f.messageId)).map(({ uid, subject }) => ({ uid, subject }));
+  return { items, alreadyDone: found.length - items.length };
+}
+
+/** Downloads the given messages and imports their PDF attachments. */
+export async function importMailboxUids(uids: number[], actorId?: string): Promise<MailboxOutcome[]> {
+  if (!uids.length) return [];
+  const { simpleParser } = await import("mailparser");
+  return withMailbox(async (client) => {
+    const outcomes: MailboxOutcome[] = [];
+    for (const uid of uids) {
+      const msg = await client.fetchOne(String(uid), { source: true, envelope: true }, { uid: true });
+      if (!msg || !msg.source) continue;
+      const subject = msg.envelope?.subject ?? "";
+      const mail = await simpleParser(msg.source);
+      const pdfs = mail.attachments.filter((a) => a.contentType === "application/pdf" || a.filename?.toLowerCase().endsWith(".pdf"));
+      if (!pdfs.length) outcomes.push({ status: "skipped", reason: "No PDF attached.", subject });
+      for (const a of pdfs) {
+        const outcome = await importSystemPdf(
+          {
+            data: new Uint8Array(a.content),
+            filename: a.filename ?? "invoice.pdf",
+            messageId: `${mail.messageId ?? `uid-${uid}`}:${a.filename ?? ""}`,
+            subject,
+            receivedAt: mail.date ?? null,
+          },
+          undefined,
+          actorId
+        );
+        outcomes.push({ ...outcome, subject });
+      }
+    }
+    return outcomes;
+  });
+}
+
+/** Scheduled run: imports as much as fits in `budgetMs`. Whatever is left is picked up next run. */
+export async function fetchMailbox(budgetMs = 45_000, actorId?: string) {
+  const started = Date.now();
+  const { items, alreadyDone } = await listMailbox();
+  const outcomes: MailboxOutcome[] = [];
+  let next = 0;
+  while (next < items.length && Date.now() - started < budgetMs) {
+    const batch = items.slice(next, next + 5).map((i) => i.uid);
+    outcomes.push(...(await importMailboxUids(batch, actorId)));
+    next += batch.length;
+  }
+  return { outcomes, alreadyDone, remaining: items.length - next };
 }
