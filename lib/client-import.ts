@@ -122,6 +122,11 @@ export function nameKey(name: string) {
   return name.replace(/\s+/g, " ").trim().toUpperCase();
 }
 
+/** Upper-cased, trimmed and de-duplicated agreement numbers. */
+export function normalizeAgreements(list: string[]) {
+  return [...new Set(list.map((a) => a.trim().toUpperCase()).filter(Boolean))];
+}
+
 type ExistingClient = {
   agreementNo: string;
   agreementDate: Date | null;
@@ -135,6 +140,7 @@ type ExistingClient = {
   contactTitle: string;
   contactEmail: string;
   websiteUrls: string;
+  otherAgreements: string[];
   jotformId: string | null;
   submittedAt: Date | null;
   fees: unknown;
@@ -156,8 +162,8 @@ const TEXT_FIELDS = [
 /** Update for an existing client from a form row. Text already on the client
  *  is kept (only blanks are filled) and fees are merged, never removed. When
  *  the form is a different agreement than the client's (e.g. a PCI form for a
- *  Whitelabel client), the client's agreement stays and the form's number and
- *  date are stored as fee fields. */
+ *  Whitelabel client), the client's agreement stays and the form's is added to
+ *  its other agreements. */
 export function mergeClientDraft(existing: ExistingClient, d: ClientDraft, jotformIdFree: boolean) {
   const data: Record<string, unknown> = {};
   for (const f of TEXT_FIELDS) {
@@ -167,9 +173,7 @@ export function mergeClientDraft(existing: ExistingClient, d: ClientDraft, jotfo
   const fees: Record<string, string> = { ...((existing.fees as Record<string, string>) ?? {}), ...d.fees };
   const otherAgreement = !!existing.agreementNo.trim() && !!d.agreementNo && nameKey(existing.agreementNo) !== nameKey(d.agreementNo);
   if (otherAgreement) {
-    const label = /^SPC/i.test(d.agreementNo) ? "PCI AGREEMENT" : "OTHER AGREEMENT";
-    fees[`${label} NO.`] = d.agreementNo;
-    if (d.agreementDate) fees[`${label} DATE`] = d.agreementDate.toISOString().slice(0, 10);
+    data.otherAgreements = normalizeAgreements([...existing.otherAgreements, d.agreementNo]);
   } else {
     if (d.agreementNo && !existing.agreementNo.trim()) data.agreementNo = d.agreementNo;
     if (d.agreementDate) data.agreementDate = d.agreementDate;

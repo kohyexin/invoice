@@ -170,7 +170,7 @@ function JotformImport({ open, onClose, existing }: { open: boolean; onClose: ()
       }
     >
       <p className="text-[13px] text-ink-muted">
-        {t("Clients are matched by client name (ignoring capitals and spacing) or Jotform submission ID. Existing clients only get blank fields filled, dates corrected and new fees added; nothing already on the client is removed. A form with a different agreement number is kept as extra agreement fields.")}
+        {t("Clients are matched by client name (ignoring capitals and spacing) or Jotform submission ID. Existing clients only get blank fields filled, dates corrected and new fees added; nothing already on the client is removed. A form with a different agreement number is added to the client's other agreements.")}
       </p>
 
       <button

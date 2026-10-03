@@ -36,7 +36,10 @@ const norm = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, "");
 
 async function matchClient(inv: Partial<SystemInvoice>): Promise<{ id: string; name: string } | { reason: string }> {
   if (inv.reference) {
-    const byRef = await prisma.client.findMany({ where: { agreementNo: { equals: inv.reference, mode: "insensitive" } }, select: { id: true, name: true } });
+    const byRef = await prisma.client.findMany({
+      where: { OR: [{ agreementNo: { equals: inv.reference, mode: "insensitive" } }, { otherAgreements: { has: inv.reference.trim().toUpperCase() } }] },
+      select: { id: true, name: true },
+    });
     if (byRef.length === 1) return byRef[0];
     if (byRef.length > 1) return { reason: `Reference ${inv.reference} matches ${byRef.length} clients.` };
   }

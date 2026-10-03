@@ -43,7 +43,7 @@ export default async function ClientPage({ params }: { params: { id: string } })
         breadcrumb="Clients"
         breadcrumbHref="/clients"
         title={client?.name ?? "New client"}
-        subtitle={client ? [client.alias, client.agreementNo].filter(Boolean).join(" · ") || undefined : "Add a client by hand. Most clients come in through the Jotform import."}
+        subtitle={client ? [client.alias, client.agreementNo, ...client.otherAgreements].filter(Boolean).join(" · ") || undefined : "Add a client by hand. Most clients come in through the Jotform import."}
       />
       <ClientForm
         id={client?.id ?? null}
@@ -53,6 +53,7 @@ export default async function ClientPage({ params }: { params: { id: string } })
           name: client?.name ?? "",
           alias: client?.alias ?? "",
           agreementNo: client?.agreementNo ?? "",
+          otherAgreements: client?.otherAgreements.join(", ") ?? "",
           agreementDate: toDateInput(client?.agreementDate),
           country: client?.country ?? "",
           incorporationNo: client?.incorporationNo ?? "",

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
+import { normalizeAgreements } from "@/lib/client-import";
 import { importClientRows } from "@/lib/client-import-db";
 import { authorize } from "@/lib/session";
 import { parseDateInput } from "@/lib/utils";
@@ -26,6 +27,8 @@ export type ClientInput = {
   name: string;
   alias: string;
   agreementNo: string;
+  /** Comma- or space-separated. */
+  otherAgreements: string;
   agreementDate: string;
   country: string;
   incorporationNo: string;
@@ -57,6 +60,9 @@ export async function saveClient(id: string | null, input: ClientInput): Promise
     name,
     alias: input.alias.trim().toUpperCase(),
     agreementNo: input.agreementNo.trim(),
+    otherAgreements: normalizeAgreements(input.otherAgreements.split(/[\s,;]+/)).filter(
+      (a) => a !== input.agreementNo.trim().toUpperCase()
+    ),
     agreementDate: parseDateInput(input.agreementDate),
     country: input.country.trim(),
     incorporationNo: input.incorporationNo.trim(),

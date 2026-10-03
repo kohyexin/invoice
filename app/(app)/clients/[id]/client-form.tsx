@@ -29,6 +29,7 @@ const TEXT_FIELDS: { key: keyof ClientInput; label: string; mono?: boolean; wide
   { key: "name", label: "Client name *", wide: true },
   { key: "alias", label: "Alias", mono: true, hint: "Short name used on the ledger and system invoices, e.g. CIRCLEPAYMENT" },
   { key: "agreementNo", label: "Agreement no.", mono: true, hint: "Invoice numbers follow it: SPP-22062024 gives 22062024-001" },
+  { key: "otherAgreements", label: "Other agreements", mono: true, hint: "Separate with commas, e.g. SVM-20012025. Each can be picked as the reference on a new invoice." },
   { key: "directorName", label: "Director / attention" },
   { key: "contactEmail", label: "Contact email" },
   { key: "address1", label: "Address line 1", wide: true },

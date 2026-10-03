@@ -21,6 +21,8 @@ type ClientOpt = {
   name: string;
   alias: string;
   agreementNo: string;
+  /** Main and other agreements, the one the client's latest invoice used first. */
+  agreements: string[];
   directorName: string;
   address1: string;
   address2: string;
@@ -210,11 +212,20 @@ export function Composer({
       return;
     }
     setBillTo(billToFromClient(c));
-    setReference(c.agreementNo);
+    const agreement = c.agreements[0] ?? "";
+    setReference(agreement);
     setAlias(typedAlias || c.alias || aliases[c.id]?.[0] || "");
     setOwnerId(c.defaultOwnerId ?? defaultOwnerId);
     setLines((prev) => prev.map((l) => withClientRate(l, c)));
-    if (!editing) start(async () => setNumber(await nextNumber(c.id)));
+    if (!editing) start(async () => setNumber(await nextNumber(c.id, agreement)));
+  }
+
+  function pickAgreement(agreement: string) {
+    setReference(agreement);
+    if (!editing && clientId) {
+      setReuse(null);
+      start(async () => setNumber(await nextNumber(clientId, agreement)));
+    }
   }
 
   function withClientRate(l: Line, c: ClientOpt | undefined): Line {
@@ -426,9 +437,22 @@ export function Composer({
               </Field>
             </div>
             <div className="sm:col-span-3">
-              <Field label="Reference">
-                <input value={reference} onChange={(e) => setReference(e.target.value)} placeholder={t("Agreement no.")} className={cn(fieldClass, "font-mono")} />
-              </Field>
+              {client && client.agreements.length > 1 ? (
+                <Field label="Reference" hint={editing ? undefined : "This client has more than one agreement. The invoice number follows the one you pick."}>
+                  <Select value={reference} onChange={(e) => pickAgreement(e.target.value)} className="font-mono">
+                    {!client.agreements.includes(reference) && <option value={reference}>{reference || "—"}</option>}
+                    {client.agreements.map((a) => (
+                      <option key={a} value={a}>
+                        {a}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+              ) : (
+                <Field label="Reference">
+                  <input value={reference} onChange={(e) => setReference(e.target.value)} placeholder={t("Agreement no.")} className={cn(fieldClass, "font-mono")} />
+                </Field>
+              )}
             </div>
             <div className="sm:col-span-2">
               <Field label="Date of issue *">

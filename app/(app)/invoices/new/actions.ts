@@ -10,9 +10,9 @@ import { round2 } from "@/lib/utils";
 
 type Result<T = object> = ({ ok: true } & T) | { ok: false; error: string };
 
-export async function nextNumber(clientId: string) {
+export async function nextNumber(clientId: string, agreementNo?: string) {
   await requireRole("STAFF");
-  return suggestInvoiceNumber(clientId);
+  return suggestInvoiceNumber(clientId, agreementNo);
 }
 
 /** Validates composer input into invoice columns and line rows shared by create and update. */

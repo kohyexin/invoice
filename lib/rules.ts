@@ -25,13 +25,16 @@ export async function resolvePaymentAccountId(companyId: string | null, currency
 }
 
 /** Manual invoice numbers follow the agreement: agreement SPP-22062024 gives
- *  22062024-001, 22062024-002, ... per client. */
-export async function suggestInvoiceNumber(clientId: string) {
+ *  22062024-001, 22062024-002, ... per client. Pass one of the client's other
+ *  agreements to number against it instead of the main one. */
+export async function suggestInvoiceNumber(clientId: string, agreementNo?: string) {
   const client = await prisma.client.findUnique({
     where: { id: clientId },
-    select: { agreementNo: true },
+    select: { agreementNo: true, otherAgreements: true },
   });
-  const base = (client?.agreementNo ?? "").replace(/^[A-Za-z]+-/, "").trim();
+  const chosen = agreementNo?.trim();
+  const agreement = chosen && client && [client.agreementNo, ...client.otherAgreements].some((a) => a.toUpperCase() === chosen.toUpperCase()) ? chosen : client?.agreementNo;
+  const base = (agreement ?? "").replace(/^[A-Za-z]+-/, "").trim();
   if (!base) return "";
 
   const existing = await prisma.invoice.findMany({

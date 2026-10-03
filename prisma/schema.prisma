@@ -204,6 +204,9 @@ model Client {
   alias            String    @default("")
   agreementNo      String    @default("")
   agreementDate    DateTime? @db.Date
+  /// Further agreements (e.g. a PCI or VCC agreement next to the Whitelabel
+  /// one); each can be picked as an invoice reference.
+  otherAgreements  String[]  @default([])
   country          String    @default("")
   incorporationNo  String    @default("")
   address1         String    @default("")
