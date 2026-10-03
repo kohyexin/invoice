@@ -155,14 +155,16 @@ export async function approveReview(id: string, clientId: string, actorId: strin
     return { ok: false, error: "This invoice number is already in the ledger." };
   }
 
-  const [client, last] = await Promise.all([
+  // Type, subtype and owner follow the client's last system invoice, or its last
+  // invoice of any kind (e.g. VH invoices that were issued by hand until now).
+  const lastOf = (where: { clientId: string; generate?: "SYSTEM" }) =>
+    prisma.invoice.findFirst({ where: { ...where, typeId: { not: null } }, orderBy: { invoiceDate: "desc" }, select: { typeId: true, subtype: true, ownerId: true } });
+  const [client, lastSystem, lastAny] = await Promise.all([
     prisma.client.findUnique({ where: { id: clientId }, select: { id: true, name: true, alias: true, defaultOwnerId: true } }),
-    prisma.invoice.findFirst({
-      where: { clientId, generate: "SYSTEM" },
-      orderBy: { invoiceDate: "desc" },
-      select: { typeId: true, subtype: true, ownerId: true },
-    }),
+    lastOf({ clientId, generate: "SYSTEM" }),
+    lastOf({ clientId }),
   ]);
+  const last = lastSystem ?? lastAny;
   if (!client) return { ok: false, error: "Pick a client." };
 
   const currency: Currency = (CURRENCIES as readonly string[]).includes(inv.currency) ? (inv.currency as Currency) : "USD";

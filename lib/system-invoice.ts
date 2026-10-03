@@ -1,5 +1,9 @@
 /* Reads the fields the ledger needs from a STAR SAAS billing-system invoice
-   (the PDF emailed on the 1st, e.g. "Invoice on Circlepayment / 01-Sep-2026"). */
+   (the PDF emailed on the 1st, e.g. "Invoice on Circlepayment / 01-Sep-2026").
+   Two layouts exist:
+   - SI invoices: "Client Name: ArtfulPay", dates like 01-Sep-2026, "GRAND TOTAL(USD)".
+   - VH invoices: legal name under "Billed to", one row holding number, reference,
+     issue and due date (01/10/2026), period "01-09-2026 to 30-09-2026". */
 
 export type SystemInvoice = {
   number: string;
@@ -18,35 +22,50 @@ const MON: Record<string, string> = {
   jul: "07", aug: "08", sep: "09", oct: "10", nov: "11", dec: "12",
 };
 
-/** "01-Sep-2026" → "2026-09-01" */
+/** "01-Sep-2026", "01/09/2026" or "01-09-2026" (day first) → "2026-09-01" */
 function isoDate(s: string | undefined) {
   const m = s?.match(/(\d{1,2})-([A-Za-z]{3})-(\d{4})/);
-  if (!m) return null;
-  const mm = MON[m[2].toLowerCase()];
-  return mm ? `${m[3]}-${mm}-${m[1].padStart(2, "0")}` : null;
+  if (m) {
+    const mm = MON[m[2].toLowerCase()];
+    return mm ? `${m[3]}-${mm}-${m[1].padStart(2, "0")}` : null;
+  }
+  const n = s?.match(/(\d{1,2})[/-](\d{1,2})[/-](\d{4})/);
+  if (!n || Number(n[2]) < 1 || Number(n[2]) > 12) return null;
+  return `${n[3]}-${n[2].padStart(2, "0")}-${n[1].padStart(2, "0")}`;
 }
+
+const DATE = String.raw`\d{1,2}-[A-Za-z]{3}-\d{4}|\d{1,2}[/-]\d{1,2}[/-]\d{4}`;
 
 const money = (s: string) => Number(s.replace(/[^\d.-]/g, ""));
 
 export function parseSystemInvoiceText(raw: string): { ok: true; invoice: SystemInvoice } | { ok: false; error: string; partial: Partial<SystemInvoice> } {
   const text = raw.replace(/\r/g, "").replace(/[ \t\u00a0]+/g, " ");
 
-  const number = text.match(/\b(SI\d{6,})\b/)?.[1] ?? "";
-  const reference = text.match(/\b([A-Z]{2,5}-\d{6,})\b/)?.[1] ?? "";
-  const clientName = text.match(/Client Name:\s*([^\n]+?)\s*(?:\n|Category|$)/i)?.[1]?.trim() ?? "";
+  // VH layout: "Invoice Number Reference Date of Issue Due Date" header, values on the next row.
+  const row = text.match(
+    new RegExp(String.raw`Invoice Number\s+Reference\s+Date of Issue\s+Due Date\s*\n\s*([A-Z]{2,4}\d{6,})\s+(\S+)\s+(${DATE})\s+(${DATE})`, "i")
+  );
+
+  const number = row?.[1] ?? text.match(/\b(SI\d{6,})\b/)?.[1] ?? "";
+  const reference = (row && /^[A-Z]{2,5}-\d{6,}$/.test(row[2]) ? row[2] : undefined) ?? text.match(/\b([A-Z]{2,5}-\d{6,})\b/)?.[1] ?? "";
+  const clientName =
+    text.match(/Client Name:\s*([^\n]+?)\s*(?:\n|Category|$)/i)?.[1]?.trim() ??
+    (row ? text.match(/Billed to:?\s*\n\s*([^\n]+)/i)?.[1]?.trim() : undefined) ??
+    "";
   const currency = text.match(/Amount Due \(([A-Z]{3})\)/i)?.[1]?.toUpperCase() ?? text.match(/GRAND TOTAL\s*\(([A-Z]{3})\)/i)?.[1]?.toUpperCase() ?? "USD";
 
-  const grand = text.match(/GRAN[DT] TOTAL\s*\([A-Z]{3}\)\s*\$?\s*([\d,]+\.\d{2})/i)?.[1];
+  const grand = text.match(/GRAN[DT] TOTAL\s*(?:\([A-Z]{3}\))?\s*\$?\s*([\d,]+\.\d{2})/i)?.[1];
   const afterNumber = number ? text.slice(text.indexOf(number) + number.length).match(/^\s*\$?\s*([\d,]+\.\d{2})/)?.[1] : undefined;
-  const amountText = grand ?? afterNumber;
+  const amountDue = text.match(/Amount Due \([A-Z]{3}\)\s*\$?\s*([\d,]+\.\d{2})/i)?.[1];
+  const amountText = grand ?? afterNumber ?? amountDue;
 
-  const period = text.match(/billing period from\s+(\d{1,2}-[A-Za-z]{3}-\d{4})\s+to\s+(\d{1,2}-[A-Za-z]{3}-\d{4})/i);
-  // Issue date sits on the same row as the invoice number; due date follows "Due Date".
-  const issue = number ? text.slice(0, text.indexOf(number)).match(/(\d{1,2}-[A-Za-z]{3}-\d{4})\s*$/)?.[1] : undefined;
+  const period = text.match(new RegExp(String.raw`billing period from\s+(${DATE})\s+to\s+(${DATE})`, "i"));
+  // SI layout: issue date sits on the same row as the invoice number; due date follows "Due Date".
+  const issue = row?.[3] ?? (number ? text.slice(0, text.indexOf(number)).match(/(\d{1,2}-[A-Za-z]{3}-\d{4})\s*$/)?.[1] : undefined);
   const dates = [...text.matchAll(/\b\d{1,2}-[A-Za-z]{3}-\d{4}\b/g)].map((m) => m[0]);
   const periodDates = new Set(period ? [period[1], period[2]] : []);
   const loose = dates.filter((d) => !periodDates.has(d));
-  const due = text.match(/Due Date[\s\S]{0,40}?(\d{1,2}-[A-Za-z]{3}-\d{4})/i)?.[1] ?? loose[1];
+  const due = row?.[4] ?? text.match(/Due Date[\s\S]{0,40}?(\d{1,2}-[A-Za-z]{3}-\d{4})/i)?.[1] ?? loose[1];
 
   const partial: Partial<SystemInvoice> = {
     number,
