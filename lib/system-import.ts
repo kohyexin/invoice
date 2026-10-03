@@ -35,21 +35,30 @@ const STATUS_OF: Record<ReviewStatus, StageStatus> = {
 const norm = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, "");
 
 async function matchClient(inv: Partial<SystemInvoice>): Promise<{ id: string; name: string } | { reason: string }> {
-  if (inv.reference) {
-    const byRef = await prisma.client.findMany({
-      where: { OR: [{ agreementNo: { equals: inv.reference, mode: "insensitive" } }, { otherAgreements: { has: inv.reference.trim().toUpperCase() } }] },
-      select: { id: true, name: true },
-    });
-    if (byRef.length === 1) return byRef[0];
-    if (byRef.length > 1) return { reason: `Reference ${inv.reference} matches ${byRef.length} clients.` };
-  }
+  const byRef = inv.reference
+    ? await prisma.client.findMany({
+        where: { OR: [{ agreementNo: { equals: inv.reference, mode: "insensitive" } }, { otherAgreements: { has: inv.reference.trim().toUpperCase() } }] },
+        select: { id: true, name: true, alias: true },
+      })
+    : [];
+  let byName: { id: string; name: string; alias: string }[] = [];
   if (inv.clientName) {
     const key = norm(inv.clientName);
     const all = await prisma.client.findMany({ select: { id: true, alias: true, name: true } });
-    const hits = all.filter((c) => (c.alias && norm(c.alias) === key) || norm(c.name) === key);
-    if (hits.length === 1) return hits[0];
-    if (hits.length > 1) return { reason: `Client name ${inv.clientName} matches ${hits.length} clients.` };
+    byName = all.filter((c) => (c.alias && norm(c.alias) === key) || norm(c.name) === key);
   }
+
+  if (byRef.length > 1) return { reason: `Reference ${inv.reference} matches ${byRef.length} clients.` };
+  // The system has been seen printing another client's agreement number, so a
+  // reference that disagrees with the client named on the invoice is not trusted.
+  if (byRef.length === 1 && byName.length && !byName.some((c) => c.id === byRef[0].id)) {
+    return {
+      reason: `Reference ${inv.reference} belongs to ${byRef[0].alias || byRef[0].name}, but the invoice is addressed to ${inv.clientName}. Pick the right client.`,
+    };
+  }
+  if (byRef.length === 1) return byRef[0];
+  if (byName.length === 1) return byName[0];
+  if (byName.length > 1) return { reason: `Client name ${inv.clientName} matches ${byName.length} clients.` };
   return { reason: `No client with reference ${inv.reference || "—"} or alias ${inv.clientName || "—"}.` };
 }
 
