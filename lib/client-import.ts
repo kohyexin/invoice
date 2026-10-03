@@ -118,6 +118,68 @@ export function toClientDraft(row: Record<string, unknown>): ClientDraft | null 
   return draft.name ? draft : null;
 }
 
+export function nameKey(name: string) {
+  return name.replace(/\s+/g, " ").trim().toUpperCase();
+}
+
+type ExistingClient = {
+  agreementNo: string;
+  agreementDate: Date | null;
+  country: string;
+  incorporationNo: string;
+  address1: string;
+  address2: string;
+  address3: string;
+  city: string;
+  directorName: string;
+  contactTitle: string;
+  contactEmail: string;
+  websiteUrls: string;
+  jotformId: string | null;
+  submittedAt: Date | null;
+  fees: unknown;
+};
+
+const TEXT_FIELDS = [
+  "country",
+  "incorporationNo",
+  "address1",
+  "address2",
+  "address3",
+  "city",
+  "directorName",
+  "contactTitle",
+  "contactEmail",
+  "websiteUrls",
+] as const;
+
+/** Update for an existing client from a form row. Text already on the client
+ *  is kept (only blanks are filled) and fees are merged, never removed. When
+ *  the form is a different agreement than the client's (e.g. a PCI form for a
+ *  Whitelabel client), the client's agreement stays and the form's number and
+ *  date are stored as fee fields. */
+export function mergeClientDraft(existing: ExistingClient, d: ClientDraft, jotformIdFree: boolean) {
+  const data: Record<string, unknown> = {};
+  for (const f of TEXT_FIELDS) {
+    if (!existing[f].trim() && d[f]) data[f] = d[f];
+  }
+
+  const fees: Record<string, string> = { ...((existing.fees as Record<string, string>) ?? {}), ...d.fees };
+  const otherAgreement = !!existing.agreementNo.trim() && !!d.agreementNo && nameKey(existing.agreementNo) !== nameKey(d.agreementNo);
+  if (otherAgreement) {
+    const label = /^SPC/i.test(d.agreementNo) ? "PCI AGREEMENT" : "OTHER AGREEMENT";
+    fees[`${label} NO.`] = d.agreementNo;
+    if (d.agreementDate) fees[`${label} DATE`] = d.agreementDate.toISOString().slice(0, 10);
+  } else {
+    if (d.agreementNo && !existing.agreementNo.trim()) data.agreementNo = d.agreementNo;
+    if (d.agreementDate) data.agreementDate = d.agreementDate;
+    if (d.submittedAt) data.submittedAt = d.submittedAt;
+    if (d.jotformId && !existing.jotformId && jotformIdFree) data.jotformId = d.jotformId;
+  }
+  data.fees = fees;
+  return data;
+}
+
 /** Client fields written on import. Alias, owner, transfer name and notes
  *  are ours and are never overwritten by a form resubmission. */
 export function clientData(d: ClientDraft) {

@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { useI18n } from "@/components/i18n/locale-provider";
 import { DataTable, type Column, type FilterDef } from "@/components/ui/data-table";
 import { SidePanel } from "@/components/ui/side-panel";
-import { toClientDraft } from "@/lib/client-import";
+import { nameKey, toClientDraft } from "@/lib/client-import";
 import { fieldClass } from "@/components/ui/form-controls";
 import { cn, formatDate, formatMoney } from "@/lib/utils";
 import { importJotformRows } from "./actions";
@@ -100,7 +100,7 @@ export function ClientsView({ rows }: { rows: Row[] }) {
 
       <DataTable tableId="clients" columns={columns} rows={visible} filters={filters} rowKey={(r) => r.id} exportName="clients" defaultPageSize={25} />
 
-      <JotformImport open={importOpen} onClose={() => setImportOpen(false)} existing={new Set(rows.map((r) => r.name))} />
+      <JotformImport open={importOpen} onClose={() => setImportOpen(false)} existing={new Set(rows.map((r) => nameKey(r.name)))} />
     </>
   );
 }
@@ -116,7 +116,7 @@ function JotformImport({ open, onClose, existing }: { open: boolean; onClose: ()
   const { t } = useI18n();
 
   const drafts = rows.map((r) => toClientDraft(r)).filter((d): d is NonNullable<typeof d> => d !== null);
-  const newCount = drafts.filter((d) => !existing.has(d.name)).length;
+  const newCount = drafts.filter((d) => !existing.has(nameKey(d.name))).length;
 
   function reset() {
     setRows([]);
@@ -170,7 +170,7 @@ function JotformImport({ open, onClose, existing }: { open: boolean; onClose: ()
       }
     >
       <p className="text-[13px] text-ink-muted">
-        {t("Clients are matched by client name. Existing clients get their address, agreement and fee schedule refreshed from the form. Alias, owner, transfer name and notes stay as they are.")}
+        {t("Clients are matched by client name (ignoring capitals and spacing) or Jotform submission ID. Existing clients only get blank fields filled, dates corrected and new fees added; nothing already on the client is removed. A form with a different agreement number is kept as extra agreement fields.")}
       </p>
 
       <button
@@ -206,7 +206,7 @@ function JotformImport({ open, onClose, existing }: { open: boolean; onClose: ()
                   <tr key={i} className="border-b border-line/60 last:border-0">
                     <td className="px-3 py-2">
                       <span className="text-ink">{d.name}</span>
-                      {!existing.has(d.name) && <span className="ml-2 rounded-full bg-brand-500/15 px-1.5 text-[11px] text-brand-700 dark:text-brand-200">{t("new")}</span>}
+                      {!existing.has(nameKey(d.name)) && <span className="ml-2 rounded-full bg-brand-500/15 px-1.5 text-[11px] text-brand-700 dark:text-brand-200">{t("new")}</span>}
                     </td>
                     <td className="px-3 py-2 font-mono text-ink-muted">{d.agreementNo || "—"}</td>
                     <td className="px-3 py-2 text-right text-ink-muted">{Object.keys(d.fees).length}</td>

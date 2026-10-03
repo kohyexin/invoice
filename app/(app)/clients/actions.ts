@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
-import { clientData, toClientDraft } from "@/lib/client-import";
+import { importClientRows } from "@/lib/client-import-db";
 import { authorize } from "@/lib/session";
 import { parseDateInput } from "@/lib/utils";
 
@@ -13,35 +13,10 @@ export async function importJotformRows(
 ): Promise<Result<{ created: number; updated: number; skipped: number }>> {
   const auth = await authorize("STAFF");
   if (!auth.ok) return auth;
-  let created = 0;
-  let updated = 0;
-  let skipped = 0;
   try {
-    for (const row of rows) {
-      const draft = toClientDraft(row);
-      if (!draft) {
-        skipped++;
-        continue;
-      }
-      const existing = await prisma.client.findUnique({ where: { name: draft.name }, select: { id: true } });
-      const jotformTaken =
-        draft.jotformId &&
-        (await prisma.client.findFirst({
-          where: { jotformId: draft.jotformId, NOT: { name: draft.name } },
-          select: { id: true },
-        }));
-      const jotformId = jotformTaken ? undefined : draft.jotformId ?? undefined;
-
-      if (existing) {
-        await prisma.client.update({ where: { id: existing.id }, data: { ...clientData(draft), jotformId } });
-        updated++;
-      } else {
-        await prisma.client.create({ data: { name: draft.name, ...clientData(draft), jotformId } });
-        created++;
-      }
-    }
+    const res = await importClientRows(prisma, rows);
     revalidatePath("/clients");
-    return { ok: true, created, updated, skipped };
+    return { ok: true, ...res };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }

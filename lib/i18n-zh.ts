@@ -304,8 +304,8 @@ export const ZH: Record<string, string> = {
   "{0} added, {1} updated, {2} skipped (no client name).": "新增 {0} 个，更新 {1} 个，跳过 {2} 个（无客户名称）。",
   "Import {0} clients": "导入 {0} 个客户",
   "Import clients": "导入客户",
-  "Clients are matched by client name. Existing clients get their address, agreement and fee schedule refreshed from the form. Alias, owner, transfer name and notes stay as they are.":
-    "按客户名称匹配。现有客户的地址、协议和费用表将按表单更新；简称、负责人、转账名称和备注保持不变。",
+  "Clients are matched by client name (ignoring capitals and spacing) or Jotform submission ID. Existing clients only get blank fields filled, dates corrected and new fees added; nothing already on the client is removed. A form with a different agreement number is kept as extra agreement fields.":
+    "按客户名称（不区分大小写和空格）或 Jotform 提交 ID 匹配。现有客户只会补全空白字段、更正日期并添加新费用，不会删除已有内容。协议编号不同的表单将另存为附加协议字段。",
   "Choose a CSV file": "选择 CSV 文件",
   "Jotform export with a CLIENT NAME column": "包含 CLIENT NAME 列的 Jotform 导出文件",
   "{0} rows: {1} new, {2} existing.": "{0} 行：新增 {1} 个，已存在 {2} 个。",
