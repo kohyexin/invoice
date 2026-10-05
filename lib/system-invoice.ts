@@ -15,6 +15,8 @@ export type SystemInvoice = {
   periodTo: string | null;
   currency: string;
   amount: number;
+  /** USD total printed next to a non-USD amount due; null when only one currency is printed. */
+  usdAmount?: number | null;
 };
 
 const MON: Record<string, string> = {
@@ -54,10 +56,18 @@ export function parseSystemInvoiceText(raw: string): { ok: true; invoice: System
     "";
   const currency = text.match(/Amount Due \(([A-Z]{3})\)/i)?.[1]?.toUpperCase() ?? text.match(/GRAND TOTAL\s*\(([A-Z]{3})\)/i)?.[1]?.toUpperCase() ?? "USD";
 
-  const grand = text.match(/GRAN[DT] TOTAL\s*(?:\([A-Z]{3}\))?\s*\$?\s*([\d,]+\.\d{2})/i)?.[1];
-  const afterNumber = number ? text.slice(text.indexOf(number) + number.length).match(/^\s*\$?\s*([\d,]+\.\d{2})/)?.[1] : undefined;
-  const amountDue = text.match(/Amount Due \([A-Z]{3}\)\s*\$?\s*([\d,]+\.\d{2})/i)?.[1];
+  // Lines are priced in USD; an invoice due in CNY prints both "GRAND TOTAL(USD)" and
+  // "GRAND TOTAL(CNY)". The amount is the total in the amount-due currency, the USD one its booked value.
+  const totals = new Map<string, string>();
+  for (const m of text.matchAll(/GRAN[DT] TOTAL\s*(?:\(([A-Z]{3})\))?\s*[$¥€]?\s*([\d,]+\.\d{2})/gi)) {
+    const cur = (m[1] ?? "").toUpperCase();
+    if (!totals.has(cur)) totals.set(cur, m[2]);
+  }
+  const grand = totals.get(currency) ?? totals.get("") ?? (currency === "USD" ? [...totals.values()][0] : undefined);
+  const afterNumber = number ? text.slice(text.indexOf(number) + number.length).match(/^\s*[$¥€]?\s*([\d,]+\.\d{2})/)?.[1] : undefined;
+  const amountDue = text.match(/Amount Due \([A-Z]{3}\)\s*[$¥€]?\s*([\d,]+\.\d{2})/i)?.[1];
   const amountText = grand ?? afterNumber ?? amountDue;
+  const usdText = currency !== "USD" ? totals.get("USD") : undefined;
 
   const period = text.match(new RegExp(String.raw`billing period from\s+(${DATE})\s+to\s+(${DATE})`, "i"));
   // SI layout: issue date sits on the same row as the invoice number; due date follows "Due Date".
@@ -77,6 +87,7 @@ export function parseSystemInvoiceText(raw: string): { ok: true; invoice: System
     periodFrom: isoDate(period?.[1]),
     periodTo: isoDate(period?.[2]),
     amount: amountText ? money(amountText) : undefined,
+    usdAmount: usdText ? money(usdText) : null,
   };
 
   const missing = [!number && "invoice number", !partial.invoiceDate && "issue date", partial.amount === undefined && "amount"].filter(Boolean);

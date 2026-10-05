@@ -168,7 +168,7 @@ export async function approveReview(id: string, clientId: string, actorId: strin
   if (!client) return { ok: false, error: "Pick a client." };
 
   const currency: Currency = (CURRENCIES as readonly string[]).includes(inv.currency) ? (inv.currency as Currency) : "USD";
-  const usdAmount = toUsd(inv.amount, currency, await fxRates());
+  const usdAmount = currency !== "USD" && inv.usdAmount ? inv.usdAmount : toUsd(inv.amount, currency, await fxRates());
   if (usdAmount === null) return { ok: false, error: `No FX rate for ${currency}.` };
 
   const created = await prisma.invoice.create({
