@@ -52,6 +52,13 @@ export async function finishMailboxCheck() {
   refresh();
 }
 
+/** Multipart parsing hands over UTF-8 file names decoded as Latin-1 ("é¦æ¸¯…" for "香港…"); undo that when it round-trips cleanly. */
+function uploadName(name: string) {
+  if (!/[\u0080-\u00ff]/.test(name) || /[^\u0000-\u00ff]/.test(name)) return name;
+  const utf8 = Buffer.from(name, "latin1").toString("utf8");
+  return utf8.includes("\ufffd") ? name : utf8;
+}
+
 export async function uploadPdfs(form: FormData): Promise<Summary> {
   const auth = await authorize("STAFF");
   if (!auth.ok) return auth;
@@ -59,8 +66,9 @@ export async function uploadPdfs(form: FormData): Promise<Summary> {
   if (!files.length) return { ok: false, error: "Choose one or more PDF files." };
   const outcomes: (StageOutcome & { label: string })[] = [];
   for (const f of files) {
-    const outcome = await stageSystemPdf({ data: new Uint8Array(await f.arrayBuffer()), filename: f.name, subject: f.name });
-    outcomes.push({ ...outcome, label: f.name });
+    const name = uploadName(f.name);
+    const outcome = await stageSystemPdf({ data: new Uint8Array(await f.arrayBuffer()), filename: name, subject: name });
+    outcomes.push({ ...outcome, label: name });
   }
   refresh();
   return { ok: true, outcomes };
