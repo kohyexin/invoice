@@ -64,31 +64,31 @@ export function DashboardView({ data }: { data: DashboardData }) {
   return (
     <div className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <KpiCard icon={Receipt} label="Total invoiced" value={formatMoney(totals.all.amount, 0)} footer={hint(t("{0} invoices issued", totals.all.count))} />
-        <KpiCard icon={CheckCircle2} tone="success" label="Paid" value={formatMoney(totals.paid.amount, 0)} footer={hint(t("{0} invoices", totals.paid.count))} />
-        <KpiCard icon={Hourglass} tone="warning" label="Unpaid" value={formatMoney(totals.unpaid.amount, 0)} footer={hint(t("{0} invoices sent, not paid", totals.unpaid.count))} />
+        <KpiCard icon={Receipt} label="Total invoiced" value={formatMoney(totals.all.amount)} footer={hint(t("{0} invoices issued", totals.all.count))} />
+        <KpiCard icon={CheckCircle2} tone="success" label="Paid" value={formatMoney(totals.paid.amount)} footer={hint(t("{0} invoices", totals.paid.count))} />
+        <KpiCard icon={Hourglass} tone="warning" label="Unpaid" value={formatMoney(totals.unpaid.amount)} footer={hint(t("{0} invoices sent, not paid", totals.unpaid.count))} />
         <KpiCard
           icon={XCircle}
           tone="danger"
           label="End / lost"
-          value={formatMoney(totals.endLost.amount, 0)}
-          footer={hint(t("{0} invoices · {1} waived ({2})", totals.endLost.count, totals.waived.count, formatMoney(totals.waived.amount, 0)))}
+          value={formatMoney(totals.endLost.amount)}
+          footer={hint(t("{0} invoices · {1} waived ({2})", totals.endLost.count, totals.waived.count, formatMoney(totals.waived.amount)))}
         />
         <KpiCard icon={Users} label="Clients" value={String(data.clientCount)} footer={hint(t("{0} billed in the last 3 months", data.activeClients))} />
         <KpiCard
           icon={CalendarDays}
           label={t("This month · {0}", monthLabel(data.thisMonth.month))}
-          value={formatMoney(data.thisMonth.billed, 0)}
-          footer={hint(t("{0} invoices · {1} received", data.thisMonth.count, formatMoney(data.thisMonth.received, 0)))}
+          value={formatMoney(data.thisMonth.billed)}
+          footer={hint(t("{0} invoices · {1} received", data.thisMonth.count, formatMoney(data.thisMonth.received)))}
         />
         <KpiCard
           icon={Trophy}
           tone="success"
           label="Best month"
-          value={data.best ? formatMoney(data.best.billed, 0) : "—"}
+          value={data.best ? formatMoney(data.best.billed) : "—"}
           footer={hint(data.best ? t("{0} · {1} invoices", monthLabel(data.best.month), data.best.count) : t("No history yet"))}
         />
-        <KpiCard icon={BarChart3} label="Median month" value={formatMoney(data.medianMonth, 0)} footer={hint(t("Across completed months"))} />
+        <KpiCard icon={BarChart3} label="Median month" value={formatMoney(data.medianMonth)} footer={hint(t("Across completed months"))} />
       </div>
 
       <section className="glass-panel neon-edge rounded-card p-5">
