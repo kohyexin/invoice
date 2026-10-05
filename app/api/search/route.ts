@@ -3,28 +3,55 @@ import { apiDenied } from "@/lib/session";
 
 export const runtime = "nodejs";
 
+const TAKE_INVOICES = 15;
+
 /** Clients and invoices for the ⌘K palette. */
 export async function GET(req: Request) {
   const denied = await apiDenied("VIEWER");
   if (denied) return denied;
 
   const q = new URL(req.url).searchParams.get("q")?.trim() ?? "";
-  if (q.length < 2) return Response.json({ clients: [], invoices: [] });
+  if (q.length < 2) return Response.json({ clients: [], invoices: [], invoiceTotal: 0 });
 
   const contains = { contains: q, mode: "insensitive" as const };
-  const [clients, invoices] = await Promise.all([
+  // "1,600" and "1600" should both find an amount of 1600.00.
+  const digits = q.replace(/,/g, "");
+  const amountIds = /^\d+(\.\d*)?$/.test(digits)
+    ? (
+        await prisma.$queryRaw<{ id: string }[]>`
+          SELECT id FROM "Invoice"
+          WHERE "amount"::text LIKE ${`%${digits}%`}
+             OR "usdAmount"::text LIKE ${`%${digits}%`}
+             OR "receivedAmount"::text LIKE ${`%${digits}%`}`
+      ).map((r) => r.id)
+    : [];
+
+  const invoiceWhere = {
+    OR: [
+      { number: contains },
+      { alias: contains },
+      { reference: contains },
+      { subtype: contains },
+      { paymentNote: contains },
+      { client: { name: contains } },
+      ...(amountIds.length ? [{ id: { in: amountIds } }] : []),
+    ],
+  };
+
+  const [clients, invoices, invoiceTotal] = await Promise.all([
     prisma.client.findMany({
-      where: { OR: [{ name: contains }, { alias: contains }, { contactEmail: contains }, { agreementNo: contains }] },
+      where: { OR: [{ name: contains }, { alias: contains }, { contactEmail: contains }, { agreementNo: contains }, { otherAgreements: { has: q.toUpperCase() } }] },
       orderBy: { name: "asc" },
-      take: 5,
+      take: 8,
       select: { id: true, name: true, alias: true, country: true },
     }),
     prisma.invoice.findMany({
-      where: { OR: [{ number: contains }, { alias: contains }, { reference: contains }, { client: { name: contains } }] },
+      where: invoiceWhere,
       orderBy: { invoiceDate: "desc" },
-      take: 6,
+      take: TAKE_INVOICES,
       select: { id: true, number: true, currency: true, amount: true, status: true, client: { select: { name: true } } },
     }),
+    prisma.invoice.count({ where: invoiceWhere }),
   ]);
 
   return Response.json({
@@ -37,5 +64,6 @@ export async function GET(req: Request) {
       currency: i.currency,
       status: i.status,
     })),
+    invoiceTotal,
   });
 }

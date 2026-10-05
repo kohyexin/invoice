@@ -41,17 +41,23 @@ export type LedgerRow = {
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-export function LedgerView({ rows, lookups }: { rows: LedgerRow[]; lookups: Lookups }) {
+export function LedgerView({ rows, lookups, initialQuery = "" }: { rows: LedgerRow[]; lookups: Lookups; initialQuery?: string }) {
   const router = useRouter();
   const canEdit = useCan("STAFF");
   const { t } = useI18n();
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(initialQuery);
   const [adding, setAdding] = useState(false);
   const [paying, setPaying] = useState<LedgerRow | null>(null);
 
   const q = query.trim().toLowerCase();
+  const digits = q.replace(/,/g, "");
+  const isAmount = /^\d+(\.\d*)?$/.test(digits);
   const visible = q
-    ? rows.filter((r) => [r.number, r.client, r.alias, r.subtype, r.paymentNote].some((v) => v.toLowerCase().includes(q)))
+    ? rows.filter(
+        (r) =>
+          [r.number, r.client, r.alias, r.subtype, r.paymentNote].some((v) => v.toLowerCase().includes(q)) ||
+          (isAmount && [r.amount, r.usdAmount, r.receivedAmount].some((n) => n !== null && n.toFixed(2).includes(digits)))
+      )
     : rows;
 
   const stats = useMemo(() => {
@@ -153,7 +159,7 @@ export function LedgerView({ rows, lookups }: { rows: LedgerRow[]; lookups: Look
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder={t("Search number, client, alias, subtype")}
+            placeholder={t("Search number, client, alias, subtype, amount")}
             className={cn(fieldClass, "pl-9")}
           />
         </div>

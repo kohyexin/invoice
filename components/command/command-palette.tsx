@@ -42,9 +42,10 @@ type Group = { label: string; items: Item[] };
 type SearchResult = {
   clients: { id: string; name: string; detail: string }[];
   invoices: { id: string; number: string; client: string; amount: number; currency: string; status: string }[];
+  invoiceTotal: number;
 };
 
-const EMPTY: SearchResult = { clients: [], invoices: [] };
+const EMPTY: SearchResult = { clients: [], invoices: [], invoiceTotal: 0 };
 
 export function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { locale, setLocale, t } = useI18n();
@@ -130,6 +131,15 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
       detail: `${formatCurrency(i.amount, i.currency)} · ${t(i.status)}`,
       perform: go(`/invoices/${i.id}`),
     }));
+    if (results.invoiceTotal > 0) {
+      invoices.push({
+        id: "inv-all",
+        icon: Search,
+        label: t("See all {0} matching invoices", results.invoiceTotal),
+        detail: t("Opens the Invoices list filtered by “{0}”", query.trim()),
+        perform: go(`/invoices?q=${encodeURIComponent(query.trim())}`),
+      });
+    }
 
     const clients: Item[] = results.clients.map((c) => ({
       id: `client-${c.id}`,
@@ -142,7 +152,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
     return [
       { label: t("Navigation"), items: navigation },
       { label: t("Actions"), items: actions },
-      { label: t("Invoices"), items: invoices },
+      { label: results.invoiceTotal ? `${t("Invoices")} (${results.invoiceTotal})` : t("Invoices"), items: invoices },
       { label: t("Clients"), items: clients },
     ].filter((g) => g.items.length > 0);
   }, [query, results, locale, resolvedTheme, canEdit, user.role, router, setTheme, setLocale, t]);

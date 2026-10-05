@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db";
 import { LedgerView } from "./ledger-view";
 import { loadLookups } from "./lookups";
 
-export default async function InvoicesPage() {
+export default async function InvoicesPage({ searchParams }: { searchParams: { q?: string } }) {
   const [invoices, lookups] = await Promise.all([
     prisma.invoice.findMany({
       orderBy: [{ invoiceDate: "desc" }, { number: "desc" }],
@@ -37,6 +37,8 @@ export default async function InvoicesPage() {
       <PageHeader title="Invoices" subtitle="Every invoice billed, with its USD value and payment. Replaces the Invoice List sheet." />
       <LedgerView
         lookups={lookups}
+        key={searchParams.q ?? ""}
+        initialQuery={searchParams.q ?? ""}
         rows={invoices.map((i) => ({
           id: i.id,
           number: i.number,
