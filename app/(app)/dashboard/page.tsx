@@ -98,7 +98,7 @@ export default async function DashboardPage() {
     best: best ? { month: best.month, billed: best.billed, count: best.count } : null,
     medianMonth: median,
     monthly,
-    unpaid: [...unpaidByClient.values()].sort((a, b) => b.amount - a.amount),
+    unpaid: [...unpaidByClient.values()].sort((a, b) => a.name.localeCompare(b.name, "en", { sensitivity: "base" })),
     activeByType: [...activeByType.entries()].map(([type, set]) => ({ type, clients: set.size })).sort((a, b) => b.clients - a.clients),
     recentMonths,
     recentClients: [...billedByClientMonth.values()].sort((a, b) => a.name.localeCompare(b.name)),

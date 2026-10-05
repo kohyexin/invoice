@@ -124,7 +124,7 @@ export function DashboardView({ data }: { data: DashboardData }) {
             <div className="mr-auto">
               <h2 className="text-base font-semibold text-ink">{t("Unpaid by client")}</h2>
               <p className="text-[13px] text-ink-muted">
-                {t(unpaidView === "summary" ? "Invoices with status SENT, largest balance first." : "Unpaid USD by invoice month, largest balance first.")}
+                {t(unpaidView === "summary" ? "Invoices with status SENT, by client A–Z." : "Unpaid USD by invoice month, by client A–Z.")}
               </p>
             </div>
             <Segmented
