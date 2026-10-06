@@ -6,6 +6,7 @@ import { BarChart3, CalendarDays, CheckCircle2, Hourglass, Receipt, Trophy, User
 import { Bar, CartesianGrid, ComposedChart, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { useChartTheme } from "@/components/dashboard/use-chart-theme";
+import { BrandLogo } from "@/components/brand/brand-logo";
 import { CopyImageButton } from "@/components/ui/copy-image-button";
 import { Segmented } from "@/components/ui/form-controls";
 import { useI18n } from "@/components/i18n/locale-provider";
@@ -274,11 +275,12 @@ function UnpaidByMonth({ rows, monthLabel }: { rows: UnpaidRows; monthLabel: (m:
       {/* Uncropped copy used for the image: no scroll box, no sticky cells, no truncation. */}
       <div aria-hidden className="pointer-events-none fixed left-[-100000px] top-0">
         <div ref={captureRef} className="inline-block bg-surface p-5 text-ink">
-          <div className="mb-3">
-            <div className="text-[15px] font-semibold">{t("Unpaid by client · by invoice month (USD)")}</div>
-            <div className="text-[12px] text-ink-soft">
-              {t("As of {0}", formatDate(new Date()))} · STAR SAAS
+          <div className="mb-3 flex items-end justify-between gap-8 border-b border-line pb-3">
+            <div>
+              <div className="text-[15px] font-semibold">{t("Unpaid by client · by invoice month (USD)")}</div>
+              <div className="text-[12px] text-ink-soft">{t("As of {0}", formatDate(new Date()))}</div>
             </div>
+            <BrandLogo className="h-6" />
           </div>
           <PivotTable rows={rows} monthLabel={monthLabel} />
         </div>
