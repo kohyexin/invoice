@@ -54,7 +54,23 @@ export function CashLedgerView({
   const purposes = useMemo(() => Array.from(new Set(rows.map((r) => r.purpose).filter(Boolean))).sort(), [rows]);
 
   const columns: Column<CashLedgerRow>[] = [
-    { key: "date", header: "Date", fixed: true, accessor: (r) => r.date, render: (r) => formatDate(r.date) },
+    {
+      key: "date",
+      header: "Date",
+      fixed: true,
+      accessor: (r) => r.date,
+      render: (r) => (
+        <span className="whitespace-nowrap">
+          {formatDate(r.date)}
+          {r.period !== r.date.slice(0, 7) && (
+            <span className="ml-1.5 text-[11px] text-ink-soft" title={t("Counted in {0} on the monthly statement", r.period)}>
+              → {r.period}
+            </span>
+          )}
+        </span>
+      ),
+    },
+    { key: "period", header: "Month used", defaultHidden: true, accessor: (r) => r.period },
     { key: "account", header: "Account", accessor: (r) => r.account, render: (r) => <span className="text-ink-muted">{r.account}</span> },
     {
       key: "category",
@@ -189,12 +205,13 @@ function Amount({ value, currency, className }: { value: number; currency: strin
 }
 
 function blank(accountId: string): CashTxnInput {
-  return { date: toDateInput(new Date()), accountId, categoryId: "", purpose: "", party: "", memo: "", amountIn: "", amountOut: "", invoiceNumber: "" };
+  return { date: toDateInput(new Date()), period: "", accountId, categoryId: "", purpose: "", party: "", memo: "", amountIn: "", amountOut: "", invoiceNumber: "" };
 }
 
 function fromRow(r: CashLedgerRow): CashTxnInput {
   return {
     date: r.date.slice(0, 10),
+    period: r.period === r.date.slice(0, 7) ? "" : r.period,
     accountId: r.accountId,
     categoryId: r.categoryId,
     purpose: r.purpose,
@@ -306,6 +323,9 @@ function TxnPanel({
               </Select>
             </Field>
           </div>
+          <Field label="Month used" hint="Leave blank for the month of the date. Set it when paying for another month, e.g. salary for August paid in September.">
+            <input type="month" value={v.period} onChange={(e) => set("period", e.target.value)} className={fieldClass} />
+          </Field>
           <Field label="Category" hint="Income and expense count on the monthly statement; transfers move money between accounts.">
             <Select value={v.categoryId} onChange={(e) => set("categoryId", e.target.value)}>
               <option value="">{t("Uncategorized")}</option>

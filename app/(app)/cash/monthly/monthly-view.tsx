@@ -97,6 +97,14 @@ export function MonthlyView({ statement: s, months }: { statement: MonthlyStatem
               <Row label="Expenses" value={s.expense} sign="−" />
               <Row label="Transfers (net)" value={s.transfers} signed />
               {Math.abs(s.uncategorized) >= 0.005 && <Row label="Uncategorized (net)" value={s.uncategorized} signed />}
+              {Math.abs(s.timing) >= 0.005 && (
+                <Row
+                  label="Banked in another month (net)"
+                  value={s.timing}
+                  signed
+                  note={t("Lines whose month used differs from the bank date, e.g. salary paid on the 10th for the month before.")}
+                />
+              )}
               <Row label="Closing balance" value={s.closingUsd} strong />
             </dl>
           </section>
@@ -221,7 +229,10 @@ function CategoryRow({ category: c, negate }: { category: MonthlyCategory; negat
               <tbody>
                 {c.lines.map((l) => (
                   <tr key={l.id} className="border-t border-line/50">
-                    <td className="whitespace-nowrap py-2 pr-3 text-ink-muted">{formatDate(l.date)}</td>
+                    <td className="whitespace-nowrap py-2 pr-3 text-ink-muted">
+                      {formatDate(l.date)}
+                      {l.otherMonth && <span className="ml-1.5 text-[11px] text-ink-soft" title={t("Banked in {0}", l.otherMonth)}>↺</span>}
+                    </td>
                     <td className="whitespace-nowrap px-3 py-2 text-ink-muted">{l.account}</td>
                     <td className="max-w-[180px] truncate px-3 py-2 text-ink" title={l.purpose}>
                       {l.purpose || "—"}

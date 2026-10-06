@@ -451,6 +451,9 @@ model CashTxn {
   accountId   String
   account     BankAccount   @relation(fields: [accountId], references: [id], onDelete: Restrict)
   date        DateTime      @db.Date
+  /// 使用月: first day of the month the line belongs to on the monthly statement,
+  /// e.g. salary paid on 10 Sept for August work. Usually the month of `date`.
+  period      DateTime      @db.Date
   /// Order within the account on the same date (the workbook's row order).
   seq         Int           @default(0)
   categoryId  String?
@@ -474,6 +477,7 @@ model CashTxn {
   @@unique([sourceSheet, sourceRow])
   @@index([accountId, date])
   @@index([date])
+  @@index([period])
   @@index([categoryId])
   @@index([invoiceId])
 }

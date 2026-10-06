@@ -72,6 +72,8 @@ export async function loadCashAccounts() {
 export type MonthlyLine = {
   id: string;
   date: string;
+  /** yyyy-mm when the line was banked in a different month. */
+  otherMonth: string;
   account: string;
   currency: string;
   purpose: string;
@@ -104,11 +106,12 @@ const nextMonth = (ym: string) => {
 
 /** yyyy-mm of every month from the first cash line to the last. */
 export async function cashMonths() {
-  const range = await prisma.cashTxn.aggregate({ _min: { date: true }, _max: { date: true } });
-  if (!range._min.date || !range._max.date) return [];
+  const range = await prisma.cashTxn.aggregate({ _min: { date: true, period: true }, _max: { date: true, period: true } });
+  if (!range._min.date || !range._max.date || !range._min.period || !range._max.period) return [];
   const out: string[] = [];
-  const d = new Date(Date.UTC(range._min.date.getUTCFullYear(), range._min.date.getUTCMonth(), 1));
-  const last = range._max.date;
+  const first = range._min.period < range._min.date ? range._min.period : range._min.date;
+  const d = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth(), 1));
+  const last = range._max.period > range._max.date ? range._max.period : range._max.date;
   while (d <= last) {
     out.push(d.toISOString().slice(0, 7));
     d.setUTCMonth(d.getUTCMonth() + 1);
@@ -132,8 +135,9 @@ export async function loadMonthlyStatement(ym: string) {
     freshFxRates(),
     totalsByCurrency(from),
     totalsByCurrency(to),
+    // Income and expenses follow 使用月; opening and closing follow the bank date.
     prisma.cashTxn.findMany({
-      where: { date: { gte: from, lt: to } },
+      where: { period: from },
       orderBy: [{ date: "asc" }, { seq: "asc" }, { createdAt: "asc" }],
       include: {
         account: { select: { label: true, currency: true } },
@@ -177,6 +181,7 @@ export async function loadMonthlyStatement(ym: string) {
     g.lines.push({
       id: t.id,
       date: t.date.toISOString(),
+      otherMonth: t.date.toISOString().slice(0, 7) === ym ? "" : t.date.toISOString().slice(0, 7),
       account: t.account.label,
       currency: cur,
       purpose: t.purpose,
@@ -207,6 +212,7 @@ export async function loadMonthlyStatement(ym: string) {
   const sum = (kind: MonthlyCategory["kind"]) => list.filter((g) => g.kind === kind).reduce((s, g) => s + g.usd, 0);
   const openingUsd = toUsd(opening, rates);
   const closingUsd = toUsd(closing, rates);
+  const flows = list.reduce((s, g) => s + g.usd, 0);
 
   return {
     month: ym,
@@ -219,6 +225,8 @@ export async function loadMonthlyStatement(ym: string) {
     expense: -sum("EXPENSE"),
     transfers: sum("TRANSFER"),
     uncategorized: sum("NONE"),
+    /** Banked this month but used in another month, less used this month but banked in another. */
+    timing: closingUsd - openingUsd - flows,
     categories: list,
     lineCount: txns.length,
     invoices: {
@@ -237,6 +245,8 @@ export type MonthlyStatement = Awaited<ReturnType<typeof loadMonthlyStatement>>;
 export type CashLedgerRow = {
   id: string;
   date: string;
+  /** yyyy-mm (使用月). */
+  period: string;
   accountId: string;
   account: string;
   currency: string;
@@ -282,6 +292,7 @@ export async function loadCashLedger() {
     return {
       id: t.id,
       date: t.date.toISOString(),
+      period: t.period.toISOString().slice(0, 7),
       accountId: t.accountId,
       account: t.account.label,
       currency: t.account.currency,

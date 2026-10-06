@@ -64,6 +64,22 @@ function date(cell: ExcelJS.Cell): Date | null {
   return m ? new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])) : null;
 }
 
+const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+
+/** 使用月 as the first of its month: a date, 2024-07(-01) or Jul 2024. Falls back to the line date's month. */
+function period(cell: ExcelJS.Cell, fallback: Date): Date {
+  const v = cellValue(cell);
+  const first = (y: number, m: number) => new Date(Date.UTC(y, m, 1));
+  if (v instanceof Date && !Number.isNaN(v.getTime())) return first(v.getUTCFullYear(), v.getUTCMonth());
+  if (typeof v === "string") {
+    const iso = v.trim().match(/^(\d{4})[-/](\d{1,2})/);
+    if (iso) return first(+iso[1], +iso[2] - 1);
+    const named = v.trim().toLowerCase().match(/^([a-z]{3})[a-z]*[\s-]+(\d{4})$/);
+    if (named && MONTHS.includes(named[1])) return first(+named[2], MONTHS.indexOf(named[1]));
+  }
+  return first(fallback.getUTCFullYear(), fallback.getUTCMonth());
+}
+
 async function main() {
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.readFile(file);
@@ -112,6 +128,7 @@ async function main() {
 
     type Line = {
       date: Date;
+      period: Date;
       seq: number;
       categoryId: string | null;
       purpose: string;
@@ -146,6 +163,7 @@ async function main() {
       const memo = str(row.getCell(6));
       lines.push({
         date: d,
+        period: period(row.getCell(7), d),
         seq: r,
         categoryId: categories.get(cat) ?? null,
         purpose: str(row.getCell(4)),
@@ -170,6 +188,7 @@ async function main() {
       wbBal === null ? "—" : wbBal.toFixed(2),
       ok ? "ok" : "DIFFERS",
       String(lines.filter((l) => l.invoiceId).length),
+      String(lines.filter((l) => l.period.getUTCMonth() !== l.date.getUTCMonth() || l.period.getUTCFullYear() !== l.date.getUTCFullYear()).length),
       skipped ? `${skipped} undated` : "",
       unknownCategories.size ? `unknown: ${[...unknownCategories].join(", ")}` : "",
     ]);
@@ -205,7 +224,7 @@ async function main() {
     ]);
   }
 
-  const head = ["Sheet", "Account", "Lines", "Recomputed", "Workbook", "Check", "Invoices linked", "", ""];
+  const head = ["Sheet", "Account", "Lines", "Recomputed", "Workbook", "Check", "Invoices linked", "Other month", "", ""];
   const widths = head.map((h, c) => Math.max(h.length, ...report.map((r) => r[c].length)));
   for (const r of [head, ...report]) console.log(r.map((v, c) => v.padEnd(widths[c])).join("  ").trimEnd());
   console.log(dryRun ? "\nDry run: nothing written." : "\nImported.");

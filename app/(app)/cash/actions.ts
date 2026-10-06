@@ -9,6 +9,8 @@ type Result = { ok: true } | { ok: false; error: string };
 
 export type CashTxnInput = {
   date: string;
+  /** yyyy-mm; blank means the month of `date`. */
+  period: string;
   accountId: string;
   categoryId: string;
   purpose: string;
@@ -36,6 +38,11 @@ export async function saveCashTxn(id: string | null, input: CashTxnInput): Promi
 
   const date = parseDateInput(input.date);
   if (!date) return { ok: false, error: "Enter the date." };
+  const pm = input.period.trim().match(/^(\d{4})-(\d{2})$/);
+  if (input.period.trim() && !pm) return { ok: false, error: "Month used must be a month, e.g. 2026-08." };
+  const period = pm
+    ? new Date(Date.UTC(+pm[1], +pm[2] - 1, 1))
+    : new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
   const amountIn = amount(input.amountIn);
   const amountOut = amount(input.amountOut);
   if (Number.isNaN(amountIn) || Number.isNaN(amountOut)) return { ok: false, error: "Amounts must be numbers." };
@@ -64,6 +71,7 @@ export async function saveCashTxn(id: string | null, input: CashTxnInput): Promi
 
   const data = {
     date,
+    period,
     accountId: account.id,
     categoryId,
     purpose: input.purpose.trim(),
