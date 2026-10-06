@@ -549,6 +549,8 @@ export const ZH: Record<string, string> = {
   "Total cash (USD)": "资金合计（美元）",
   "{0} accounts at the latest rate": "{0} 个账户，按最新汇率",
   "{0} accounts": "{0} 个账户",
+  "1 account": "1 个账户",
+  "1 line": "1 条记录",
   "No company": "未指定公司",
   Accounts: "账户",
   Account: "账户",

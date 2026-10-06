@@ -182,7 +182,7 @@ function Section({ title, hint, total, categories, negate }: { title: string; hi
 function CategoryRow({ category: c, negate }: { category: MonthlyCategory; negate?: boolean }) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
-  const shown = (n: number) => (negate ? -n : n);
+  const shown = (n: number) => (Math.abs(n) < 0.005 ? 0 : negate ? -n : n);
   const natives = Object.entries(c.native).filter(([cur, n]) => cur !== "USD" && Math.abs(n) >= 0.005);
 
   return (
@@ -200,7 +200,7 @@ function CategoryRow({ category: c, negate }: { category: MonthlyCategory; negat
             </span>
           )}
         </span>
-        <span className="text-[12px] text-ink-soft">{t("{0} lines", c.lines.length)}</span>
+        <span className="text-[12px] text-ink-soft">{c.lines.length === 1 ? t("1 line") : t("{0} lines", c.lines.length)}</span>
         <span className="tnum w-32 text-right font-medium text-ink">{formatMoney(shown(c.usd))}</span>
       </button>
       {open && (

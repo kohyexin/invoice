@@ -66,7 +66,7 @@ export function CashPositionView({
             tone={i === 0 ? "success" : "brand"}
             label={c.name}
             value={formatMoney(c.usd)}
-            footer={<Hint>{t("{0} accounts", c.accounts.length)}</Hint>}
+            footer={<Hint>{c.accounts.length === 1 ? t("1 account") : t("{0} accounts", c.accounts.length)}</Hint>}
           />
         ))}
       </div>
@@ -127,7 +127,7 @@ export function CashPositionView({
                               {t("Inactive")}
                             </Badge>
                           )}
-                          <span className="block text-[12px] text-ink-soft">{t("{0} lines", a.lines)}</span>
+                          <span className="block text-[12px] text-ink-soft">{a.lines === 1 ? t("1 line") : t("{0} lines", a.lines)}</span>
                         </td>
                         <td className="px-3 py-3 text-ink-muted">{a.bankName || "—"}</td>
                         <td className="px-3 py-3 text-right">
