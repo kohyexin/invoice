@@ -366,6 +366,7 @@ export function DataTable<T>({
   defaultPageSize = 10,
   renderMobileCard,
   serverPagination,
+  initialFilters,
 }: {
   /** Stable id — persists column visibility + page size in localStorage. */
   tableId: string;
@@ -390,10 +391,12 @@ export function DataTable<T>({
     onPageChange: (page: number) => void;
     onPageSizeChange: (size: number) => void;
   };
+  /** Filter chips already set on first render, e.g. from the URL. */
+  initialFilters?: Record<string, string>;
 }) {
   const { locale, t } = useI18n();
   const [mounted, setMounted] = useState(false);
-  const [filterValues, setFilterValues] = useState<Record<string, string | null>>({});
+  const [filterValues, setFilterValues] = useState<Record<string, string | null>>(initialFilters ?? {});
   const [sort, setSort] = useState<SortState>(null);
   const [hiddenKeys, setHiddenKeys] = useState<Set<string>>(
     () => new Set(columns.filter((c) => c.defaultHidden && !c.fixed).map((c) => c.key))

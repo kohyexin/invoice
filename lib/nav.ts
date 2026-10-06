@@ -1,10 +1,13 @@
 import {
+  BookOpen,
+  CalendarRange,
   FilePlus2,
   FileText,
   Inbox,
   LayoutDashboard,
   Settings,
   Users,
+  Wallet,
   type LucideIcon,
 } from "lucide-react";
 import type { RoleName } from "@/lib/roles";
@@ -29,6 +32,14 @@ export const navGroups: NavGroup[] = [
       { label: "Invoices", href: "/invoices", icon: FileText },
       { label: "New invoice", href: "/invoices/new", icon: FilePlus2, minRole: "STAFF" },
       { label: "System imports", href: "/imports", icon: Inbox, minRole: "STAFF" },
+    ],
+  },
+  {
+    label: "Balance sheet",
+    items: [
+      { label: "Cash position", href: "/cash", icon: Wallet },
+      { label: "Cash book", href: "/cash/ledger", icon: BookOpen },
+      { label: "Monthly statement", href: "/cash/monthly", icon: CalendarRange },
     ],
   },
   {

@@ -10,6 +10,7 @@ import { useCurrentUser } from "./user-context";
 
 function isActive(pathname: string, href: string) {
   if (href === "/invoices") return pathname === "/invoices" || /^\/invoices\/(?!new)/.test(pathname);
+  if (href === "/cash") return pathname === "/cash";
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 

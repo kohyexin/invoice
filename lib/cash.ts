@@ -1,0 +1,306 @@
+import "server-only";
+import { prisma } from "@/lib/db";
+import { freshFxRates } from "@/lib/fx";
+import { round2 } from "@/lib/utils";
+
+/* Cash book figures. Lines are kept in the account's currency; USD is
+   worked out once per currency total with the latest rate. */
+
+export const BALANCE_USES = ["BALANCE", "BOTH"] as const;
+
+export type Rates = Record<string, number>;
+
+/** USD for a per-currency total. Unknown currencies count as zero rather than 1:1. */
+export function toUsd(totals: Record<string, number>, rates: Rates) {
+  return Object.entries(totals).reduce((s, [cur, amount]) => s + amount * (rates[cur] ?? 0), 0);
+}
+
+export type CashAccountRow = {
+  id: string;
+  label: string;
+  bankName: string;
+  accountName: string;
+  accountNumber: string;
+  currency: string;
+  companyId: string;
+  company: string;
+  active: boolean;
+  balance: number;
+  usd: number;
+  lines: number;
+  lastDate: string | null;
+};
+
+export async function loadCashAccounts() {
+  const [accounts, sums, fx] = await Promise.all([
+    prisma.bankAccount.findMany({
+      where: { use: { in: [...BALANCE_USES] } },
+      orderBy: [{ sortOrder: "asc" }, { label: "asc" }],
+      include: { company: { select: { id: true, legalName: true, sortOrder: true } } },
+    }),
+    prisma.cashTxn.groupBy({
+      by: ["accountId"],
+      _sum: { amountIn: true, amountOut: true },
+      _count: { _all: true },
+      _max: { date: true },
+    }),
+    freshFxRates(),
+  ]);
+  const byAccount = new Map(sums.map((s) => [s.accountId, s]));
+  const rows: CashAccountRow[] = accounts.map((a) => {
+    const s = byAccount.get(a.id);
+    const balance = round2(Number(s?._sum.amountIn ?? 0) - Number(s?._sum.amountOut ?? 0));
+    return {
+      id: a.id,
+      label: a.label,
+      bankName: a.bankName,
+      accountName: a.accountName,
+      accountNumber: a.accountNumber,
+      currency: a.currency,
+      companyId: a.company?.id ?? "",
+      company: a.company?.legalName ?? "",
+      active: a.active,
+      balance,
+      usd: balance * (fx.rates[a.currency] ?? 0),
+      lines: s?._count._all ?? 0,
+      lastDate: s?._max.date?.toISOString() ?? null,
+    };
+  });
+  return { accounts: rows, rates: fx.rates, ratesUpdatedAt: fx.updatedAt };
+}
+
+export type MonthlyLine = {
+  id: string;
+  date: string;
+  account: string;
+  currency: string;
+  purpose: string;
+  party: string;
+  memo: string;
+  net: number;
+  usd: number;
+  invoice: { id: string; number: string } | null;
+};
+
+export type MonthlyCategory = {
+  id: string;
+  name: string;
+  nameEn: string;
+  kind: "INCOME" | "EXPENSE" | "TRANSFER" | "NONE";
+  /** Net in USD: money in minus money out. */
+  usd: number;
+  /** Net per currency, before conversion. */
+  native: Record<string, number>;
+  byPurpose: { purpose: string; usd: number; count: number }[];
+  lines: MonthlyLine[];
+};
+
+const monthStart = (ym: string) => new Date(`${ym}-01T00:00:00.000Z`);
+const nextMonth = (ym: string) => {
+  const d = monthStart(ym);
+  d.setUTCMonth(d.getUTCMonth() + 1);
+  return d;
+};
+
+/** yyyy-mm of every month from the first cash line to the last. */
+export async function cashMonths() {
+  const range = await prisma.cashTxn.aggregate({ _min: { date: true }, _max: { date: true } });
+  if (!range._min.date || !range._max.date) return [];
+  const out: string[] = [];
+  const d = new Date(Date.UTC(range._min.date.getUTCFullYear(), range._min.date.getUTCMonth(), 1));
+  const last = range._max.date;
+  while (d <= last) {
+    out.push(d.toISOString().slice(0, 7));
+    d.setUTCMonth(d.getUTCMonth() + 1);
+  }
+  return out.reverse();
+}
+
+async function totalsByCurrency(before: Date) {
+  const rows = await prisma.$queryRaw<{ currency: string; net: unknown }[]>`
+    SELECT b."currency"::text AS currency, SUM(t."amountIn" - t."amountOut") AS net
+    FROM "CashTxn" t JOIN "BankAccount" b ON b.id = t."accountId"
+    WHERE t."date" < ${before}
+    GROUP BY b."currency"`;
+  return Object.fromEntries(rows.map((r) => [r.currency, Number(r.net)]));
+}
+
+export async function loadMonthlyStatement(ym: string) {
+  const from = monthStart(ym);
+  const to = nextMonth(ym);
+  const [fx, opening, closing, txns, categories, issued, received, unpaid] = await Promise.all([
+    freshFxRates(),
+    totalsByCurrency(from),
+    totalsByCurrency(to),
+    prisma.cashTxn.findMany({
+      where: { date: { gte: from, lt: to } },
+      orderBy: [{ date: "asc" }, { seq: "asc" }, { createdAt: "asc" }],
+      include: {
+        account: { select: { label: true, currency: true } },
+        invoice: { select: { id: true, number: true } },
+      },
+    }),
+    prisma.cashCategory.findMany({ orderBy: [{ sortOrder: "asc" }, { nameZh: "asc" }] }),
+    prisma.invoice.aggregate({
+      where: { invoiceDate: { gte: from, lt: to }, status: { not: "WAIVED" } },
+      _sum: { usdAmount: true },
+      _count: { _all: true },
+    }),
+    prisma.invoice.aggregate({
+      where: { receivedDate: { gte: from, lt: to } },
+      _sum: { receivedAmount: true },
+      _count: { _all: true },
+    }),
+    // Unpaid at month end: issued by then and not yet received by then.
+    prisma.invoice.aggregate({
+      where: {
+        invoiceDate: { lt: to },
+        OR: [{ status: "SENT" }, { status: "PAID", receivedDate: { gte: to } }],
+      },
+      _sum: { usdAmount: true },
+      _count: { _all: true },
+    }),
+  ]);
+  const rates = fx.rates;
+
+  const groups = new Map<string, MonthlyCategory>();
+  for (const c of categories) {
+    groups.set(c.id, { id: c.id, name: c.nameZh, nameEn: c.nameEn, kind: c.kind, usd: 0, native: {}, byPurpose: [], lines: [] });
+  }
+  const none: MonthlyCategory = { id: "", name: "Uncategorized", nameEn: "", kind: "NONE", usd: 0, native: {}, byPurpose: [], lines: [] };
+
+  for (const t of txns) {
+    const g = (t.categoryId && groups.get(t.categoryId)) || none;
+    const net = Number(t.amountIn) - Number(t.amountOut);
+    const cur = t.account.currency;
+    g.native[cur] = (g.native[cur] ?? 0) + net;
+    g.lines.push({
+      id: t.id,
+      date: t.date.toISOString(),
+      account: t.account.label,
+      currency: cur,
+      purpose: t.purpose,
+      party: t.party,
+      memo: t.memo,
+      net,
+      usd: net * (rates[cur] ?? 0),
+      invoice: t.invoice,
+    });
+  }
+
+  const list = [...groups.values(), none].filter((g) => g.lines.length > 0);
+  for (const g of list) {
+    g.usd = toUsd(g.native, rates);
+    const purposes = new Map<string, { usd: number; count: number }>();
+    for (const l of g.lines) {
+      const key = l.purpose || "—";
+      const p = purposes.get(key) ?? { usd: 0, count: 0 };
+      p.usd += l.usd;
+      p.count += 1;
+      purposes.set(key, p);
+    }
+    g.byPurpose = [...purposes.entries()]
+      .map(([purpose, p]) => ({ purpose, ...p }))
+      .sort((a, b) => Math.abs(b.usd) - Math.abs(a.usd));
+  }
+
+  const sum = (kind: MonthlyCategory["kind"]) => list.filter((g) => g.kind === kind).reduce((s, g) => s + g.usd, 0);
+  const openingUsd = toUsd(opening, rates);
+  const closingUsd = toUsd(closing, rates);
+
+  return {
+    month: ym,
+    rates,
+    ratesUpdatedAt: fx.updatedAt,
+    openingUsd,
+    closingUsd,
+    income: sum("INCOME"),
+    /** Positive number: money spent. */
+    expense: -sum("EXPENSE"),
+    transfers: sum("TRANSFER"),
+    uncategorized: sum("NONE"),
+    categories: list,
+    lineCount: txns.length,
+    invoices: {
+      issuedUsd: Number(issued._sum.usdAmount ?? 0),
+      issuedCount: issued._count._all,
+      receivedUsd: Number(received._sum.receivedAmount ?? 0),
+      receivedCount: received._count._all,
+      unpaidUsd: Number(unpaid._sum.usdAmount ?? 0),
+      unpaidCount: unpaid._count._all,
+    },
+  };
+}
+
+export type MonthlyStatement = Awaited<ReturnType<typeof loadMonthlyStatement>>;
+
+export type CashLedgerRow = {
+  id: string;
+  date: string;
+  accountId: string;
+  account: string;
+  currency: string;
+  company: string;
+  categoryId: string;
+  category: string;
+  kind: string;
+  purpose: string;
+  party: string;
+  memo: string;
+  amountIn: number;
+  amountOut: number;
+  /** Running balance of the account after this line. */
+  balance: number;
+  invoiceId: string;
+  invoiceNumber: string;
+};
+
+export async function loadCashLedger() {
+  const [txns, accounts, categories] = await Promise.all([
+    prisma.cashTxn.findMany({
+      orderBy: [{ accountId: "asc" }, { date: "asc" }, { seq: "asc" }, { createdAt: "asc" }],
+      include: {
+        account: { select: { label: true, currency: true, company: { select: { legalName: true } } } },
+        category: { select: { nameZh: true, kind: true } },
+        invoice: { select: { number: true } },
+      },
+    }),
+    prisma.bankAccount.findMany({
+      where: { use: { in: [...BALANCE_USES] } },
+      orderBy: [{ sortOrder: "asc" }, { label: "asc" }],
+      select: { id: true, label: true, currency: true, active: true },
+    }),
+    prisma.cashCategory.findMany({ orderBy: [{ sortOrder: "asc" }, { nameZh: "asc" }], select: { id: true, nameZh: true, nameEn: true, kind: true, active: true } }),
+  ]);
+
+  const running = new Map<string, number>();
+  const rows: CashLedgerRow[] = txns.map((t) => {
+    const amountIn = Number(t.amountIn);
+    const amountOut = Number(t.amountOut);
+    const balance = round2((running.get(t.accountId) ?? 0) + amountIn - amountOut);
+    running.set(t.accountId, balance);
+    return {
+      id: t.id,
+      date: t.date.toISOString(),
+      accountId: t.accountId,
+      account: t.account.label,
+      currency: t.account.currency,
+      company: t.account.company?.legalName ?? "",
+      categoryId: t.categoryId ?? "",
+      category: t.category?.nameZh ?? "",
+      kind: t.category?.kind ?? "",
+      purpose: t.purpose,
+      party: t.party,
+      memo: t.memo,
+      amountIn,
+      amountOut,
+      balance,
+      invoiceId: t.invoiceId ?? "",
+      invoiceNumber: t.invoice?.number ?? "",
+    };
+  });
+  // Newest first, keeping the account's own order within a day.
+  rows.reverse().sort((a, b) => b.date.localeCompare(a.date));
+
+  return { rows, accounts, categories };
+}
