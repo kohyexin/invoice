@@ -495,7 +495,7 @@ export const ZH: Record<string, string> = {
   "Your session has ended. Sign in again.": "登录已失效，请重新登录。",
 
   // Settings
-  "Users, issuers, bank accounts, payment defaults, exchange rates and the lists used on invoices.": "用户、开票方、银行账户、默认收款规则、汇率以及发票使用的各类列表。",
+  "Users, issuers, bank accounts, payment defaults, exchange rates, and the lists used on invoices and the cash book.": "用户、开票方、银行账户、默认收款规则、汇率，以及发票和资金账簿使用的各类列表。",
   Users: "用户",
   User: "用户",
   Companies: "公司",
@@ -513,8 +513,31 @@ export const ZH: Record<string, string> = {
   "Invoice item": "发票项目",
   "Who can sign in. Admin: everything, including users and settings. Staff: invoices, clients, payments and imports. Viewer: read-only. Disable people instead of deleting them so their name stays on the invoices they touched.":
     "可登录的人员。管理员：全部权限，包括用户和设置。员工：发票、客户、收款和导入。查看者：只读。请停用而非删除人员，以便其姓名保留在经手的发票上。",
-  "Issuers printed on the invoice letterhead.": "打印在发票抬头上的开票方。",
-  "Accounts that can appear under Payment Details.": "可显示在收款信息中的账户。",
+  "Issuers printed on the invoice letterhead, and companies that only hold cash for the balance sheet.": "打印在发票抬头上的开票方，以及仅在资产负债表中持有资金的公司。",
+  "Every bank account. Invoice accounts can appear under Payment Details; balance-sheet accounts appear in the cash book. An account can be both.":
+    "所有银行账户。发票账户可显示在收款信息中；资产负债表账户显示在资金账簿中。一个账户可以两者兼用。",
+  "Issues invoices (shown on the letterhead picker)": "开具发票（显示在抬头选择中）",
+  "Cash only": "仅资金",
+  "Used for": "用途",
+  "Invoice only": "仅发票",
+  "Balance sheet only": "仅资产负债表",
+  "Invoice and balance sheet": "发票和资产负债表",
+  "CNH is for balance-sheet accounts only": "CNH 仅用于资产负债表账户",
+  "Invoice accounts can be printed under Payment Details; balance-sheet accounts appear in the cash book": "发票账户可打印在收款信息中；资产负债表账户显示在资金账簿中",
+  "Whose cash this is, for the balance sheet": "该资金所属公司，用于资产负债表",
+  "Cash categories": "资金分类",
+  "Cash category": "资金分类",
+  "Categories for cash book lines (the 摘要 column). Income and expense make up the monthly statement; transfers move money between accounts and are shown separately.":
+    "资金账簿记录的分类（摘要列）。收入和支出构成月度报表；转账是在账户间调拨资金，单独显示。",
+  "Chinese name": "中文名称",
+  "English name": "英文名称",
+  "As written in the 摘要 column, e.g. 办公费用": "与摘要列一致，例如 办公费用",
+  Kind: "类别",
+  Income: "收入",
+  Expense: "支出",
+  "Transfer (not profit)": "转账（不计入损益）",
+  "Transfers move cash between accounts and are left out of income and expense": "转账在账户间调拨资金，不计入收入和支出",
+  "Still in use (by invoices or cash book lines). Untick Active instead.": "仍在使用中（被发票或资金账簿记录引用）。请改为取消勾选「启用」。",
   "Which account an invoice uses by default. Company and currency together beat company only, which beats currency only. The payable currency is used (the second amount-due currency when there is one).":
     "发票默认使用的账户。「公司 + 币种」优先于「仅公司」，「仅公司」优先于「仅币种」。按应付币种匹配（如有第二应付币种则使用该币种）。",
   "Used to suggest the USD equivalent of non-USD invoices. You can still override the booked USD on each invoice.": "用于为非美元发票建议美元等值。每张发票仍可改写入账的美元金额。",

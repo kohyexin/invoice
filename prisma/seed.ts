@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { PrismaClient, type Currency } from "../lib/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
+import { CASH_CATEGORIES, MOONLINK } from "../lib/cash-seed";
 
 /* Starting settings, taken from the Type sheet of
    "Star SaaS Client Invoice Repayment Status v2.0.xlsm". Safe to re-run. */
@@ -148,6 +149,7 @@ const fx: [Currency, number][] = [
   ["CNY", 1 / 6.7],
   ["EUR", 1.08],
   ["SGD", 0.74],
+  ["CNH", 1 / 6.7],
 ];
 
 async function main() {
@@ -213,7 +215,16 @@ async function main() {
     });
   }
 
-  console.log("Seeded companies, bank accounts, payment rules, owners, types, items, FX rates.");
+  await prisma.company.upsert({
+    where: { code: MOONLINK.code },
+    update: {},
+    create: { ...MOONLINK, termsEn: [], termsZh: [], sortOrder: companies.length },
+  });
+  for (const [i, [nameZh, nameEn, kind]] of CASH_CATEGORIES.entries()) {
+    await prisma.cashCategory.upsert({ where: { nameZh }, update: {}, create: { nameZh, nameEn, kind, sortOrder: i } });
+  }
+
+  console.log("Seeded companies, bank accounts, payment rules, owners, types, items, FX rates, cash categories.");
 }
 
 main()

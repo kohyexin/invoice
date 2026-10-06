@@ -21,6 +21,20 @@ export type FieldDef = {
 };
 
 export const CURRENCY_OPTIONS = ["USD", "HKD", "CNY", "EUR", "SGD"].map((c) => ({ value: c, label: c }));
+/** Bank accounts and FX rates also take CNH, which only balance-sheet accounts use. */
+export const ACCOUNT_CURRENCY_OPTIONS = [...CURRENCY_OPTIONS, { value: "CNH", label: "CNH" }];
+
+export const ACCOUNT_USE_OPTIONS = [
+  { value: "INVOICE", label: "Invoice only" },
+  { value: "BALANCE", label: "Balance sheet only" },
+  { value: "BOTH", label: "Invoice and balance sheet" },
+];
+
+export const CASH_KIND_OPTIONS = [
+  { value: "INCOME", label: "Income" },
+  { value: "EXPENSE", label: "Expense" },
+  { value: "TRANSFER", label: "Transfer (not profit)" },
+];
 
 export const SETTINGS_ENTITIES = {
   company: {
@@ -41,6 +55,7 @@ export const SETTINGS_ENTITIES = {
       },
       { key: "termsEn", label: "Terms (English)", kind: "lines" },
       { key: "termsZh", label: "Terms (Chinese)", kind: "lines" },
+      { key: "invoicing", label: "Issues invoices (shown on the letterhead picker)", kind: "checkbox" },
       { key: "sortOrder", label: "Sort order", kind: "number" },
       { key: "active", label: "Active", kind: "checkbox" },
     ],
@@ -49,7 +64,16 @@ export const SETTINGS_ENTITIES = {
     title: "Bank account",
     fields: [
       { key: "label", label: "Label", kind: "text", required: true, hint: "Shown in pickers, e.g. USD (SCB Bank)" },
-      { key: "currency", label: "Currency", kind: "select", options: CURRENCY_OPTIONS, required: true },
+      { key: "currency", label: "Currency", kind: "select", options: ACCOUNT_CURRENCY_OPTIONS, required: true, hint: "CNH is for balance-sheet accounts only" },
+      {
+        key: "use",
+        label: "Used for",
+        kind: "select",
+        options: ACCOUNT_USE_OPTIONS,
+        required: true,
+        hint: "Invoice accounts can be printed under Payment Details; balance-sheet accounts appear in the cash book",
+      },
+      { key: "companyId", label: "Company", kind: "select", optionsFrom: "companies", nullable: true, emptyLabel: "None", hint: "Whose cash this is, for the balance sheet" },
       { key: "accountName", label: "Account name", kind: "text", required: true },
       { key: "accountNumber", label: "Account number", kind: "text", required: true, mono: true },
       { key: "bankName", label: "Bank name", kind: "text" },
@@ -74,8 +98,18 @@ export const SETTINGS_ENTITIES = {
   fxRate: {
     title: "FX rate",
     fields: [
-      { key: "currency", label: "Currency", kind: "select", options: CURRENCY_OPTIONS.filter((c) => c.value !== "USD"), required: true },
+      { key: "currency", label: "Currency", kind: "select", options: ACCOUNT_CURRENCY_OPTIONS.filter((c) => c.value !== "USD"), required: true },
       { key: "perUsd", label: "Units per 1 USD", kind: "number", required: true, hint: "e.g. 7.8 for HKD, 6.7 for CNY" },
+    ],
+  },
+  cashCategory: {
+    title: "Cash category",
+    fields: [
+      { key: "nameZh", label: "Chinese name", kind: "text", required: true, hint: "As written in the 摘要 column, e.g. 办公费用" },
+      { key: "nameEn", label: "English name", kind: "text" },
+      { key: "kind", label: "Kind", kind: "select", options: CASH_KIND_OPTIONS, required: true, hint: "Transfers move cash between accounts and are left out of income and expense" },
+      { key: "sortOrder", label: "Sort order", kind: "number" },
+      { key: "active", label: "Active", kind: "checkbox" },
     ],
   },
   owner: {

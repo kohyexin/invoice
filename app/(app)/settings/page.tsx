@@ -12,7 +12,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: { d
   const notice =
     drive === "connected" || drive === "error" || drive === "not-configured" ? { kind: drive as "connected" | "error" | "not-configured", reason: searchParams.reason } : null;
   const [connection, docStats] = await Promise.all([getDriveConnection(), documentStats()]);
-  const [companies, bankAccounts, rules, fx, owners, types, items, users] = await Promise.all([
+  const [companies, bankAccounts, rules, fx, owners, types, items, users, cashCategories] = await Promise.all([
     prisma.company.findMany({ orderBy: [{ sortOrder: "asc" }, { code: "asc" }] }),
     prisma.bankAccount.findMany({ orderBy: [{ sortOrder: "asc" }, { label: "asc" }] }),
     prisma.paymentRule.findMany({ include: { company: true, bankAccount: true } }),
@@ -24,13 +24,15 @@ export default async function SettingsPage({ searchParams }: { searchParams: { d
       orderBy: [{ active: "desc" }, { name: "asc" }],
       select: { id: true, email: true, name: true, role: true, active: true, lastLoginAt: true, totpEnabledAt: true },
     }),
+    prisma.cashCategory.findMany({ orderBy: [{ sortOrder: "asc" }, { nameZh: "asc" }] }),
   ]);
+  const companyName = new Map(companies.map((c) => [c.id, c.legalName]));
 
   return (
     <>
       <PageHeader
         title="Settings"
-        subtitle="Users, issuers, bank accounts, payment defaults, exchange rates and the lists used on invoices."
+        subtitle="Users, issuers, bank accounts, payment defaults, exchange rates, and the lists used on invoices and the cash book."
       />
       <DocumentStorage
         configured={driveConfigured()}
@@ -40,7 +42,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: { d
       />
       <SettingsView
         companies={companies}
-        bankAccounts={bankAccounts}
+        bankAccounts={bankAccounts.map((b) => ({ ...b, companyId: b.companyId ?? "", companyName: b.companyId ? companyName.get(b.companyId) ?? "" : "" }))}
+        cashCategories={cashCategories}
         rules={rules.map((r) => ({
           id: r.id,
           companyId: r.companyId ?? "",

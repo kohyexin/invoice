@@ -2,12 +2,12 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Building2, Coins, KeyRound, Landmark, ListChecks, Plus, RefreshCw, Route, ShieldCheck, Tags, UserRound, X } from "lucide-react";
+import { Building2, Coins, FolderTree, KeyRound, Landmark, ListChecks, Plus, RefreshCw, Route, ShieldCheck, Tags, UserRound, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { RecordPanel } from "@/components/ui/record-panel";
 import { ROLE_HELP, ROLE_LABEL, type RoleName } from "@/lib/roles";
-import { SETTINGS_ENTITIES, type FieldDef, type SettingsEntity } from "@/lib/settings-config";
+import { ACCOUNT_USE_OPTIONS, CASH_KIND_OPTIONS, SETTINGS_ENTITIES, type FieldDef, type SettingsEntity } from "@/lib/settings-config";
 import { cn, formatDate } from "@/lib/utils";
 import { useI18n } from "@/components/i18n/locale-provider";
 import { deleteSetting, saveSetting } from "./actions";
@@ -70,6 +70,11 @@ function Inactive({ row }: { row: Row }) {
 }
 const inactive = (r: Row) => <Inactive row={r} />;
 
+const USE_LABEL = Object.fromEntries(ACCOUNT_USE_OPTIONS.map((o) => [o.value, o.label]));
+const USE_TONE: Record<string, "brand" | "outline" | "neutral"> = { INVOICE: "neutral", BALANCE: "outline", BOTH: "brand" };
+const KIND_LABEL = Object.fromEntries(CASH_KIND_OPTIONS.map((o) => [o.value, o.label]));
+const KIND_TONE: Record<string, "success" | "danger" | "neutral"> = { INCOME: "success", EXPENSE: "danger", TRANSFER: "neutral" };
+
 export function SettingsView(props: {
   companies: Row[];
   bankAccounts: Row[];
@@ -79,6 +84,7 @@ export function SettingsView(props: {
   types: Row[];
   items: Row[];
   users: Row[];
+  cashCategories: Row[];
   meId: string;
 }) {
   const router = useRouter();
@@ -134,11 +140,18 @@ export function SettingsView(props: {
       id: "company",
       label: "Companies",
       icon: Building2,
-      description: "Issuers printed on the invoice letterhead.",
+      description: "Issuers printed on the invoice letterhead, and companies that only hold cash for the balance sheet.",
       rows: props.companies,
       columns: [
         { label: "Code", render: (r) => String(r.code), mono: true },
-        { label: "Legal name", render: (r) => <span className="flex items-center gap-2">{String(r.legalName)} {inactive(r)}</span> },
+        {
+          label: "Legal name",
+          render: (r) => (
+            <span className="flex items-center gap-2">
+              {String(r.legalName)} {r.invoicing === false ? <Badge tone="outline">{t("Cash only")}</Badge> : null} {inactive(r)}
+            </span>
+          ),
+        },
         { label: "Address", render: (r) => (r.addressLines as string[]).join(", ") },
         { label: "Language", render: (r) => (r.defaultLang === "ZH" ? t("Chinese") : t("English")) },
       ],
@@ -147,10 +160,13 @@ export function SettingsView(props: {
       id: "bankAccount",
       label: "Bank accounts",
       icon: Landmark,
-      description: "Accounts that can appear under Payment Details.",
+      description:
+        "Every bank account. Invoice accounts can appear under Payment Details; balance-sheet accounts appear in the cash book. An account can be both.",
       rows: props.bankAccounts,
       columns: [
         { label: "Label", render: (r) => <span className="flex items-center gap-2">{String(r.label)} {r.compact ? <Badge tone="outline">{t("Compact")}</Badge> : null} {inactive(r)}</span> },
+        { label: "Used for", render: (r) => <Badge tone={USE_TONE[String(r.use)] ?? "neutral"}>{t(USE_LABEL[String(r.use)] ?? String(r.use))}</Badge> },
+        { label: "Company", render: (r) => (r.companyName ? String(r.companyName) : <span className="text-ink-soft">—</span>) },
         { label: "Currency", render: (r) => String(r.currency), mono: true },
         { label: "Account name", render: (r) => String(r.accountName) },
         { label: "Account number", render: (r) => String(r.accountNumber), mono: true },
@@ -236,6 +252,19 @@ export function SettingsView(props: {
         },
         { label: "Detail hint", render: (r) => (r.detailHint ? String(r.detailHint) : "—") },
         { label: "Client fee", render: (r) => (r.clientFee ? String(r.clientFee) : "—"), mono: true },
+      ],
+    },
+    {
+      id: "cashCategory",
+      label: "Cash categories",
+      icon: FolderTree,
+      description:
+        "Categories for cash book lines (the 摘要 column). Income and expense make up the monthly statement; transfers move money between accounts and are shown separately.",
+      rows: props.cashCategories,
+      columns: [
+        { label: "Chinese", render: (r) => <span className="flex items-center gap-2">{String(r.nameZh)} {inactive(r)}</span> },
+        { label: "English", render: (r) => (r.nameEn ? String(r.nameEn) : <span className="text-ink-soft">—</span>) },
+        { label: "Kind", render: (r) => <Badge tone={KIND_TONE[String(r.kind)] ?? "neutral"}>{t(KIND_LABEL[String(r.kind)] ?? String(r.kind))}</Badge> },
       ],
     },
   ];

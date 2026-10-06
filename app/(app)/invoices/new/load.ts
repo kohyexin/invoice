@@ -5,8 +5,8 @@ import { freshFxRates } from "@/lib/fx";
 /** Lists and defaults the composer needs, for both new and edit. */
 export async function loadComposerProps() {
   const [companies, accounts, rules, clients, items, types, owners, usedAliases, fx] = await Promise.all([
-    prisma.company.findMany({ where: { active: true }, orderBy: [{ sortOrder: "asc" }, { code: "asc" }] }),
-    prisma.bankAccount.findMany({ where: { active: true }, orderBy: [{ sortOrder: "asc" }, { label: "asc" }] }),
+    prisma.company.findMany({ where: { active: true, invoicing: true }, orderBy: [{ sortOrder: "asc" }, { code: "asc" }] }),
+    prisma.bankAccount.findMany({ where: { active: true, use: { in: ["INVOICE", "BOTH"] } }, orderBy: [{ sortOrder: "asc" }, { label: "asc" }] }),
     prisma.paymentRule.findMany(),
     prisma.client.findMany({
       orderBy: { name: "asc" },

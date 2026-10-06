@@ -10,12 +10,14 @@ datasource db {
   provider = "postgresql"
 }
 
+/// CNH is only used by balance-sheet accounts; invoices stay on the other five.
 enum Currency {
   USD
   HKD
   CNY
   EUR
   SGD
+  CNH
 }
 
 enum Language {
@@ -107,9 +109,19 @@ model Company {
   termsZh      String[]
   sortOrder    Int      @default(0)
   active       Boolean  @default(true)
+  /// False for companies that only hold cash (Moonlink): hidden from the letterhead picker.
+  invoicing    Boolean  @default(true)
 
   paymentRules PaymentRule[]
   invoices     Invoice[]
+  bankAccounts BankAccount[]
+}
+
+/// Where a bank account appears: the invoice payment picker, the balance sheet, or both.
+enum AccountUse {
+  INVOICE
+  BALANCE
+  BOTH
 }
 
 model BankAccount {
@@ -129,9 +141,14 @@ model BankAccount {
   compact         Boolean  @default(false)
   sortOrder       Int      @default(0)
   active          Boolean  @default(true)
+  use             AccountUse @default(INVOICE)
+  /// Company whose cash this is, for the balance sheet.
+  companyId       String?
+  company         Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
 
   paymentRules    PaymentRule[]
   invoices        Invoice[]
+  cashTxns        CashTxn[]
 }
 
 /// Default payment account. The most specific match wins:
@@ -304,6 +321,7 @@ model Invoice {
 
   lines            InvoiceLine[]
   document         InvoiceDocument?
+  cashTxns         CashTxn[]
 
   @@index([number])
   @@index([status])
@@ -404,4 +422,58 @@ model ImportReview {
 
   @@index([status])
   @@index([invoiceNumber])
+}
+
+/* ----------------------------- Cash book ----------------------------- */
+
+/// INCOME and EXPENSE count towards profit; TRANSFER moves cash without it.
+enum CashKind {
+  INCOME
+  EXPENSE
+  TRANSFER
+}
+
+/// The 摘要 column of the balance sheet workbook.
+model CashCategory {
+  id        String    @id @default(cuid())
+  nameZh    String    @unique
+  nameEn    String    @default("")
+  kind      CashKind
+  sortOrder Int       @default(0)
+  active    Boolean   @default(true)
+  txns      CashTxn[]
+}
+
+/// One bank line, in the account's own currency. USD is worked out on totals
+/// with the latest rate, never stored per line.
+model CashTxn {
+  id          String        @id @default(cuid())
+  accountId   String
+  account     BankAccount   @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  date        DateTime      @db.Date
+  /// Order within the account on the same date (the workbook's row order).
+  seq         Int           @default(0)
+  categoryId  String?
+  category    CashCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  /// 用途: client name on receipts, expense detail otherwise.
+  purpose     String        @default("")
+  /// The workbook's "Paid Invoice" column: client, person or company.
+  party       String        @default("")
+  /// 发票号码: free-text reference.
+  memo        String        @default("")
+  amountIn    Decimal       @default(0) @db.Decimal(16, 2)
+  amountOut   Decimal       @default(0) @db.Decimal(16, 2)
+  invoiceId   String?
+  invoice     Invoice?      @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  /// Workbook sheet and row the line came from, so the import can be re-run.
+  sourceSheet String?
+  sourceRow   Int?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@unique([sourceSheet, sourceRow])
+  @@index([accountId, date])
+  @@index([date])
+  @@index([categoryId])
+  @@index([invoiceId])
 }

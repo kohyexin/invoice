@@ -6,7 +6,7 @@ import type { Currency } from "@/lib/generated/prisma/client";
    Refreshed daily by /api/cron/fx, on demand from Settings and the invoice
    forms, and whenever a page reads rates older than a day. */
 
-const CURRENCIES: Exclude<Currency, "USD">[] = ["HKD", "CNY", "EUR", "SGD"];
+const CURRENCIES: Exclude<Currency, "USD">[] = ["HKD", "CNY", "EUR", "SGD", "CNH"];
 const MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
 export type FxSnapshot = { rates: Record<string, number>; updatedAt: string | null };

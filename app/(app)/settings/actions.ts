@@ -51,6 +51,7 @@ function build(entity: SettingsEntity, input: Record<string, unknown>) {
 function friendly(e: unknown) {
   const msg = e instanceof Error ? e.message : String(e);
   if (msg.includes("Unique constraint")) return "That value is already used by another record.";
+  if (msg.includes("Foreign key constraint")) return "Still in use (by invoices or cash book lines). Untick Active instead.";
   return msg;
 }
 
@@ -80,6 +81,9 @@ export async function saveSetting(entity: SettingsEntity, id: string | null, inp
       case "invoiceItem":
         await (id ? prisma.invoiceItem.update({ where: { id }, data: data as never }) : prisma.invoiceItem.create({ data: data as never }));
         break;
+      case "cashCategory":
+        await (id ? prisma.cashCategory.update({ where: { id }, data: data as never }) : prisma.cashCategory.create({ data: data as never }));
+        break;
       case "fxRate": {
         const perUsd = Number(data.perUsd);
         if (!(perUsd > 0)) throw new Error("Units per 1 USD must be above zero.");
@@ -93,6 +97,7 @@ export async function saveSetting(entity: SettingsEntity, id: string | null, inp
       }
     }
     revalidatePath("/settings");
+    if (entity === "bankAccount" || entity === "cashCategory" || entity === "fxRate") revalidatePath("/cash", "layout");
     return { ok: true };
   } catch (e) {
     return { ok: false, error: friendly(e) };
@@ -121,6 +126,9 @@ export async function deleteSetting(entity: SettingsEntity, id: string): Promise
         break;
       case "invoiceItem":
         await prisma.invoiceItem.delete({ where: { id } });
+        break;
+      case "cashCategory":
+        await prisma.cashCategory.delete({ where: { id } });
         break;
       case "fxRate":
         await prisma.fxRate.delete({ where: { currency: id as never } });
