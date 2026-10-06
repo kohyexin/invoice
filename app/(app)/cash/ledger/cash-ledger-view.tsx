@@ -19,7 +19,7 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 const KIND_LABEL: Record<string, string> = { INCOME: "Income", EXPENSE: "Expense", TRANSFER: "Transfer" };
 const KIND_TONE: Record<string, "success" | "danger" | "neutral"> = { INCOME: "success", EXPENSE: "danger", TRANSFER: "neutral" };
 
-type Account = { id: string; label: string; currency: string; active: boolean };
+type Account = { id: string; label: string; name: string; currency: string; active: boolean };
 type Category = { id: string; nameZh: string; nameEn: string; kind: string; active: boolean };
 
 export function CashLedgerView({
@@ -133,7 +133,7 @@ export function CashLedgerView({
   ];
 
   const filters: FilterDef<CashLedgerRow>[] = [
-    { id: "account", label: "Account", options: accounts.map((a) => a.label), match: (r, v) => r.account === v },
+    { id: "account", label: "Account", options: accounts.map((a) => a.name), match: (r, v) => r.account === v },
     { id: "category", label: "Category", options: distinct((r) => r.category), match: (r, v) => r.category === v },
     { id: "year", label: "Year", options: years, match: (r, v) => r.date.startsWith(v) },
     { id: "month", label: "Month", options: MONTHS, match: (r, v) => MONTHS[Number(r.date.slice(5, 7)) - 1] === v },
@@ -141,7 +141,8 @@ export function CashLedgerView({
     { id: "company", label: "Company", options: distinct((r) => r.company), match: (r, v) => r.company === v, advanced: true },
   ];
 
-  const startAccount = accounts.some((a) => a.label === initialAccount) ? initialAccount : "";
+  // Links pass the account id or its nickname.
+  const startAccount = initialAccount ? accounts.find((a) => a.id === initialAccount || a.label === initialAccount) : undefined;
 
   return (
     <>
@@ -177,7 +178,7 @@ export function CashLedgerView({
         columns={columns}
         rows={visible}
         filters={filters}
-        initialFilters={startAccount ? { account: startAccount } : undefined}
+        initialFilters={startAccount ? { account: startAccount.name } : undefined}
         rowKey={(r) => r.id}
         exportName="cash-book"
         defaultPageSize={50}
@@ -197,7 +198,7 @@ export function CashLedgerView({
         accounts={accounts}
         categories={categories}
         purposes={purposes}
-        defaultAccount={accounts.find((a) => a.label === startAccount)?.id ?? ""}
+        defaultAccount={startAccount?.id ?? ""}
         onClose={() => setEditing(null)}
       />
     </>
@@ -326,7 +327,7 @@ function TxnPanel({
                   .filter((a) => a.active || a.id === v.accountId)
                   .map((a) => (
                     <option key={a.id} value={a.id}>
-                      {a.label}
+                      {a.name} ({a.label})
                     </option>
                   ))}
               </Select>

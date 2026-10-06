@@ -2,6 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/db";
 import { round2 } from "@/lib/utils";
 import { BALANCE_USES } from "@/lib/cash";
+import { accountName, accountNameWithCurrency } from "@/lib/account-name";
 import type { ParsedStatement, StatementEntry } from "./types";
 
 /* Compares statements with the cash book and the approval queue. Nothing here
@@ -122,7 +123,7 @@ export async function reconcileStatements(
   const zijin = categories.find((c) => c.nameZh === "资金相关")?.id ?? "";
 
   const candidates: StatementPreview["candidates"] = {};
-  for (const a of accounts) (candidates[a.currency] ??= []).push({ id: a.id, label: a.label });
+  for (const a of accounts) (candidates[a.currency] ??= []).push({ id: a.id, label: `${accountName(a)} (${a.label})` });
 
   const hints = new Map<string, Hint>();
   for (const h of dbHints) hints.set(`${h.accountId}|${h.counterparty}|${h.direction}`, h);
@@ -180,7 +181,7 @@ export async function reconcileStatements(
         accountNumber: s.accountNumber,
         currency: section.currency,
         accountId: account?.id ?? null,
-        accountLabel: account?.label ?? "",
+        accountLabel: account ? accountNameWithCurrency(account) : "",
         periodStart: s.periodStart,
         periodEnd: s.periodEnd,
         opening: section.opening,
@@ -208,7 +209,7 @@ export async function reconcileStatements(
         };
         details.set(account.id, {
           accountId: account.id,
-          label: account.label,
+          label: accountNameWithCurrency(account),
           fields: [
             field("accountName", "Account name", s.accountName),
             field("bankName", "Bank name", s.bankName),

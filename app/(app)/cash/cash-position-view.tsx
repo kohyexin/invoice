@@ -95,7 +95,7 @@ export function CashPositionView({
               <thead>
                 <tr className="border-b border-line text-left text-[11px] uppercase tracking-wider text-ink-soft">
                   <th className="py-2.5 pr-3 font-semibold">{t("Account")}</th>
-                  <th className="px-3 py-2.5 font-semibold">{t("Bank")}</th>
+                  <th className="px-3 py-2.5 font-semibold">{t("Currency")}</th>
                   <th className="px-3 py-2.5 text-right font-semibold">{t("Balance")}</th>
                   <th className="px-3 py-2.5 text-right font-semibold">USD</th>
                   <th className="py-2.5 pl-3 text-right font-semibold">{t("Last line")}</th>
@@ -117,23 +117,22 @@ export function CashPositionView({
                       <tr key={a.id} className={cn("border-b border-line/60 last:border-0", Math.abs(a.balance) < 0.005 && "text-ink-soft")}>
                         <td className="py-3 pr-3">
                           <Link
-                            href={`/cash/ledger?account=${encodeURIComponent(a.label)}`}
+                            href={`/cash/ledger?account=${a.id}`}
                             className="font-medium text-ink hover:text-brand-700 dark:hover:text-brand-200"
                           >
-                            {a.label}
+                            {a.name}
                           </Link>
                           {!a.active && (
                             <Badge tone="neutral" className="ml-2">
                               {t("Inactive")}
                             </Badge>
                           )}
-                          <span className="block text-[12px] text-ink-soft">{a.lines === 1 ? t("1 line") : t("{0} lines", a.lines)}</span>
+                          <span className="block text-[12px] text-ink-soft">
+                            {a.label} · {a.lines === 1 ? t("1 line") : t("{0} lines", a.lines)}
+                          </span>
                         </td>
-                        <td className="px-3 py-3 text-ink-muted">{a.bankName || "—"}</td>
-                        <td className="px-3 py-3 text-right">
-                          <span className="mr-1 text-[11px] text-ink-soft">{a.currency}</span>
-                          {formatMoney(a.balance)}
-                        </td>
+                        <td className="px-3 py-3 text-ink-muted">{a.currency}</td>
+                        <td className="px-3 py-3 text-right">{formatMoney(a.balance)}</td>
                         <td className="px-3 py-3 text-right font-medium">{formatMoney(a.usd)}</td>
                         <td className="py-3 pl-3 text-right text-ink-muted">{formatDate(a.lastDate)}</td>
                       </tr>

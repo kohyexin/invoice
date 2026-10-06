@@ -2,6 +2,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { prisma } from "@/lib/db";
 import { requirePageRole } from "@/lib/session";
 import { round2 } from "@/lib/utils";
+import { accountNameWithCurrency } from "@/lib/account-name";
 import { StatementImportView } from "./import-view";
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
@@ -26,7 +27,7 @@ export default async function StatementImportPage() {
     cashTxnId: true,
     decidedAt: true,
     createdAt: true,
-    account: { select: { id: true, label: true, currency: true } },
+    account: { select: { id: true, label: true, currency: true, bankName: true, accountType: true, accountNumber: true } },
     decidedBy: { select: { name: true } },
   } as const;
 
@@ -52,7 +53,7 @@ export default async function StatementImportPage() {
     prisma.statementImport.findMany({
       orderBy: [{ periodStart: "desc" }, { id: "asc" }],
       take: 24,
-      select: { id: true, file: true, currency: true, periodStart: true, periodEnd: true, closing: true, uploadedAt: true, account: { select: { id: true, label: true } } },
+      select: { id: true, file: true, currency: true, periodStart: true, periodEnd: true, closing: true, uploadedAt: true, account: { select: { id: true, label: true, currency: true, bankName: true, accountType: true, accountNumber: true } } },
     }),
   ]);
 
@@ -65,7 +66,7 @@ export default async function StatementImportPage() {
       return {
         id: s.id,
         file: s.file,
-        account: s.account.label,
+        account: accountNameWithCurrency(s.account),
         accountId: s.account.id,
         currency: s.currency,
         periodStart: iso(s.periodStart),
@@ -91,7 +92,7 @@ export default async function StatementImportPage() {
     suggested: l.suggested,
     status: l.status,
     accountId: l.account.id,
-    account: l.account.label,
+    account: accountNameWithCurrency(l.account),
     currency: l.account.currency,
     decidedAt: (l.decidedAt ?? l.createdAt).toISOString(),
     decidedBy: l.decidedBy?.name ?? null,

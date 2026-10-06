@@ -2,6 +2,9 @@ import "server-only";
 import { prisma } from "@/lib/db";
 import { freshFxRates } from "@/lib/fx";
 import { round2 } from "@/lib/utils";
+import { accountName, accountNameWithCurrency } from "@/lib/account-name";
+
+const NAME_FIELDS = { label: true, currency: true, bankName: true, accountType: true, accountNumber: true } as const;
 
 /* Cash book figures. Lines are kept in the account's currency; USD is
    worked out once per currency total with the latest rate. */
@@ -17,6 +20,9 @@ export function toUsd(totals: Record<string, number>, rates: Rates) {
 
 export type CashAccountRow = {
   id: string;
+  /** Bank and last four digits, e.g. "ANEXT Business Account ··6601". */
+  name: string;
+  /** Short nickname from the workbook, e.g. "SGD (ANEXT)". */
   label: string;
   bankName: string;
   accountName: string;
@@ -52,6 +58,7 @@ export async function loadCashAccounts() {
     const balance = round2(Number(s?._sum.amountIn ?? 0) - Number(s?._sum.amountOut ?? 0));
     return {
       id: a.id,
+      name: accountName(a),
       label: a.label,
       bankName: a.bankName,
       accountName: a.accountName,
@@ -140,7 +147,7 @@ export async function loadMonthlyStatement(ym: string) {
       where: { period: from },
       orderBy: [{ date: "asc" }, { seq: "asc" }, { createdAt: "asc" }],
       include: {
-        account: { select: { label: true, currency: true } },
+        account: { select: NAME_FIELDS },
         invoice: { select: { id: true, number: true } },
       },
     }),
@@ -182,7 +189,7 @@ export async function loadMonthlyStatement(ym: string) {
       id: t.id,
       date: t.date.toISOString(),
       otherMonth: t.date.toISOString().slice(0, 7) === ym ? "" : t.date.toISOString().slice(0, 7),
-      account: t.account.label,
+      account: accountNameWithCurrency(t.account),
       currency: cur,
       purpose: t.purpose,
       party: t.party,
@@ -270,7 +277,7 @@ export async function loadCashLedger() {
     prisma.cashTxn.findMany({
       orderBy: [{ accountId: "asc" }, { date: "asc" }, { seq: "asc" }, { createdAt: "asc" }],
       include: {
-        account: { select: { label: true, currency: true, company: { select: { legalName: true } } } },
+        account: { select: { ...NAME_FIELDS, company: { select: { legalName: true } } } },
         category: { select: { nameZh: true, kind: true } },
         invoice: { select: { number: true } },
       },
@@ -278,7 +285,7 @@ export async function loadCashLedger() {
     prisma.bankAccount.findMany({
       where: { use: { in: [...BALANCE_USES] } },
       orderBy: [{ sortOrder: "asc" }, { label: "asc" }],
-      select: { id: true, label: true, currency: true, active: true },
+      select: { id: true, ...NAME_FIELDS, active: true },
     }),
     prisma.cashCategory.findMany({ orderBy: [{ sortOrder: "asc" }, { nameZh: "asc" }], select: { id: true, nameZh: true, nameEn: true, kind: true, active: true } }),
   ]);
@@ -294,7 +301,7 @@ export async function loadCashLedger() {
       date: t.date.toISOString(),
       period: t.period.toISOString().slice(0, 7),
       accountId: t.accountId,
-      account: t.account.label,
+      account: accountNameWithCurrency(t.account),
       currency: t.account.currency,
       company: t.account.company?.legalName ?? "",
       categoryId: t.categoryId ?? "",
@@ -313,5 +320,9 @@ export async function loadCashLedger() {
   // Newest first, keeping the account's own order within a day.
   rows.reverse().sort((a, b) => b.date.localeCompare(a.date));
 
-  return { rows, accounts, categories };
+  return {
+    rows,
+    accounts: accounts.map((a) => ({ id: a.id, label: a.label, name: accountNameWithCurrency(a), currency: a.currency, active: a.active })),
+    categories,
+  };
 }
