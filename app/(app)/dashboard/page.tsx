@@ -1,11 +1,14 @@
 import { PageHeader } from "@/components/ui/page-header";
+import { loadCashDashboard } from "@/lib/cash";
 import { prisma } from "@/lib/db";
+import { BalanceView } from "./balance-view";
+import { DashboardTabs } from "./dashboard-tabs";
 import { DashboardView, type DashboardData } from "./dashboard-view";
 
 const monthKey = (d: Date) => d.toISOString().slice(0, 7);
 
-export default async function DashboardPage() {
-  const [rows, clientCount] = await Promise.all([
+export default async function DashboardPage({ searchParams }: { searchParams: { view?: string } }) {
+  const [rows, clientCount, cash] = await Promise.all([
     prisma.invoice.findMany({
       select: {
         invoiceDate: true,
@@ -20,6 +23,7 @@ export default async function DashboardPage() {
       },
     }),
     prisma.client.count(),
+    loadCashDashboard(),
   ]);
 
   const now = new Date();
@@ -106,8 +110,12 @@ export default async function DashboardPage() {
 
   return (
     <>
-      <PageHeader title="Dashboard" subtitle="Live from the invoice ledger. All amounts are USD equivalents." />
-      <DashboardView data={data} />
+      <PageHeader title="Dashboard" subtitle="Invoices and cash at a glance. All amounts are USD equivalents." />
+      <DashboardTabs
+        initial={searchParams.view === "balance" ? "balance" : "invoices"}
+        invoices={<DashboardView data={data} />}
+        balance={<BalanceView cash={cash} unpaid={totals.unpaid} />}
+      />
     </>
   );
 }

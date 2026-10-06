@@ -249,6 +249,85 @@ export async function loadMonthlyStatement(ym: string) {
 
 export type MonthlyStatement = Awaited<ReturnType<typeof loadMonthlyStatement>>;
 
+export type CashDashboard = {
+  ratesUpdatedAt: string | null;
+  /** Every month from the first cash line to this month. Closing follows the bank date; income and expense follow 使用月. */
+  months: { month: string; closing: number; income: number; expense: number }[];
+  currencies: { currency: string; native: number; usd: number }[];
+  /** Expense categories over the 12 completed months before this one, as positive spend. */
+  spending: { id: string; name: string; nameEn: string; usd: number }[];
+};
+
+/** Month-by-month cash figures for the dashboard, all at today's rates. */
+export async function loadCashDashboard(): Promise<CashDashboard> {
+  const [fx, byDate, byPeriod] = await Promise.all([
+    freshFxRates(),
+    prisma.$queryRaw<{ month: string; currency: string; net: unknown }[]>`
+      SELECT to_char(t."date", 'YYYY-MM') AS month, b."currency"::text AS currency, SUM(t."amountIn" - t."amountOut") AS net
+      FROM "CashTxn" t JOIN "BankAccount" b ON b.id = t."accountId"
+      GROUP BY 1, 2`,
+    prisma.$queryRaw<{ month: string; currency: string; id: string | null; kind: string | null; nameZh: string | null; nameEn: string | null; net: unknown }[]>`
+      SELECT to_char(t."period", 'YYYY-MM') AS month, b."currency"::text AS currency,
+             c.id, c."kind"::text AS kind, c."nameZh", c."nameEn", SUM(t."amountIn" - t."amountOut") AS net
+      FROM "CashTxn" t
+      JOIN "BankAccount" b ON b.id = t."accountId"
+      LEFT JOIN "CashCategory" c ON c.id = t."categoryId"
+      GROUP BY 1, 2, 3, 4, 5, 6`,
+  ]);
+  const rates = fx.rates;
+  const usd = (cur: string, n: unknown) => Number(n) * (rates[cur] ?? 0);
+
+  const thisMonth = new Date().toISOString().slice(0, 7);
+  const all = [...byDate.map((r) => r.month), ...byPeriod.map((r) => r.month)].sort();
+  const months: CashDashboard["months"] = [];
+  if (all.length) {
+    const d = monthStart(all[0]);
+    const last = all[all.length - 1] > thisMonth ? all[all.length - 1] : thisMonth;
+    while (d.toISOString().slice(0, 7) <= last) {
+      months.push({ month: d.toISOString().slice(0, 7), closing: 0, income: 0, expense: 0 });
+      d.setUTCMonth(d.getUTCMonth() + 1);
+    }
+  }
+  const index = new Map(months.map((m, i) => [m.month, i]));
+
+  const netByMonth = months.map(() => ({}) as Record<string, number>);
+  for (const r of byDate) {
+    const row = netByMonth[index.get(r.month)!];
+    row[r.currency] = (row[r.currency] ?? 0) + Number(r.net);
+  }
+  const running: Record<string, number> = {};
+  months.forEach((m, i) => {
+    for (const [cur, n] of Object.entries(netByMonth[i])) running[cur] = (running[cur] ?? 0) + n;
+    m.closing = toUsd(running, rates);
+  });
+
+  const spendFrom = months[Math.max(0, (index.get(thisMonth) ?? months.length) - 12)]?.month ?? thisMonth;
+  const spending = new Map<string, CashDashboard["spending"][number]>();
+  for (const r of byPeriod) {
+    const m = months[index.get(r.month)!];
+    const v = usd(r.currency, r.net);
+    if (r.kind === "INCOME") m.income += v;
+    if (r.kind === "EXPENSE") {
+      m.expense -= v;
+      if (r.id && r.month >= spendFrom && r.month < thisMonth) {
+        const s = spending.get(r.id) ?? { id: r.id, name: r.nameZh ?? "", nameEn: r.nameEn ?? "", usd: 0 };
+        s.usd -= v;
+        spending.set(r.id, s);
+      }
+    }
+  }
+
+  return {
+    ratesUpdatedAt: fx.updatedAt,
+    months,
+    currencies: Object.entries(running)
+      .map(([currency, native]) => ({ currency, native, usd: native * (rates[currency] ?? 0) }))
+      .filter((c) => Math.abs(c.native) >= 0.005)
+      .sort((a, b) => b.usd - a.usd),
+    spending: [...spending.values()].filter((s) => Math.abs(s.usd) >= 0.5).sort((a, b) => b.usd - a.usd),
+  };
+}
+
 export type CashLedgerRow = {
   id: string;
   date: string;
