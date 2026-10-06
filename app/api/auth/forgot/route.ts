@@ -14,10 +14,11 @@ export async function POST(req: Request) {
   const { email } = (await req.json().catch(() => ({}))) as { email?: string };
   const normalized = email?.trim().toLowerCase() ?? "";
   const user = normalized
-    ? await prisma.user.findUnique({ where: { email: normalized }, select: { id: true, email: true, active: true } })
+    ? await prisma.user.findUnique({ where: { email: normalized }, select: { id: true, email: true, active: true, passwordHash: true } })
     : null;
 
-  if (user?.active) {
+  // Pending invitees set their password through the invitation link instead.
+  if (user?.active && user.passwordHash) {
     const recent = await prisma.passwordResetToken.count({
       where: { userId: user.id, createdAt: { gt: new Date(Date.now() - 60_000) } },
     });

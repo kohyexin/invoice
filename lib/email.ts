@@ -108,6 +108,44 @@ export function sendSignInCodeEmail(to: string, name: string, code: string) {
   );
 }
 
+export function sendInviteEmail(to: string, inviteLink: string, inviterName: string, roleLabel: string) {
+  const link = esc(inviteLink);
+  const body = `<tr>
+            <td style="padding:36px 40px 16px 40px;">
+              <p style="margin:0 0 8px 0;font-size:18px;font-weight:bold;color:#0f172a;">You're invited to STAR SAAS Invoice &amp; Cash</p>
+              <p style="margin:0 0 24px 0;font-size:14px;line-height:22px;color:#475569;">
+                ${esc(inviterName)} invited you to join STAR SAAS Invoice &amp; Cash as <strong>${esc(roleLabel)}</strong>. Accept the invitation to set your name and password.
+              </p>
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td align="center" style="padding:8px 0 8px 0;">
+                    <a href="${link}" target="_blank"
+                       style="display:inline-block;background-color:#0f172a;color:#ffffff;font-size:15px;font-weight:bold;text-decoration:none;padding:14px 36px;border-radius:8px;">
+                      Accept invitation
+                    </a>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:24px 0 0 0;font-size:13px;line-height:20px;color:#64748b;">
+                This link is valid for <strong>72 hours</strong> and can only be used once. You'll set up two-factor sign-in the first time you sign in.
+              </p>
+              <p style="margin:16px 0 0 0;font-size:12px;line-height:18px;color:#94a3b8;">
+                If the button doesn't work, copy and paste this link into your browser:<br />
+                <a href="${link}" target="_blank" style="color:#2563eb;word-break:break-all;">${link}</a>
+              </p>
+            </td>
+          </tr>
+          ${securityNote("If you weren't expecting this invitation, you can ignore this email. No account is activated until the link is used.")}`;
+  return send(
+    to,
+    {
+      subject: `${inviterName} invited you to STAR SAAS Invoice & Cash`,
+      html: layout(body, `This email was sent to ${esc(to)} because an administrator invited you.`),
+    },
+    `Invitation for ${to}: ${inviteLink}`
+  );
+}
+
 export function sendPasswordResetEmail(to: string, resetLink: string) {
   const link = esc(resetLink);
   const body = `<tr>

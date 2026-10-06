@@ -25,7 +25,9 @@ export async function POST(req: Request) {
         select: { id: true, passwordHash: true, active: true, sessionVersion: true, totpSecret: true },
       })
     : null;
-  const ok = typeof password === "string" && (await bcrypt.compare(password, user?.passwordHash ?? getDummyHash())) && Boolean(user);
+  // A pending invitee has an empty hash; they're treated like an unknown email.
+  const ok =
+    typeof password === "string" && (await bcrypt.compare(password, user?.passwordHash || getDummyHash())) && Boolean(user?.passwordHash);
 
   if (!ok || !user) {
     return NextResponse.json({ error: "Invalid email address or password." }, { status: 401 });

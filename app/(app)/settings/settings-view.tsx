@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Building2, Coins, FolderTree, KeyRound, Landmark, ListChecks, Plus, RefreshCw, Route, ShieldCheck, Tags, UserRound, X } from "lucide-react";
+import { Building2, Check, Coins, Copy, FolderTree, KeyRound, Landmark, ListChecks, Mail, Plus, RefreshCw, Route, ShieldCheck, Tags, UserPlus, UserRound, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { RecordPanel } from "@/components/ui/record-panel";
@@ -11,7 +11,7 @@ import { ACCOUNT_USE_OPTIONS, CASH_KIND_OPTIONS, SETTINGS_ENTITIES, type FieldDe
 import { cn, formatDate } from "@/lib/utils";
 import { useI18n } from "@/components/i18n/locale-provider";
 import { deleteSetting, saveSetting } from "./actions";
-import { saveUser } from "./users-actions";
+import { inviteUser, resendInvite, saveUser } from "./users-actions";
 import { refreshRates } from "../invoices/fx-actions";
 
 type Row = Record<string, unknown> & { id: string };
@@ -21,30 +21,35 @@ type Column = { label: string; render: (r: Row) => React.ReactNode; mono?: boole
 type TabId = SettingsEntity | "user";
 
 const ROLES: RoleName[] = ["ADMIN", "STAFF", "VIEWER"];
-function userFields(t: (s: string) => string, editing: boolean): FieldDef[] {
+type UserMode = "invite" | "pending" | "edit";
+
+function userFields(t: (s: string) => string, mode: UserMode): FieldDef[] {
+  const role: FieldDef = {
+    key: "role",
+    label: "Role",
+    kind: "select",
+    required: true,
+    options: ROLES.map((r) => ({ value: r, label: `${t(ROLE_LABEL[r])}: ${t(ROLE_HELP[r])}` })),
+  };
+  if (mode === "invite")
+    return [
+      { key: "email", label: "Email", kind: "text", required: true, hint: "We'll email them a link to set their name and password. It is valid for 72 hours." },
+      role,
+      { key: "name", label: "Name", kind: "text", hint: "Optional. They can change it when they accept." },
+    ];
   const base: FieldDef[] = [
-    { key: "name", label: "Name", kind: "text", required: true },
+    { key: "name", label: "Name", kind: "text", required: mode === "edit" },
     { key: "email", label: "Email", kind: "text", required: true, hint: "Used to sign in" },
-    {
-      key: "role",
-      label: "Role",
-      kind: "select",
-      required: true,
-      options: ROLES.map((r) => ({ value: r, label: `${t(ROLE_LABEL[r])}: ${t(ROLE_HELP[r])}` })),
-    },
+    role,
   ];
-  return editing ? [...base, ...EDIT_USER_EXTRA] : [...base, ...NEW_USER_EXTRA];
+  return mode === "pending" ? [...base, ...PENDING_USER_EXTRA] : [...base, ...EDIT_USER_EXTRA];
 }
 
-const NEW_USER_EXTRA: FieldDef[] = [
-  {
-    key: "password",
-    label: "Password",
-    kind: "text",
-    mono: true,
-    hint: "Leave blank to generate one. Either way it is shown once after saving so you can pass it on; they can change it under My account.",
-  },
-  { key: "active", label: "Active", kind: "checkbox" },
+const INVITE_DEFAULTS = { role: "STAFF" };
+
+const PENDING_USER_EXTRA: FieldDef[] = [
+  { key: "active", label: "Active (untick to cancel the invitation)", kind: "checkbox" },
+  { key: "resendInvite", label: "Resend invitation (the previous link stops working)", kind: "checkbox" },
 ];
 const EDIT_USER_EXTRA: FieldDef[] = [
   { key: "active", label: "Active (untick to block sign-in and sign them out)", kind: "checkbox" },
@@ -91,7 +96,9 @@ export function SettingsView(props: {
   const { t } = useI18n();
   const [tabId, setTabId] = useState<TabId>("user");
   const [editing, setEditing] = useState<{ entity: TabId; row: Row | null } | null>(null);
-  const [issued, setIssued] = useState<{ email: string; password: string } | null>(null);
+  const [issued, setIssued] = useState<
+    { kind: "password"; email: string; password: string } | { kind: "invite"; email: string; link: string; emailed: "sent" | "logged" | "failed" } | null
+  >(null);
 
   const options = useMemo(
     () => ({
@@ -116,9 +123,17 @@ export function SettingsView(props: {
           label: "Name",
           render: (r) => (
             <span className="flex items-center gap-2">
-              {String(r.name)}
+              {r.name ? String(r.name) : <span className="text-ink-soft">{t("Not set yet")}</span>}
               {r.id === props.meId && <Badge tone="outline">{t("You")}</Badge>}
-              {r.active === false && <Badge tone="danger">{t("Disabled")}</Badge>}
+              {r.active === false ? (
+                <Badge tone="danger">{t("Disabled")}</Badge>
+              ) : r.pending ? (
+                r.inviteExpiresAt && new Date(String(r.inviteExpiresAt)) > new Date() ? (
+                  <Badge tone="warning">{t("Invited (expires {0})", formatDate(String(r.inviteExpiresAt)))}</Badge>
+                ) : (
+                  <Badge tone="danger">{t("Invite expired")}</Badge>
+                )
+              ) : null}
             </span>
           ),
         },
@@ -127,7 +142,13 @@ export function SettingsView(props: {
         {
           label: "Two-factor",
           render: (r) =>
-            r.totpEnabledAt ? <Badge tone="success">{t("On")}</Badge> : <Badge tone="warning">{t("Set up at next sign-in")}</Badge>,
+            r.pending ? (
+              <span className="text-ink-soft">—</span>
+            ) : r.totpEnabledAt ? (
+              <Badge tone="success">{t("On")}</Badge>
+            ) : (
+              <Badge tone="warning">{t("Set up at next sign-in")}</Badge>
+            ),
         },
         {
           label: "Last sign-in",
@@ -281,7 +302,7 @@ export function SettingsView(props: {
   const config = !editing
     ? null
     : editing.entity === "user"
-      ? { title: "User", fields: userFields(t, Boolean(editing.row)) }
+      ? { title: "User", fields: userFields(t, !editing.row ? "invite" : editing.row.pending ? "pending" : "edit") }
       : SETTINGS_ENTITIES[editing.entity];
 
   return (
@@ -311,14 +332,32 @@ export function SettingsView(props: {
       <section className="glass-panel neon-edge rounded-card">
         {issued && (
           <div className="flex items-start gap-3 border-b border-line bg-brand-500/10 px-5 py-3.5">
-            <KeyRound className="mt-0.5 h-4 w-4 shrink-0 text-brand-600 dark:text-brand-300" />
-            <div className="min-w-0 flex-1 text-[13px] text-ink">
-              {t("Password for {0}:", issued.email)}{" "}
-              <code className="select-all rounded bg-overlay/10 px-1.5 py-0.5 font-mono text-[13px] text-brand-700 dark:text-brand-200">{issued.password}</code>
-              <p className="mt-1 text-ink-muted">
-                {t("Copy it now; it won't be shown again. They can change it under My account after signing in.")}
-              </p>
-            </div>
+            {issued.kind === "invite" ? (
+              <Mail className="mt-0.5 h-4 w-4 shrink-0 text-brand-600 dark:text-brand-300" />
+            ) : (
+              <KeyRound className="mt-0.5 h-4 w-4 shrink-0 text-brand-600 dark:text-brand-300" />
+            )}
+            {issued.kind === "invite" ? (
+              <div className="min-w-0 flex-1 text-[13px] text-ink">
+                {issued.emailed === "sent"
+                  ? t("Invitation sent to {0}.", issued.email)
+                  : issued.emailed === "logged"
+                    ? t("Invitation created for {0}. Email isn't set up on this server, so nothing was sent.", issued.email)
+                    : t("Invitation created for {0}, but the email could not be sent.", issued.email)}
+                <p className="mt-1 text-ink-muted">
+                  {t("You can also copy the link and send it yourself. It is valid for 72 hours and works once.")}
+                </p>
+                <CopyLinkButton link={issued.link} />
+              </div>
+            ) : (
+              <div className="min-w-0 flex-1 text-[13px] text-ink">
+                {t("Password for {0}:", issued.email)}{" "}
+                <code className="select-all rounded bg-overlay/10 px-1.5 py-0.5 font-mono text-[13px] text-brand-700 dark:text-brand-200">{issued.password}</code>
+                <p className="mt-1 text-ink-muted">
+                  {t("Copy it now; it won't be shown again. They can change it under My account after signing in.")}
+                </p>
+              </div>
+            )}
             <button
               onClick={() => setIssued(null)}
               aria-label={t("Dismiss")}
@@ -336,8 +375,8 @@ export function SettingsView(props: {
           <div className="flex shrink-0 items-center gap-2">
             {tab.id === "fxRate" && <RefreshFxButton />}
             <Button size="sm" onClick={() => setEditing({ entity: tab.id, row: null })}>
-              <Plus className="h-4 w-4" />
-              {t("Add")}
+              {tab.id === "user" ? <UserPlus className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+              {tab.id === "user" ? t("Invite user") : t("Add")}
             </Button>
           </div>
         </div>
@@ -394,16 +433,30 @@ export function SettingsView(props: {
       {editing && config && (
         <RecordPanel
           open
-          title={t(editing.row ? "Edit {0}" : "Add {0}", t(config.title).toLowerCase())}
+          title={editing.entity === "user" && !editing.row ? t("Invite user") : t(editing.row ? "Edit {0}" : "Add {0}", t(config.title).toLowerCase())}
+          saveLabel={editing.entity === "user" && !editing.row ? "Send invitation" : "Save"}
           fields={config.fields as FieldDef[]}
-          initial={editing.row}
+          initial={editing.row ?? (editing.entity === "user" ? INVITE_DEFAULTS : null)}
           options={options}
           onClose={() => setEditing(null)}
           onSave={async (values) => {
             if (editing.entity === "user") {
-              const res = await saveUser(editing.row?.id ?? null, values);
+              const email = String(values.email).trim().toLowerCase();
+              if (!editing.row) {
+                const res = await inviteUser(values);
+                if (!res.ok) return res.error;
+                setIssued({ kind: "invite", email, link: res.link, emailed: res.emailed });
+                router.refresh();
+                return null;
+              }
+              const res = await saveUser(editing.row.id, values);
               if (!res.ok) return res.error;
-              if (res.password) setIssued({ email: String(values.email).trim().toLowerCase(), password: res.password });
+              if (res.password) setIssued({ kind: "password", email, password: res.password });
+              if (editing.row.pending && values.resendInvite && values.active) {
+                const sent = await resendInvite(editing.row.id);
+                if (!sent.ok) return sent.error;
+                setIssued({ kind: "invite", email, link: sent.link, emailed: sent.emailed });
+              }
               router.refresh();
               return null;
             }
@@ -430,6 +483,34 @@ export function SettingsView(props: {
 
 function formatDateTime(iso: string) {
   return `${formatDate(iso)} ${new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`;
+}
+
+function CopyLinkButton({ link }: { link: string }) {
+  const { t } = useI18n();
+  const [copied, setCopied] = useState(false);
+  const [failed, setFailed] = useState(false);
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setFailed(true);
+    }
+  }
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-2">
+      <Button size="sm" variant="secondary" onClick={copy}>
+        {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+        {copied ? t("Copied") : t("Copy invite link")}
+      </Button>
+      {failed && (
+        <code className="max-w-full select-all break-all rounded bg-overlay/10 px-1.5 py-0.5 font-mono text-[12px] text-brand-700 dark:text-brand-200">
+          {link}
+        </code>
+      )}
+    </div>
+  );
 }
 
 function RefreshFxButton() {

@@ -21,9 +21,11 @@ export function RecordPanel({
   onClose,
   onSave,
   onDelete,
+  saveLabel = "Save",
 }: {
   open: boolean;
   title: string;
+  saveLabel?: string;
   fields: FieldDef[];
   initial: Record<string, unknown> | null;
   options?: Options;
@@ -90,7 +92,7 @@ export function RecordPanel({
             {t("Cancel")}
           </Button>
           <Button size="sm" onClick={save} loading={pending}>
-            {t("Save")}
+            {t(saveLabel)}
           </Button>
         </>
       }

@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 
 /** Sign-in, second factor and password reset work without a session. */
-const PUBLIC_PAGES = /^\/(login|verify|reset)(\/|$)/;
+const PUBLIC_PAGES = /^\/(login|verify|reset|invite)(\/|$)/;
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;

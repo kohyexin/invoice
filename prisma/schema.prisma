@@ -77,6 +77,13 @@ model User {
   /// Wrong codes since the last successful sign-in; too many ends the attempt.
   mfaFailures       Int       @default(0)
 
+  /// Pending invitation: sha256 of the emailed /invite token. Cleared once
+  /// accepted; until then passwordHash is empty and sign-in is refused.
+  inviteTokenHash String?   @unique
+  inviteExpiresAt DateTime?
+  invitedAt       DateTime?
+  invitedById     String?
+
   invoicesCreated    Invoice[]            @relation("InvoiceCreatedBy")
   invoicesUpdated    Invoice[]            @relation("InvoiceUpdatedBy")
   resetTokens        PasswordResetToken[]

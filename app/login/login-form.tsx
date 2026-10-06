@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AlertCircle, Eye, EyeOff, ShieldCheck } from "lucide-react";
+import { AlertCircle, CheckCircle2, Eye, EyeOff, ShieldCheck } from "lucide-react";
 import { AuthError, AuthShell, EMAIL_RE, authFieldClass } from "@/components/auth/auth-shell";
 import { useI18n } from "@/components/i18n/locale-provider";
 import { Button } from "@/components/ui/button";
@@ -11,10 +11,11 @@ import { Input, Label } from "@/components/ui/input";
 
 const LAST_USED_KEY = "inv-last-login";
 
-export function LoginForm() {
+/** `invited` is set when arriving from an accepted invitation. */
+export function LoginForm({ invited }: { invited?: string }) {
   const { t } = useI18n();
   const router = useRouter();
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(invited ?? "");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [remember, setRemember] = useState(false);
@@ -66,6 +67,16 @@ export function LoginForm() {
           <h2 className="text-2xl font-bold tracking-tight text-ink">{t("Welcome back")}</h2>
           <p className="mt-1.5 text-sm text-ink/50">{t("Sign in to your {0} workspace.", "STAR SAAS")}</p>
         </div>
+
+        {invited && !error && (
+          <div
+            role="status"
+            className="mb-5 flex items-center gap-2.5 rounded-control border border-emerald-500/30 bg-emerald-500/10 px-3.5 py-2.5 text-sm text-emerald-700 animate-scale-in dark:text-emerald-300"
+          >
+            <CheckCircle2 className="h-4 w-4 shrink-0" />
+            {t("Your account is ready. Sign in to set up two-factor authentication.")}
+          </div>
+        )}
 
         {error && (
           <AuthError>
@@ -161,7 +172,7 @@ export function LoginForm() {
         </div>
 
         <p className="mt-6 text-center text-sm text-ink/50">
-          {t("Need an account? Ask an admin to add you.")}
+          {t("Need an account? Ask an admin to invite you.")}
         </p>
       </div>
     </AuthShell>

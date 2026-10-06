@@ -22,7 +22,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: { d
     prisma.invoiceItem.findMany({ orderBy: [{ sortOrder: "asc" }, { labelEn: "asc" }] }),
     prisma.user.findMany({
       orderBy: [{ active: "desc" }, { name: "asc" }],
-      select: { id: true, email: true, name: true, role: true, active: true, lastLoginAt: true, totpEnabledAt: true },
+      select: { id: true, email: true, name: true, role: true, active: true, lastLoginAt: true, totpEnabledAt: true, passwordHash: true, inviteExpiresAt: true },
     }),
     prisma.cashCategory.findMany({ orderBy: [{ sortOrder: "asc" }, { nameZh: "asc" }] }),
   ]);
@@ -62,10 +62,12 @@ export default async function SettingsPage({ searchParams }: { searchParams: { d
         owners={owners}
         types={types}
         items={items}
-        users={users.map((u) => ({
+        users={users.map(({ passwordHash, ...u }) => ({
           ...u,
+          pending: !passwordHash,
           lastLoginAt: u.lastLoginAt?.toISOString() ?? null,
           totpEnabledAt: u.totpEnabledAt?.toISOString() ?? null,
+          inviteExpiresAt: u.inviteExpiresAt?.toISOString() ?? null,
         }))}
         meId={me.id}
       />

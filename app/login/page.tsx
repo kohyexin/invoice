@@ -4,7 +4,8 @@ import { LoginForm } from "./login-form";
 
 export const dynamic = "force-dynamic";
 
-export default async function LoginPage() {
+export default async function LoginPage({ searchParams }: { searchParams: { invited?: string } }) {
   if (await getCurrentUser()) redirect("/dashboard");
-  return <LoginForm />;
+  const invited = searchParams.invited;
+  return <LoginForm invited={typeof invited === "string" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(invited) ? invited : undefined} />;
 }
