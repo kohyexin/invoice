@@ -11,6 +11,7 @@ import { useI18n } from "@/components/i18n/locale-provider";
 import { formatMonth } from "@/lib/i18n";
 import { formatCompact, formatDate, formatMoney } from "@/lib/utils";
 import type { CashDashboard } from "@/lib/cash";
+import { salaryParts } from "@/lib/salary-parts";
 
 const RANGES = [
   { value: "12", label: "12 months" },
@@ -181,7 +182,17 @@ export function BalanceView({ cash, unpaid }: { cash: CashDashboard; unpaid: { a
             </Link>
           </div>
           <ShareList
-            rows={cash.spending.map((c) => ({ key: c.id, label: categoryLabel(c), sub: locale === "zh-CN" ? c.nameEn && t(c.nameEn) : c.name, usd: c.usd }))}
+            rows={cash.spending.map((c) => ({
+              key: c.id,
+              label: categoryLabel(c),
+              sub: locale === "zh-CN" ? c.nameEn && t(c.nameEn) : c.name,
+              usd: c.usd,
+              parts: c.byPurpose.length
+                ? salaryParts(c.byPurpose)
+                    .filter((p) => Math.abs(p.usd) >= 0.5)
+                    .map((p) => ({ key: p.label, label: p.key && locale === "zh-CN" ? p.key : t(p.label), usd: p.usd }))
+                : undefined,
+            }))}
             total={spendTotal}
             tone="expense"
             empty={t("No expenses in the last 12 months.")}
@@ -197,7 +208,9 @@ export function BalanceView({ cash, unpaid }: { cash: CashDashboard; unpaid: { a
   );
 }
 
-function ShareList({ rows, total, tone, empty }: { rows: { key: string; label: string; sub: string; usd: number }[]; total: number; tone?: "expense"; empty: string }) {
+type ShareRow = { key: string; label: string; sub: string; usd: number; parts?: { key: string; label: string; usd: number }[] };
+
+function ShareList({ rows, total, tone, empty }: { rows: ShareRow[]; total: number; tone?: "expense"; empty: string }) {
   if (rows.length === 0) return <p className="py-8 text-center text-[13px] text-ink-soft">{empty}</p>;
   const max = Math.max(...rows.map((r) => r.usd), 1);
   return (
@@ -220,6 +233,19 @@ function ShareList({ rows, total, tone, empty }: { rows: { key: string; label: s
               style={{ width: `${(Math.max(0, r.usd) / max) * 100}%` }}
             />
           </div>
+          {r.parts && (
+            <ul className="mt-2 space-y-1 border-l border-line pl-3">
+              {r.parts.map((p) => (
+                <li key={p.key} className="flex justify-between gap-3 text-[12px] text-ink-muted">
+                  <span>{p.label}</span>
+                  <span className="tnum">
+                    {formatMoney(p.usd, 0)}
+                    <span className="ml-2 inline-block w-10 text-right text-ink-soft">{Math.round((Math.max(0, p.usd) / total) * 100)}%</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
         </li>
       ))}
     </ul>

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { freshFxRates } from "@/lib/fx";
 import { round2 } from "@/lib/utils";
 import { accountName, accountNameWithCurrency } from "@/lib/account-name";
+import { SALARY_CATEGORY } from "@/lib/salary-parts";
 
 const NAME_FIELDS = { label: true, currency: true, bankName: true, accountType: true, accountNumber: true } as const;
 
@@ -255,12 +256,12 @@ export type CashDashboard = {
   months: { month: string; closing: number; income: number; expense: number }[];
   currencies: { currency: string; native: number; usd: number }[];
   /** Expense categories over the 12 completed months before this one, as positive spend. */
-  spending: { id: string; name: string; nameEn: string; usd: number }[];
+  spending: { id: string; name: string; nameEn: string; usd: number; byPurpose: { purpose: string; usd: number }[] }[];
 };
 
 /** Month-by-month cash figures for the dashboard, all at today's rates. */
 export async function loadCashDashboard(): Promise<CashDashboard> {
-  const [fx, byDate, byPeriod] = await Promise.all([
+  const [fx, byDate, byPeriod, salary] = await Promise.all([
     freshFxRates(),
     prisma.$queryRaw<{ month: string; currency: string; net: unknown }[]>`
       SELECT to_char(t."date", 'YYYY-MM') AS month, b."currency"::text AS currency, SUM(t."amountIn" - t."amountOut") AS net
@@ -273,6 +274,13 @@ export async function loadCashDashboard(): Promise<CashDashboard> {
       JOIN "BankAccount" b ON b.id = t."accountId"
       LEFT JOIN "CashCategory" c ON c.id = t."categoryId"
       GROUP BY 1, 2, 3, 4, 5, 6`,
+    prisma.$queryRaw<{ month: string; currency: string; purpose: string; net: unknown }[]>`
+      SELECT to_char(t."period", 'YYYY-MM') AS month, b."currency"::text AS currency, t."purpose", SUM(t."amountIn" - t."amountOut") AS net
+      FROM "CashTxn" t
+      JOIN "BankAccount" b ON b.id = t."accountId"
+      JOIN "CashCategory" c ON c.id = t."categoryId"
+      WHERE c."nameZh" = ${SALARY_CATEGORY}
+      GROUP BY 1, 2, 3`,
   ]);
   const rates = fx.rates;
   const usd = (cur: string, n: unknown) => Number(n) * (rates[cur] ?? 0);
@@ -310,11 +318,21 @@ export async function loadCashDashboard(): Promise<CashDashboard> {
     if (r.kind === "EXPENSE") {
       m.expense -= v;
       if (r.id && r.month >= spendFrom && r.month < thisMonth) {
-        const s = spending.get(r.id) ?? { id: r.id, name: r.nameZh ?? "", nameEn: r.nameEn ?? "", usd: 0 };
+        const s = spending.get(r.id) ?? { id: r.id, name: r.nameZh ?? "", nameEn: r.nameEn ?? "", usd: 0, byPurpose: [] };
         s.usd -= v;
         spending.set(r.id, s);
       }
     }
+  }
+
+  const salaryRow = [...spending.values()].find((s) => s.name === SALARY_CATEGORY);
+  if (salaryRow) {
+    const byPurpose = new Map<string, number>();
+    for (const r of salary) {
+      if (r.month < spendFrom || r.month >= thisMonth) continue;
+      byPurpose.set(r.purpose, (byPurpose.get(r.purpose) ?? 0) - usd(r.currency, r.net));
+    }
+    salaryRow.byPurpose = [...byPurpose.entries()].map(([purpose, v]) => ({ purpose, usd: v }));
   }
 
   return {

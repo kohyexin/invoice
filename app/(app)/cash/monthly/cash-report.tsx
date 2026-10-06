@@ -4,8 +4,9 @@ import { BrandLogo } from "@/components/brand/brand-logo";
 import { useI18n } from "@/components/i18n/locale-provider";
 import { cn, formatDate, formatMoney, formatMonth } from "@/lib/utils";
 import type { MonthlyCategory, MonthlyStatement } from "@/lib/cash";
+import { SALARY_CATEGORY, salaryParts } from "@/lib/salary-parts";
 
-type RowKind = "balance" | "section" | "item" | "subtotal" | "grand";
+type RowKind = "balance" | "section" | "item" | "sub" | "subtotal" | "grand";
 type ReportRow = { key: string; label: string; kind: RowKind; values: number[] };
 
 const ZERO = 0.5;
@@ -18,13 +19,25 @@ export function acct(n: number | null) {
   return n < 0 ? `(${s})` : s;
 }
 
-function categoryRows(stmts: MonthlyStatement[], kind: MonthlyCategory["kind"], label: (c: MonthlyCategory) => string): ReportRow[] {
-  const byId = new Map<string, { c: MonthlyCategory; values: number[] }>();
+function categoryRows(
+  stmts: MonthlyStatement[],
+  kind: MonthlyCategory["kind"],
+  label: (c: MonthlyCategory) => string,
+  partLabel: (p: { key: string; label: string }) => string
+): ReportRow[] {
+  const byId = new Map<string, { c: MonthlyCategory; values: number[]; parts: Map<string, { label: string; values: number[] }> }>();
   stmts.forEach((s, i) => {
     for (const c of s.categories) {
       if (c.kind !== kind) continue;
-      const row = byId.get(c.id) ?? { c, values: stmts.map(() => 0) };
+      const row = byId.get(c.id) ?? { c, values: stmts.map(() => 0), parts: new Map() };
       row.values[i] = c.usd;
+      if (c.name === SALARY_CATEGORY) {
+        for (const p of salaryParts(c.byPurpose)) {
+          const part = row.parts.get(p.label) ?? { label: partLabel(p), values: stmts.map(() => 0) };
+          part.values[i] = p.usd;
+          row.parts.set(p.label, part);
+        }
+      }
       byId.set(c.id, row);
     }
   });
@@ -32,12 +45,18 @@ function categoryRows(stmts: MonthlyStatement[], kind: MonthlyCategory["kind"], 
   return [...byId.values()]
     .filter((r) => magnitude(r.values) >= ZERO)
     .sort((a, b) => magnitude(b.values) - magnitude(a.values))
-    .map((r) => ({ key: `${kind}:${r.c.id}`, label: label(r.c), kind: "item", values: r.values }));
+    .flatMap((r): ReportRow[] => [
+      { key: `${kind}:${r.c.id}`, label: label(r.c), kind: "item", values: r.values },
+      ...[...r.parts.entries()]
+        .filter(([, p]) => magnitude(p.values) >= ZERO)
+        .map(([k, p]): ReportRow => ({ key: `${kind}:${r.c.id}:${k}`, label: p.label, kind: "sub", values: p.values })),
+    ]);
 }
 
 function useReport(stmts: MonthlyStatement[]) {
   const { t, locale } = useI18n();
   const label = (c: MonthlyCategory) => (locale === "zh-CN" || !c.nameEn ? c.name : c.nameEn);
+  const partLabel = (p: { key: string; label: string }) => (p.key && locale === "zh-CN" ? p.key : t(p.label));
   const all = (f: (s: MonthlyStatement) => number) => stmts.map(f);
   const any = (v: number[]) => v.some((n) => Math.abs(n) >= ZERO);
 
@@ -48,9 +67,9 @@ function useReport(stmts: MonthlyStatement[]) {
   const cash: ReportRow[] = [
     { key: "opening", label: t("Opening cash"), kind: "balance", values: all((s) => s.openingUsd) },
     { key: "income", label: t("Cash received"), kind: "section", values: all((s) => s.income) },
-    ...categoryRows(stmts, "INCOME", label),
+    ...categoryRows(stmts, "INCOME", label, partLabel),
     { key: "expense", label: t("Operating expenses"), kind: "section", values: all((s) => -s.expense) },
-    ...categoryRows(stmts, "EXPENSE", label),
+    ...categoryRows(stmts, "EXPENSE", label, partLabel),
     { key: "net", label: t("Net operating cash flow"), kind: "subtotal", values: all((s) => s.income - s.expense) },
     ...(any(transfers) ? [{ key: "transfers", label: t("Transfers and FX (net)"), kind: "item" as const, values: transfers }] : []),
     ...(any(uncategorized) ? [{ key: "uncat", label: t("Uncategorized (net)"), kind: "item" as const, values: uncategorized }] : []),
@@ -100,6 +119,7 @@ const ROW_STYLE: Record<RowKind, string> = {
   balance: "font-medium",
   section: "font-semibold",
   item: "text-ink-muted",
+  sub: "text-[12px] text-ink-soft",
   subtotal: "font-semibold border-t border-line",
   grand: "font-semibold border-t border-ink/50 border-b-[3px] border-b-ink/50 border-double",
 };
@@ -109,7 +129,7 @@ function Rows({ rows, extra }: { rows: ReportRow[]; extra?: (r: ReportRow) => Re
     <>
       {rows.map((r) => (
         <tr key={r.key} className={ROW_STYLE[r.kind]}>
-          <td className={cn("py-1 pr-6", r.kind === "item" && "pl-4")}>{r.label}</td>
+          <td className={cn("py-1 pr-6", r.kind === "item" && "pl-4", r.kind === "sub" && "py-0.5 pl-8")}>{r.label}</td>
           {r.values.map((v, i) => (
             <td key={i} className="py-1 pl-6 text-right">
               {acct(v)}
