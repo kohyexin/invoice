@@ -14,6 +14,7 @@
     "db:studio": "prisma studio",
     "db:generate": "prisma generate",
     "import:workbook": "tsx scripts/import-workbook.ts",
+    "import:balance": "tsx scripts/import-balance-sheet.ts",
     "user:create": "tsx scripts/create-user.ts"
   },
   "dependencies": {
