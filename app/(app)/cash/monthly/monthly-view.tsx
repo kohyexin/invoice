@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowDownCircle, ArrowUpCircle, ChevronDown, ChevronLeft, ChevronRight, Landmark, Receipt } from "lucide-react";
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { Badge } from "@/components/ui/badge";
+import { CopyImageButton } from "@/components/ui/copy-image-button";
+import { ComparisonReport, MonthReport } from "./cash-report";
 import { Select } from "@/components/ui/form-controls";
 import { useI18n } from "@/components/i18n/locale-provider";
 import { cn, formatDate, formatMoney, formatMonth } from "@/lib/utils";
@@ -13,9 +15,11 @@ import type { MonthlyCategory, MonthlyStatement } from "@/lib/cash";
 
 const KIND_TONE: Record<string, "success" | "danger" | "neutral" | "warning"> = { INCOME: "success", EXPENSE: "danger", TRANSFER: "neutral", NONE: "warning" };
 
-export function MonthlyView({ statement: s, months }: { statement: MonthlyStatement; months: string[] }) {
+export function MonthlyView({ statement: s, recent, months }: { statement: MonthlyStatement; recent: MonthlyStatement[]; months: string[] }) {
   const { t } = useI18n();
   const router = useRouter();
+  const monthRef = useRef<HTMLDivElement>(null);
+  const compareRef = useRef<HTMLDivElement>(null);
   const idx = months.indexOf(s.month);
   const newer = idx > 0 ? months[idx - 1] : null;
   const older = idx >= 0 && idx < months.length - 1 ? months[idx + 1] : null;
@@ -57,6 +61,7 @@ export function MonthlyView({ statement: s, months }: { statement: MonthlyStatem
           <ChevronRight className="h-4 w-4" />
         </button>
         <span className="ml-2 text-[13px] text-ink-soft">{t("{0} lines", s.lineCount)}</span>
+        <CopyImageButton target={monthRef} filename={`cash-report-${s.month}`} label="Copy month as image" className="ml-auto" />
       </div>
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -129,6 +134,31 @@ export function MonthlyView({ statement: s, months }: { statement: MonthlyStatem
             {t("Past months are shown at today's rate, so their USD totals move when rates move.")}
           </p>
         </aside>
+      </div>
+
+      <section className="glass-panel neon-edge mt-6 rounded-card">
+        <div className="flex flex-wrap items-start justify-between gap-4 border-b border-line px-5 py-4">
+          <div>
+            <h2 className="text-base font-semibold text-ink">{t("Last 3 months")}</h2>
+            <p className="mt-0.5 text-[13px] text-ink-muted">
+              {t("{0} to {1} side by side, with the average and the change on the month before.", formatMonth(`${recent[0].month}-01`), formatMonth(`${s.month}-01`))}
+            </p>
+          </div>
+          <CopyImageButton target={compareRef} filename={`cash-report-${recent[0].month}-to-${s.month}`} />
+        </div>
+        <div className="px-5 pb-5">
+          <ComparisonReport stmts={recent} />
+        </div>
+      </section>
+
+      {/* Report layouts used for the images, kept off screen so they are never cropped. */}
+      <div aria-hidden className="pointer-events-none fixed left-[-100000px] top-0">
+        <div ref={monthRef} className="inline-block bg-surface p-6 text-ink">
+          <MonthReport stmt={s} recent={recent} />
+        </div>
+        <div ref={compareRef} className="inline-block bg-surface p-6 text-ink">
+          <ComparisonReport stmts={recent} framed />
+        </div>
       </div>
     </>
   );
