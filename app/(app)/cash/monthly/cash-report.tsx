@@ -1,5 +1,6 @@
 "use client";
 
+import { BrandLogo } from "@/components/brand/brand-logo";
 import { useI18n } from "@/components/i18n/locale-provider";
 import { cn, formatDate, formatMoney, formatMonth } from "@/lib/utils";
 import type { MonthlyCategory, MonthlyStatement } from "@/lib/cash";
@@ -81,7 +82,7 @@ function ReportHeader({ title, subtitle }: { title: string; subtitle: string }) 
         <div className="text-[16px] font-semibold">{title}</div>
         <div className="text-[12px] text-ink-soft">{subtitle}</div>
       </div>
-      <div className="text-[12px] font-semibold tracking-wider text-ink-soft">STAR SAAS</div>
+      <BrandLogo className="h-6" />
     </div>
   );
 }
@@ -139,8 +140,8 @@ export function MonthReport({ stmt, recent }: { stmt: MonthlyStatement; recent: 
   const net = stmt.income - stmt.expense;
   const tiles = [
     { label: t("Closing cash"), value: acct(stmt.closingUsd) },
-    { label: t("Net operating cash flow"), value: acct(net), tone: net < 0 ? "text-red-600 dark:text-red-300" : "text-emerald-700 dark:text-emerald-300" },
-    { label: t("Avg monthly spend ({0} mo)", b.months), value: acct(b.avgSpend) },
+    { label: t("Operating cash flow"), value: acct(net), tone: net < 0 ? "text-red-600 dark:text-red-300" : "text-emerald-700 dark:text-emerald-300" },
+    { label: t("Avg spend ({0} mo)", b.months), value: acct(b.avgSpend) },
     { label: t("Runway"), value: b.runway === null ? "—" : t("{0} months", b.runway.toFixed(1)) },
   ];
 
@@ -149,8 +150,8 @@ export function MonthReport({ stmt, recent }: { stmt: MonthlyStatement; recent: 
       <ReportHeader title={t("Monthly cash report · {0}", formatMonth(`${stmt.month}-01`))} subtitle={t("All bank accounts, in USD")} />
       <div className="mb-2 grid grid-cols-4 gap-2">
         {tiles.map((x) => (
-          <div key={x.label} className="rounded-md border border-line px-3 py-2">
-            <div className="text-[11px] leading-tight text-ink-soft">{x.label}</div>
+          <div key={x.label} className="flex flex-col justify-between rounded-md border border-line px-3 py-2">
+            <div className="whitespace-nowrap text-[11px] leading-tight text-ink-soft">{x.label}</div>
             <div className={cn("mt-1 text-[15px] font-semibold", x.tone)}>{x.value}</div>
           </div>
         ))}
