@@ -2,9 +2,8 @@
 
 import { useEffect } from "react";
 import { X } from "lucide-react";
-import { BrandLogo } from "@/components/brand/brand-logo";
 import { useI18n } from "@/components/i18n/locale-provider";
-import { AccountSwitcher } from "./account-switcher";
+import { SidebarBrand } from "./sidebar-brand";
 import { SidebarNav } from "./sidebar-nav";
 
 /** Slide-in navigation for screens below lg, where the sidebar is hidden. */
@@ -41,7 +40,7 @@ export function NavDrawer({
       >
         <div className="flex items-center justify-between border-b border-line pr-2">
           <div className="flex-1 p-3">
-            <AccountSwitcher />
+            <SidebarBrand onNavigate={onClose} />
           </div>
           <button
             onClick={onClose}
@@ -53,12 +52,6 @@ export function NavDrawer({
         </div>
 
         <SidebarNav onNavigate={onClose} badges={badges} />
-
-        <div className="border-t border-line">
-          <div className="flex items-center gap-2 p-3 pl-4">
-            <BrandLogo />
-          </div>
-        </div>
       </aside>
     </div>
   );

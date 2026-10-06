@@ -11,7 +11,7 @@ export const ZH: Record<string, string> = {
   Records: "记录",
   Clients: "客户",
   Settings: "设置",
-  Workspace: "工作区",
+  "Invoice & Cash": "发票与现金",
   "My account": "我的账户",
   "Sign out": "退出登录",
   "Collapse sidebar": "收起侧边栏",

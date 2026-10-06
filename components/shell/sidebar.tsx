@@ -2,9 +2,8 @@
 
 import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { BrandLogo } from "@/components/brand/brand-logo";
 import { useI18n } from "@/components/i18n/locale-provider";
-import { AccountSwitcher } from "./account-switcher";
+import { SidebarBrand } from "./sidebar-brand";
 import { SidebarNav } from "./sidebar-nav";
 
 export function Sidebar({
@@ -27,14 +26,13 @@ export function Sidebar({
       )}
     >
       <div className="p-3">
-        <AccountSwitcher collapsed={collapsed} />
+        <SidebarBrand collapsed={collapsed} />
       </div>
 
       <SidebarNav collapsed={collapsed} badges={badges} />
 
       <div className="border-t border-line">
-        <div className={cn("flex items-center gap-2 p-3", collapsed ? "flex-col justify-center" : "justify-between")}>
-          <BrandLogo collapsed={collapsed} className={collapsed ? undefined : "pl-1.5"} />
+        <div className={cn("flex items-center p-3", collapsed ? "justify-center" : "justify-end")}>
           <button
             onClick={onToggle}
             aria-label={collapsed ? t("Expand sidebar") : t("Collapse sidebar")}
