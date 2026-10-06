@@ -39,7 +39,9 @@ enum InvoiceStatus {
   WAIVED
 }
 
-/* ------------------------------- Users ------------------------------- */
+/**
+ * ------------------------------- Users -------------------------------
+ */
 
 /// ADMIN: everything incl. users and settings. STAFF: invoices, clients,
 /// imports. VIEWER: read-only.
@@ -50,18 +52,18 @@ enum Role {
 }
 
 model User {
-  id              String    @id @default(cuid())
-  email           String    @unique
-  name            String
-  role            Role      @default(STAFF)
-  passwordHash    String
-  active          Boolean   @default(true)
+  id             String    @id @default(cuid())
+  email          String    @unique
+  name           String
+  role           Role      @default(STAFF)
+  passwordHash   String
+  active         Boolean   @default(true)
   /// Bumped on password change or deactivation; sessions carrying an older
   /// value are rejected, which signs the user out everywhere.
-  sessionVersion  Int       @default(0)
-  lastLoginAt     DateTime?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  sessionVersion Int       @default(0)
+  lastLoginAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   /// Authenticator-app (TOTP) secret, base32. Required on every sign-in;
   /// users without one enrol on their next sign-in.
@@ -75,10 +77,12 @@ model User {
   /// Wrong codes since the last successful sign-in; too many ends the attempt.
   mfaFailures       Int       @default(0)
 
-  invoicesCreated Invoice[] @relation("InvoiceCreatedBy")
-  invoicesUpdated Invoice[] @relation("InvoiceUpdatedBy")
-  resetTokens     PasswordResetToken[]
-  importDecisions ImportReview[]
+  invoicesCreated    Invoice[]            @relation("InvoiceCreatedBy")
+  invoicesUpdated    Invoice[]            @relation("InvoiceUpdatedBy")
+  resetTokens        PasswordResetToken[]
+  importDecisions    ImportReview[]
+  statementUploads   StatementImport[]    @relation("StatementUploads")
+  statementDecisions StatementLine[]      @relation("StatementDecisions")
 }
 
 /// One-time "forgot password" link; only the sha256 of the token is kept.
@@ -94,7 +98,9 @@ model PasswordResetToken {
   @@index([userId])
 }
 
-/* ----------------------------- Settings ----------------------------- */
+/**
+ * ----------------------------- Settings -----------------------------
+ */
 
 /// Issuer on the letterhead (SPARK PSP, STAR SAAS, 厦门星知付).
 model Company {
@@ -125,33 +131,35 @@ enum AccountUse {
 }
 
 model BankAccount {
-  id              String   @id @default(cuid())
+  id              String     @id @default(cuid())
   /// Short label shown in pickers, e.g. "USD (SCB Bank)".
-  label           String   @unique
+  label           String     @unique
   currency        Currency
   accountName     String
   accountNumber   String
-  bankName        String   @default("")
+  bankName        String     @default("")
   /// e.g. "ANEXT Business Account". Not printed on invoices.
-  accountType     String   @default("")
-  bankAddress     String   @default("")
-  bankCode        String   @default("")
-  branchCode      String   @default("")
-  swiftCode       String   @default("")
-  accountLocation String   @default("")
+  accountType     String     @default("")
+  bankAddress     String     @default("")
+  bankCode        String     @default("")
+  branchCode      String     @default("")
+  swiftCode       String     @default("")
+  accountLocation String     @default("")
   /// Compact accounts (e.g. Airwallex) print only name + number.
-  compact         Boolean  @default(false)
-  sortOrder       Int      @default(0)
-  active          Boolean  @default(true)
+  compact         Boolean    @default(false)
+  sortOrder       Int        @default(0)
+  active          Boolean    @default(true)
   use             AccountUse @default(INVOICE)
   /// Company whose cash this is, for the balance sheet.
   companyId       String?
-  company         Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  company         Company?   @relation(fields: [companyId], references: [id], onDelete: SetNull)
 
-  paymentRules    PaymentRule[]
-  invoices        Invoice[]
-  cashTxns        CashTxn[]
-  cashHints       CashHint[]
+  paymentRules   PaymentRule[]
+  invoices       Invoice[]
+  cashTxns       CashTxn[]
+  cashHints      CashHint[]
+  statements     StatementImport[]
+  statementLines StatementLine[]
 }
 
 /// Default payment account. The most specific match wins:
@@ -188,143 +196,147 @@ model Owner {
 }
 
 model InvoiceType {
-  id          String    @id @default(cuid())
-  name        String    @unique
+  id          String        @id @default(cuid())
+  name        String        @unique
   /// What the free-text subtype should say for this type.
   subtypeHint String?
-  sortOrder   Int       @default(0)
-  active      Boolean   @default(true)
+  sortOrder   Int           @default(0)
+  active      Boolean       @default(true)
   invoices    Invoice[]
   items       InvoiceItem[]
 }
 
 model InvoiceItem {
-  id          String        @id @default(cuid())
-  labelEn     String
-  labelZh     String        @default("")
+  id         String        @id @default(cuid())
+  labelEn    String
+  labelZh    String        @default("")
   /// Prompt for the detail line, e.g. "Month :" or "Channel :".
-  detailHint  String?
+  detailHint String?
   /// Client fee field (Jotform header) that prices this item, if any.
-  clientFee   String?
+  clientFee  String?
   /// Ledger type an invoice gets when this is its first line.
-  typeId      String?
-  type        InvoiceType?  @relation(fields: [typeId], references: [id], onDelete: SetNull)
+  typeId     String?
+  type       InvoiceType?  @relation(fields: [typeId], references: [id], onDelete: SetNull)
   /// Default subtype; {month} becomes the invoice month, e.g. SEPT 2026.
-  subtype     String        @default("")
-  sortOrder   Int           @default(0)
-  active      Boolean       @default(true)
-  lines       InvoiceLine[]
+  subtype    String        @default("")
+  sortOrder  Int           @default(0)
+  active     Boolean       @default(true)
+  lines      InvoiceLine[]
 }
 
-/* ------------------------------ Clients ------------------------------ */
+/**
+ * ------------------------------ Clients ------------------------------
+ */
 
 model Client {
-  id               String    @id @default(cuid())
-  name             String    @unique
-  alias            String    @default("")
-  agreementNo      String    @default("")
-  agreementDate    DateTime? @db.Date
+  id              String    @id @default(cuid())
+  name            String    @unique
+  alias           String    @default("")
+  agreementNo     String    @default("")
+  agreementDate   DateTime? @db.Date
   /// Further agreements (e.g. a PCI or VCC agreement next to the Whitelabel
   /// one); each can be picked as an invoice reference.
-  otherAgreements  String[]  @default([])
-  country          String    @default("")
-  incorporationNo  String    @default("")
-  address1         String    @default("")
-  address2         String    @default("")
-  address3         String    @default("")
-  city             String    @default("")
-  directorName     String    @default("")
-  contactTitle     String    @default("")
-  contactEmail     String    @default("")
-  websiteUrls      String    @default("")
+  otherAgreements String[]  @default([])
+  country         String    @default("")
+  incorporationNo String    @default("")
+  address1        String    @default("")
+  address2        String    @default("")
+  address3        String    @default("")
+  city            String    @default("")
+  directorName    String    @default("")
+  contactTitle    String    @default("")
+  contactEmail    String    @default("")
+  websiteUrls     String    @default("")
   /// Payer name when funds arrive under a different name.
-  transferName     String    @default("")
-  defaultOwnerId   String?
-  defaultOwner     Owner?    @relation(fields: [defaultOwnerId], references: [id], onDelete: SetNull)
+  transferName    String    @default("")
+  defaultOwnerId  String?
+  defaultOwner    Owner?    @relation(fields: [defaultOwnerId], references: [id], onDelete: SetNull)
   /// Fee schedule keyed by the Jotform column header.
-  fees             Json      @default("{}")
-  jotformId        String?   @unique
-  submittedAt      DateTime?
-  notes            String    @default("")
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  fees            Json      @default("{}")
+  jotformId       String?   @unique
+  submittedAt     DateTime?
+  notes           String    @default("")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
-  invoices         Invoice[]
-  importReviews    ImportReview[]
+  invoices      Invoice[]
+  importReviews ImportReview[]
 }
 
-/* ------------------------------ Invoices ----------------------------- */
+/**
+ * ------------------------------ Invoices -----------------------------
+ */
 
 model Invoice {
-  id               String        @id @default(cuid())
+  id       String        @id @default(cuid())
   /// Not unique: one invoice can be split into rows by type, and the legacy
   /// ledger reused numbers. New numbers are checked for reuse in the app.
-  number           String
-  clientId         String
-  client           Client        @relation(fields: [clientId], references: [id], onDelete: Restrict)
-  alias            String        @default("")
-  ownerId          String?
-  owner            Owner?        @relation(fields: [ownerId], references: [id], onDelete: SetNull)
-  typeId           String?
-  type             InvoiceType?  @relation(fields: [typeId], references: [id], onDelete: SetNull)
-  subtype          String        @default("")
-  generate         Generate      @default(MANUAL)
-  status           InvoiceStatus @default(SENT)
+  number   String
+  clientId String
+  client   Client        @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  alias    String        @default("")
+  ownerId  String?
+  owner    Owner?        @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  typeId   String?
+  type     InvoiceType?  @relation(fields: [typeId], references: [id], onDelete: SetNull)
+  subtype  String        @default("")
+  generate Generate      @default(MANUAL)
+  status   InvoiceStatus @default(SENT)
 
-  invoiceDate      DateTime      @db.Date
-  dueDate          DateTime?     @db.Date
-  billingFrom      DateTime?     @db.Date
-  billingTo        DateTime?     @db.Date
-  reference        String        @default("")
+  invoiceDate DateTime  @db.Date
+  dueDate     DateTime? @db.Date
+  billingFrom DateTime? @db.Date
+  billingTo   DateTime? @db.Date
+  reference   String    @default("")
 
   /// Currency the invoice lines are priced in.
-  currency         Currency      @default(USD)
-  amount           Decimal       @db.Decimal(14, 2)
+  currency    Currency  @default(USD)
+  amount      Decimal   @db.Decimal(14, 2)
   /// Booked USD equivalent — the figure every total and KPI uses.
-  usdAmount        Decimal       @db.Decimal(14, 2)
-  fxRate           Decimal?      @db.Decimal(18, 8)
+  usdAmount   Decimal   @db.Decimal(14, 2)
+  fxRate      Decimal?  @db.Decimal(18, 8)
   /// Included in amount (amount = line subtotal + tax).
-  taxAmount        Decimal       @default(0) @db.Decimal(14, 2)
+  taxAmount   Decimal   @default(0) @db.Decimal(14, 2)
   /// Already paid before this invoice; amount due = amount - amountPaid.
-  amountPaid       Decimal       @default(0) @db.Decimal(14, 2)
+  amountPaid  Decimal   @default(0) @db.Decimal(14, 2)
   /// Optional second "amount due" line in another currency.
-  altCurrency      Currency?
-  altAmount        Decimal?      @db.Decimal(14, 2)
+  altCurrency Currency?
+  altAmount   Decimal?  @db.Decimal(14, 2)
   /// Billed-to block as printed: { name, attention, lines[] }. Kept so a
   /// later client address change does not alter issued invoices.
-  billTo           Json?
+  billTo      Json?
 
-  receivedDate     DateTime?     @db.Date
+  receivedDate     DateTime? @db.Date
   /// USD equivalent received, net of fee. receivedCurrency records what
   /// actually arrived when it was not USD.
-  receivedAmount   Decimal?      @db.Decimal(14, 2)
+  receivedAmount   Decimal?  @db.Decimal(14, 2)
   receivedCurrency Currency?
   /// Bank or transfer fee in USD.
-  fee              Decimal?      @db.Decimal(14, 2)
-  paymentNote      String        @default("")
+  fee              Decimal?  @db.Decimal(14, 2)
+  paymentNote      String    @default("")
 
-  companyId        String?
-  company          Company?      @relation(fields: [companyId], references: [id], onDelete: SetNull)
-  language         Language      @default(EN)
-  bankAccountId    String?
-  bankAccount      BankAccount?  @relation(fields: [bankAccountId], references: [id], onDelete: SetNull)
-  extraAccountIds  String[]
+  companyId       String?
+  company         Company?     @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  language        Language     @default(EN)
+  bankAccountId   String?
+  bankAccount     BankAccount? @relation(fields: [bankAccountId], references: [id], onDelete: SetNull)
+  extraAccountIds String[]
 
-  notes            String        @default("")
+  notes           String   @default("")
   /// Row number in the Excel Invoice List, for tracing imported rows.
-  legacyNo         Int?          @unique
-  sourceMessageId  String?       @unique
+  legacyNo        Int?     @unique
+  sourceMessageId String?  @unique
   /// Null on rows from the workbook import or the scheduled mailbox import.
-  createdById      String?
-  createdBy        User?         @relation("InvoiceCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  updatedById      String?
-  updatedBy        User?         @relation("InvoiceUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
+  createdById     String?
+  createdBy       User?    @relation("InvoiceCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedById     String?
+  updatedBy       User?    @relation("InvoiceUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-  lines            InvoiceLine[]
-  document         InvoiceDocument?
-  cashTxns         CashTxn[]
+  lines    InvoiceLine[]
+  document InvoiceDocument?
+  cashTxns CashTxn[]
 
   @@index([number])
   @@index([status])
@@ -388,7 +400,9 @@ model AppSetting {
   updatedAt DateTime @updatedAt
 }
 
-/* --------------------------- Email import ---------------------------- */
+/**
+ * --------------------------- Email import ----------------------------
+ */
 
 enum ReviewStatus {
   /// Waiting for someone to approve or reject it.
@@ -427,7 +441,9 @@ model ImportReview {
   @@index([invoiceNumber])
 }
 
-/* ----------------------------- Cash book ----------------------------- */
+/**
+ * ----------------------------- Cash book -----------------------------
+ */
 
 /// INCOME and EXPENSE count towards profit; TRANSFER moves cash without it.
 enum CashKind {
@@ -438,13 +454,14 @@ enum CashKind {
 
 /// The 摘要 column of the balance sheet workbook.
 model CashCategory {
-  id        String    @id @default(cuid())
-  nameZh    String    @unique
-  nameEn    String    @default("")
-  kind      CashKind
-  sortOrder Int       @default(0)
-  active    Boolean   @default(true)
-  txns      CashTxn[]
+  id             String          @id @default(cuid())
+  nameZh         String          @unique
+  nameEn         String          @default("")
+  kind           CashKind
+  sortOrder      Int             @default(0)
+  active         Boolean         @default(true)
+  txns           CashTxn[]
+  statementLines StatementLine[]
 }
 
 /// One bank line, in the account's own currency. USD is worked out on totals
@@ -491,16 +508,83 @@ model CashTxn {
 /// learned when statement entries match cash book lines. Kept apart from CashTxn so workbook
 /// re-imports don't erase it.
 model CashHint {
-  id           String   @id @default(cuid())
+  id           String      @id @default(cuid())
   accountId    String
   account      BankAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
   counterparty String
   /// "in" or "out".
   direction    String
   categoryId   String?
-  purpose      String   @default("")
-  party        String   @default("")
-  updatedAt    DateTime @updatedAt
+  purpose      String      @default("")
+  party        String      @default("")
+  updatedAt    DateTime    @updatedAt
 
   @@unique([accountId, counterparty, direction])
+}
+
+/// One uploaded bank statement month, kept so its balances can be checked against the cash book.
+model StatementImport {
+  /// "BANK:accountNumber:CUR:yyyy-mm", the prefix of its lines' keys.
+  id           String          @id
+  accountId    String
+  account      BankAccount     @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  file         String          @default("")
+  currency     String
+  periodStart  DateTime        @db.Date
+  periodEnd    DateTime        @db.Date
+  opening      Decimal         @db.Decimal(16, 2)
+  closing      Decimal         @db.Decimal(16, 2)
+  uploadedAt   DateTime        @default(now())
+  uploadedById String?
+  uploadedBy   User?           @relation("StatementUploads", fields: [uploadedById], references: [id], onDelete: SetNull)
+  lines        StatementLine[]
+
+  @@index([accountId, periodStart])
+}
+
+enum StatementLineStatus {
+  /// Waiting for someone to approve or reject it.
+  PENDING
+  /// Added to the cash book.
+  IMPORTED
+  /// Rejected; uploading the statement again doesn't queue it again.
+  REJECTED
+  /// The workbook now has this entry, so the workbook's line is used instead.
+  IN_EXCEL
+}
+
+/// A line from a bank statement that the cash book doesn't have yet. Nothing reaches the
+/// cash book until a user approves it.
+model StatementLine {
+  id           String              @id @default(cuid())
+  /// Same as CashTxn.importKey once approved.
+  key          String              @unique
+  statementId  String
+  statement    StatementImport     @relation(fields: [statementId], references: [id], onDelete: Cascade)
+  accountId    String
+  account      BankAccount         @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  /// "opening", "interest" or "entry".
+  kind         String
+  date         DateTime            @db.Date
+  amountIn     Decimal             @default(0) @db.Decimal(16, 2)
+  amountOut    Decimal             @default(0) @db.Decimal(16, 2)
+  categoryId   String?
+  category     CashCategory?       @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  purpose      String              @default("")
+  party        String              @default("")
+  memo         String              @default("")
+  /// The statement's own wording for the entry.
+  description  String              @default("")
+  counterparty String              @default("")
+  /// "rule", "history" or "none": where the category came from.
+  suggested    String              @default("none")
+  status       StatementLineStatus @default(PENDING)
+  cashTxnId    String?
+  decidedAt    DateTime?
+  decidedById  String?
+  decidedBy    User?               @relation("StatementDecisions", fields: [decidedById], references: [id], onDelete: SetNull)
+  createdAt    DateTime            @default(now())
+
+  @@index([status])
+  @@index([accountId])
 }

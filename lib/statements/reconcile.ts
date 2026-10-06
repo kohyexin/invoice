@@ -4,8 +4,8 @@ import { round2 } from "@/lib/utils";
 import { BALANCE_USES } from "@/lib/cash";
 import type { ParsedStatement, StatementEntry } from "./types";
 
-/* Compares statements with the cash book. Nothing here writes; the import
-   page shows the result and applyStatements() inserts what was chosen. */
+/* Compares statements with the cash book and the approval queue. Nothing here
+   writes; stageStatements() queues the proposed lines for approval. */
 
 const MATCH_DAYS = 3;
 const DAY = 86_400_000;
@@ -22,6 +22,8 @@ export type ProposedLine = {
   purpose: string;
   party: string;
   memo: string;
+  /** The statement's own wording, for entries. */
+  description: string;
   counterparty: string;
   /** Where the suggested category came from. */
   suggested: "history" | "rule" | "none";
@@ -55,14 +57,23 @@ export type MonthPreview = {
   /** Book balance before the period / at its end, from what is saved now. */
   baseOpening: number;
   baseClosing: number;
+  /** Book balance at the period end once every waiting and newly queued line is approved. */
+  closingAfterApproval: number;
   /** Opening difference on a later statement; shown as a warning only. */
   openingWarning: number | null;
   interestTotal: number;
   interestAlready: boolean;
   matched: MatchedEntry[];
   proposed: ProposedLine[];
+  /** Lines from this statement already waiting for approval, or rejected before. */
+  waiting: number;
+  rejected: number;
+  /** Waiting entry lines that the cash book now has (e.g. added to Excel since). */
+  caughtUp: string[];
   bookOnly: BookOnly[];
 };
+
+type QueueLine = { id: string; key: string; status: string; date: Date; amountIn: unknown; amountOut: unknown };
 
 export type DetailField = { key: "accountName" | "bankName" | "accountType" | "accountNumber" | "accountLocation"; label: string; current: string; statement: string; tick: boolean };
 export type AccountDetails = { accountId: string; label: string; fields: DetailField[] };
@@ -130,12 +141,25 @@ export async function reconcileStatements(
     }
     return books.get(accountId)!;
   };
+  const queues = new Map<string, QueueLine[]>();
+  const queueOf = async (accountId: string) => {
+    if (!queues.has(accountId)) {
+      queues.set(
+        accountId,
+        await prisma.statementLine.findMany({
+          where: { accountId },
+          select: { id: true, key: true, status: true, date: true, amountIn: true, amountOut: true },
+        }),
+      );
+    }
+    return queues.get(accountId)!;
+  };
 
   const ordered = [...files].sort((a, b) => a.statement.periodStart.localeCompare(b.statement.periodStart));
   const months: MonthPreview[] = [];
   const details = new Map<string, AccountDetails>();
-  /** Lines proposed by earlier months of this upload, per account. */
-  const pending = new Map<string, ProposedLine[]>();
+  /** Lines waiting for approval plus those proposed by earlier months of this upload, per account. */
+  const pending = new Map<string, { date: string; amountIn: number; amountOut: number }[]>();
   const used = new Set<string>();
 
   for (const { name, statement: s } of ordered) {
@@ -163,11 +187,15 @@ export async function reconcileStatements(
         closing: section.closing,
         baseOpening: 0,
         baseClosing: 0,
+        closingAfterApproval: 0,
         openingWarning: null,
         interestTotal,
         interestAlready: false,
         matched: [],
         proposed: [],
+        waiting: 0,
+        rejected: 0,
+        caughtUp: [],
         bookOnly: [],
       };
       months.push(month);
@@ -192,25 +220,38 @@ export async function reconcileStatements(
       }
 
       const book = await bookOf(account.id);
-      const keys = new Set(book.map((l) => l.importKey).filter(Boolean) as string[]);
-      const earlier = pending.get(account.id) ?? [];
+      const queue = await queueOf(account.id);
+      const queued = new Map(queue.map((q) => [q.key, q]));
+      const keys = new Set([...(book.map((l) => l.importKey).filter(Boolean) as string[]), ...queued.keys()]);
+      // Lines waiting for approval count as booked when checking balances.
+      if (!pending.has(account.id)) {
+        pending.set(
+          account.id,
+          queue.filter((q) => q.status === "PENDING").map((q) => ({ date: iso(q.date), amountIn: Number(q.amountIn), amountOut: Number(q.amountOut) })),
+        );
+      }
+      const earlier = pending.get(account.id)!;
       const start = utc(s.periodStart);
       const end = utc(s.periodEnd);
       const sumBook = (pred: (d: Date) => boolean) => round2(book.filter((l) => pred(l.date)).reduce((t, l) => t + net(l), 0));
       const sumPending = (pred: (d: Date) => boolean) => round2(earlier.filter((l) => pred(utc(l.date))).reduce((t, l) => t + l.amountIn - l.amountOut, 0));
       month.baseOpening = sumBook((d) => d < start);
       month.baseClosing = sumBook((d) => d <= end);
+      for (const q of queue) {
+        if (!q.key.startsWith(`${prefix}:`)) continue;
+        if (q.status === "PENDING") month.waiting++;
+        if (q.status === "REJECTED") month.rejected++;
+      }
 
       const add = (line: Omit<ProposedLine, "accountId">) => {
-        const full = { ...line, accountId: account.id };
-        month.proposed.push(full);
-        (pending.get(account.id) ?? pending.set(account.id, []).get(account.id)!).push(full);
+        month.proposed.push({ ...line, accountId: account.id });
+        earlier.push({ date: line.date, amountIn: line.amountIn, amountOut: line.amountOut });
       };
 
       // Opening: on the first statement for the account, bring the book to the bank's opening balance.
       const bookOpening = round2(month.baseOpening + sumPending((d) => d < start));
       const openingGap = round2(section.opening - bookOpening);
-      const firstImport = !book.some((l) => l.importKey) && earlier.length === 0;
+      const firstImport = !book.some((l) => l.importKey) && queue.length === 0 && !months.some((m) => m !== month && m.accountId === account.id);
       if (Math.abs(openingGap) >= 0.005) {
         if (firstImport && !keys.has(`${prefix}:opening`)) {
           const before = new Date(start.getTime() - DAY);
@@ -224,6 +265,7 @@ export async function reconcileStatements(
             purpose: "存款利息",
             party: "",
             memo: `Interest before ${monthName(s.periodStart)}, not recorded line by line; brings the book to the statement opening balance`,
+            description: "",
             counterparty: "",
             suggested: "rule",
           });
@@ -237,6 +279,10 @@ export async function reconcileStatements(
       const periodMatched = new Set<string>();
       for (const e of section.entries.filter((x) => !x.isInterest)) {
         const amount = round2(e.credit - e.debit);
+        const n = (seen.get(`${e.date}:${amount}`) ?? 0) + 1;
+        seen.set(`${e.date}:${amount}`, n);
+        const key = entryKey(prefix, e.date, amount, n);
+        const inQueue = queued.get(key);
         const at = utc(e.date);
         const best = book
           .filter((l) => !used.has(l.id) && !isFixedKey(l.importKey) && net(l) === amount && Math.abs(l.date.getTime() - at.getTime()) <= MATCH_DAYS * DAY)
@@ -247,11 +293,15 @@ export async function reconcileStatements(
           periodMatched.add(best.id);
           hints.set(`${account.id}|${e.counterparty}|${dir}`, { categoryId: best.categoryId, purpose: best.purpose, party: best.party });
           month.matched.push({ date: e.date, description: e.description, net: amount, bookDate: iso(best.date), bookPurpose: best.purpose, bookParty: best.party, bookCategoryId: best.categoryId, counterparty: e.counterparty });
+          if (inQueue?.status === "PENDING" && best.importKey !== key) {
+            month.caughtUp.push(inQueue.id);
+            const i = earlier.findIndex((l) => l.date === iso(inQueue.date) && round2(l.amountIn - l.amountOut) === amount);
+            if (i >= 0) earlier.splice(i, 1);
+          }
           continue;
         }
-        const n = (seen.get(`${e.date}:${amount}`) ?? 0) + 1;
-        seen.set(`${e.date}:${amount}`, n);
-        add(entryLine(prefix, e, amount, n, hints.get(`${account.id}|${e.counterparty}|${dir}`)));
+        if (keys.has(key)) continue;
+        add(entryLine(key, e, amount, hints.get(`${account.id}|${e.counterparty}|${dir}`)));
       }
 
       // Lines in the book for this period that the bank doesn't have.
@@ -263,7 +313,7 @@ export async function reconcileStatements(
       // Interest: one line for the month.
       if (Math.abs(interestTotal) >= 0.005) {
         if (keys.has(`${prefix}:interest`)) {
-          month.interestAlready = true;
+          month.interestAlready = queued.get(`${prefix}:interest`)?.status !== "REJECTED";
         } else {
           add({
             key: `${prefix}:interest`,
@@ -275,20 +325,26 @@ export async function reconcileStatements(
             purpose: "存款利息",
             party: "",
             memo: `Interest Earned, ${monthName(s.periodStart)} (${s.bank} statement)`,
+            description: "",
             counterparty: "",
             suggested: "rule",
           });
         }
       }
+      month.closingAfterApproval = round2(month.baseClosing + sumPending((d) => d <= end));
     }
   }
 
   return { months, accounts: [...details.values()], candidates };
 }
 
-function entryLine(prefix: string, e: StatementEntry, amount: number, n: number, hint: Hint | undefined): Omit<ProposedLine, "accountId"> {
+function entryKey(prefix: string, date: string, amount: number, n: number) {
+  return `${prefix}:${date}:${amount.toFixed(2)}:${n}`;
+}
+
+function entryLine(key: string, e: StatementEntry, amount: number, hint: Hint | undefined): Omit<ProposedLine, "accountId"> {
   return {
-    key: `${prefix}:${e.date}:${amount.toFixed(2)}:${n}`,
+    key,
     kind: "entry",
     date: e.date,
     amountIn: Math.max(amount, 0),
@@ -297,6 +353,7 @@ function entryLine(prefix: string, e: StatementEntry, amount: number, n: number,
     purpose: hint?.purpose || e.description,
     party: hint?.party || e.counterparty,
     memo: e.description,
+    description: e.description,
     counterparty: e.counterparty,
     suggested: hint ? "history" : "none",
   };

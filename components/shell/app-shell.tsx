@@ -14,7 +14,10 @@ export function AppShell({ children, alerts }: { children: React.ReactNode; aler
   const [collapsed, setCollapsed] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
   const pathname = usePathname();
-  const badges = alerts.imports?.count ? { "/imports": alerts.imports.count } : undefined;
+  const badgeList: Record<string, number> = {};
+  if (alerts.imports?.count) badgeList["/imports"] = alerts.imports.count;
+  if (alerts.statementLines?.count) badgeList["/cash/import"] = alerts.statementLines.count;
+  const badges = Object.keys(badgeList).length ? badgeList : undefined;
 
   useEffect(() => {
     setCollapsed(window.localStorage.getItem(COLLAPSE_KEY) === "1");

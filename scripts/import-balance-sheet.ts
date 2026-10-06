@@ -231,13 +231,13 @@ async function main() {
 
     // Entries added from a bank statement that the workbook now has too: keep the workbook's copy.
     // Statement interest and opening adjustments stay, since the workbook doesn't record interest.
-    const fromStatements = (await prisma.cashTxn.findMany({ where: { accountId, importKey: { not: null } } })).filter(
-      (t) => !t.importKey!.endsWith(":interest") && !t.importKey!.endsWith(":opening"),
-    );
-    if (fromStatements.length) {
+    // Statement entries still waiting for approval are closed the same way.
+    const isEntryKey = (key: string) => !key.endsWith(":interest") && !key.endsWith(":opening");
+    const fromStatements = (await prisma.cashTxn.findMany({ where: { accountId, importKey: { not: null } } })).filter((t) => isEntryKey(t.importKey!));
+    const waiting = (await prisma.statementLine.findMany({ where: { accountId, status: "PENDING", kind: "entry" } })).filter((l) => isEntryKey(l.key));
+    if (fromStatements.length || waiting.length) {
       const used = new Set<number>();
-      const caughtUp: string[] = [];
-      for (const t of fromStatements) {
+      const findInWorkbook = (t: { date: Date; amountIn: unknown; amountOut: unknown }) => {
         const net = Math.round((Number(t.amountIn) - Number(t.amountOut)) * 100) / 100;
         const idx = lines.findIndex(
           (l, i) =>
@@ -245,14 +245,22 @@ async function main() {
             Math.round((l.amountIn - l.amountOut) * 100) / 100 === net &&
             Math.abs(l.date.getTime() - t.date.getTime()) <= 3 * 86_400_000,
         );
-        if (idx >= 0) {
-          used.add(idx);
-          caughtUp.push(t.id);
-        }
-      }
-      if (caughtUp.length) {
-        await prisma.cashTxn.deleteMany({ where: { id: { in: caughtUp } } });
-        console.log(`${acc.sheet}: removed ${caughtUp.length} statement line(s) now also in the workbook.`);
+        if (idx >= 0) used.add(idx);
+        return idx >= 0;
+      };
+      const caughtUp = fromStatements.filter(findInWorkbook);
+      const caughtUpWaiting = waiting.filter(findInWorkbook);
+      const keys = [...caughtUp.map((t) => t.importKey!), ...caughtUpWaiting.map((l) => l.key)];
+      if (keys.length) {
+        await prisma.$transaction([
+          prisma.cashTxn.deleteMany({ where: { id: { in: caughtUp.map((t) => t.id) } } }),
+          prisma.statementLine.updateMany({
+            where: { key: { in: keys }, status: { in: ["PENDING", "IMPORTED"] } },
+            data: { status: "IN_EXCEL", cashTxnId: null, decidedAt: new Date(), decidedById: null },
+          }),
+        ]);
+        if (caughtUp.length) console.log(`${acc.sheet}: removed ${caughtUp.length} statement line(s) now also in the workbook.`);
+        if (caughtUpWaiting.length) console.log(`${acc.sheet}: closed ${caughtUpWaiting.length} waiting statement line(s) now in the workbook.`);
       }
     }
   }

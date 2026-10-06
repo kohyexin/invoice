@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { AlarmClock, Bell, Inbox } from "lucide-react";
+import { AlarmClock, Bell, Inbox, Landmark } from "lucide-react";
 import { cn, formatDate, formatMoney } from "@/lib/utils";
 import type { ShellAlerts } from "@/lib/shell-alerts";
 import { useI18n } from "@/components/i18n/locale-provider";
@@ -14,7 +14,7 @@ export function NotificationsBell({ alerts }: { alerts: ShellAlerts }) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const tabs: { id: Tab; label: string; count: number }[] = [
-    ...(alerts.imports ? [{ id: "imports" as const, label: "To review", count: alerts.imports.count }] : []),
+    ...(alerts.imports ? [{ id: "imports" as const, label: "To review", count: alerts.imports.count + (alerts.statementLines?.count ?? 0) }] : []),
     { id: "overdue", label: "Overdue", count: alerts.overdue.count },
   ];
   const [tab, setTab] = useState<Tab>((tabs.find((x) => x.count > 0) ?? tabs[0]).id);
@@ -74,10 +74,20 @@ export function NotificationsBell({ alerts }: { alerts: ShellAlerts }) {
 
             <div className="min-h-0 flex-1 divide-y divide-line/50 overflow-y-auto">
               {tab === "imports" && alerts.imports ? (
-                alerts.imports.items.length === 0 ? (
+                alerts.imports.items.length === 0 && !alerts.statementLines?.count ? (
                   <Empty text={t("No mailbox imports are waiting for review.")} />
                 ) : (
-                  alerts.imports.items.map((r) => (
+                  <>
+                  {!!alerts.statementLines?.count && (
+                    <Row
+                      href="/cash/import"
+                      onNavigate={close}
+                      icon={<Landmark className="h-4 w-4" />}
+                      title={t("{0} bank statement lines waiting", alerts.statementLines.count)}
+                      detail={t("Approve or reject them on Import statement.")}
+                    />
+                  )}
+                  {alerts.imports.items.map((r) => (
                     <Row
                       key={r.id}
                       href="/imports"
@@ -87,7 +97,8 @@ export function NotificationsBell({ alerts }: { alerts: ShellAlerts }) {
                       detail={r.reason}
                       meta={formatDate(r.at)}
                     />
-                  ))
+                  ))}
+                  </>
                 )
               ) : alerts.overdue.items.length === 0 ? (
                 <Empty text={t("No invoices are past their due date.")} />

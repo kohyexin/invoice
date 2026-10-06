@@ -6,6 +6,8 @@ import { addDays, todayUtc } from "@/lib/utils";
 export type ShellAlerts = {
   /** Mailbox imports waiting for review; null when the user can't act on them. */
   imports: { count: number; items: { id: string; subject: string; reason: string; at: string }[] } | null;
+  /** Bank statement lines waiting for approval; null when the user can't act on them. */
+  statementLines: { count: number } | null;
   overdue: { count: number; items: { id: string; number: string; client: string; dueDate: string; usd: number }[] };
 };
 
@@ -15,7 +17,7 @@ const TAKE = 12;
 export async function loadShellAlerts(role: RoleName): Promise<ShellAlerts> {
   const today = todayUtc();
   // Same rule as the ledger: no due date means invoice date + 7 days.
-  const [sent, imports] = await Promise.all([
+  const [sent, imports, statementLines] = await Promise.all([
     prisma.invoice.findMany({
       where: {
         status: "SENT",
@@ -34,6 +36,7 @@ export async function loadShellAlerts(role: RoleName): Promise<ShellAlerts> {
           }),
         ])
       : null,
+    hasRole(role, "STAFF") ? prisma.statementLine.count({ where: { status: "PENDING" } }) : null,
   ]);
 
   const overdue = sent
@@ -50,6 +53,7 @@ export async function loadShellAlerts(role: RoleName): Promise<ShellAlerts> {
         at: (r.receivedAt ?? r.createdAt).toISOString(),
       })),
     },
+    statementLines: statementLines === null ? null : { count: statementLines },
     overdue: {
       count: overdue.length,
       items: overdue.slice(0, TAKE).map(({ r, due }) => ({
