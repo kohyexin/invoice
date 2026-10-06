@@ -8,7 +8,7 @@ function monthsBefore(ym: string, n: number) {
   return d.toISOString().slice(0, 7);
 }
 
-export default async function MonthlyStatementPage({ searchParams }: { searchParams: { month?: string } }) {
+export default async function MonthlyStatementPage({ searchParams }: { searchParams: { month?: string; view?: string } }) {
   const months = await cashMonths();
   const today = new Date().toISOString().slice(0, 7);
   const requested = searchParams.month && /^\d{4}-\d{2}$/.test(searchParams.month) ? searchParams.month : null;
@@ -24,7 +24,12 @@ export default async function MonthlyStatementPage({ searchParams }: { searchPar
         title="Monthly statement"
         subtitle="Opening balance, income, expenses and closing balance for a month. USD totals use the latest Yahoo Finance rate."
       />
-      <MonthlyView statement={statement} recent={[older2, older1, statement]} months={months.includes(month) ? months : [month, ...months]} />
+      <MonthlyView
+        statement={statement}
+        recent={[older2, older1, statement]}
+        months={months.includes(month) ? months : [month, ...months]}
+        initialView={searchParams.view === "3m" ? "3m" : "month"}
+      />
     </>
   );
 }

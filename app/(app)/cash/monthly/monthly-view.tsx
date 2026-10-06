@@ -8,27 +8,42 @@ import { KpiCard } from "@/components/dashboard/kpi-card";
 import { Badge } from "@/components/ui/badge";
 import { CopyImageButton } from "@/components/ui/copy-image-button";
 import { ComparisonReport, MonthReport } from "./cash-report";
-import { Select } from "@/components/ui/form-controls";
+import { Segmented, Select } from "@/components/ui/form-controls";
 import { useI18n } from "@/components/i18n/locale-provider";
 import { cn, formatDate, formatMoney, formatMonth } from "@/lib/utils";
 import type { MonthlyCategory, MonthlyStatement } from "@/lib/cash";
 
 const KIND_TONE: Record<string, "success" | "danger" | "neutral" | "warning"> = { INCOME: "success", EXPENSE: "danger", TRANSFER: "neutral", NONE: "warning" };
 
-export function MonthlyView({ statement: s, recent, months }: { statement: MonthlyStatement; recent: MonthlyStatement[]; months: string[] }) {
+export type MonthlyViewMode = "month" | "3m";
+
+const href = (month: string, view: MonthlyViewMode) => `/cash/monthly?month=${month}${view === "3m" ? "&view=3m" : ""}`;
+
+export function MonthlyView({
+  statement: s,
+  recent,
+  months,
+  initialView,
+}: {
+  statement: MonthlyStatement;
+  recent: MonthlyStatement[];
+  months: string[];
+  initialView: MonthlyViewMode;
+}) {
   const { t } = useI18n();
   const router = useRouter();
   const monthRef = useRef<HTMLDivElement>(null);
   const compareRef = useRef<HTMLDivElement>(null);
+  const [view, setView] = useState(initialView);
   const idx = months.indexOf(s.month);
   const newer = idx > 0 ? months[idx - 1] : null;
   const older = idx >= 0 && idx < months.length - 1 ? months[idx + 1] : null;
-  const go = (m: string) => router.push(`/cash/monthly?month=${m}`);
-
-  const income = s.categories.filter((c) => c.kind === "INCOME");
-  const expense = s.categories.filter((c) => c.kind === "EXPENSE").sort((a, b) => a.usd - b.usd);
-  const other = s.categories.filter((c) => c.kind === "TRANSFER" || c.kind === "NONE");
-  const net = s.income - s.expense;
+  const go = (m: string) => router.push(href(m, view));
+  const switchView = (v: MonthlyViewMode) => {
+    setView(v);
+    window.history.replaceState(null, "", href(s.month, v));
+  };
+  const range = t("{0} to {1}", formatMonth(`${recent[0].month}-01`), formatMonth(`${s.month}-01`));
 
   return (
     <>
@@ -60,10 +75,64 @@ export function MonthlyView({ statement: s, recent, months }: { statement: Month
         >
           <ChevronRight className="h-4 w-4" />
         </button>
-        <span className="ml-2 text-[13px] text-ink-soft">{t("{0} lines", s.lineCount)}</span>
-        <CopyImageButton target={monthRef} filename={`cash-report-${s.month}`} label="Copy month as image" className="ml-auto" />
+        <div className="ml-2">
+          <Segmented
+            value={view}
+            options={[
+              { value: "month", label: "Month" },
+              { value: "3m", label: "Last 3 months" },
+            ]}
+            onChange={switchView}
+          />
+        </div>
+        <span className="ml-2 text-[13px] text-ink-soft">{view === "month" ? t("{0} lines", s.lineCount) : range}</span>
+        {view === "month" ? (
+          <CopyImageButton key="month" target={monthRef} filename={`cash-report-${s.month}`} className="ml-auto" />
+        ) : (
+          <CopyImageButton key="3m" target={compareRef} filename={`cash-report-${recent[0].month}-to-${s.month}`} className="ml-auto" />
+        )}
       </div>
 
+      {view === "3m" ? (
+        <section className="glass-panel neon-edge rounded-card">
+          <div className="border-b border-line px-5 py-4">
+            <h2 className="text-base font-semibold text-ink">{t("Last 3 months")}</h2>
+            <p className="mt-0.5 text-[13px] text-ink-muted">{t("{0} side by side, with the 3-month average and the change on the month before. A positive change means more cash.", range)}</p>
+          </div>
+          <div className="px-5 pb-5">
+            <ComparisonReport stmts={recent} />
+          </div>
+          <p className="border-t border-line px-5 py-3 text-[12px] text-ink-soft">
+            {s.ratesUpdatedAt ? t("Rates updated {0}", formatDate(s.ratesUpdatedAt)) : t("No rates stored yet.")}{" "}
+            {t("Past months are shown at today's rate, so their USD totals move when rates move.")}
+          </p>
+        </section>
+      ) : (
+        <MonthBody statement={s} />
+      )}
+
+      {/* Report layouts used for the images, kept off screen so they are never cropped. */}
+      <div aria-hidden className="pointer-events-none fixed left-[-100000px] top-0">
+        <div ref={monthRef} className="inline-block bg-surface p-6 text-ink">
+          <MonthReport stmt={s} recent={recent} />
+        </div>
+        <div ref={compareRef} className="inline-block bg-surface p-6 text-ink">
+          <ComparisonReport stmts={recent} framed />
+        </div>
+      </div>
+    </>
+  );
+}
+
+function MonthBody({ statement: s }: { statement: MonthlyStatement }) {
+  const { t } = useI18n();
+  const income = s.categories.filter((c) => c.kind === "INCOME");
+  const expense = s.categories.filter((c) => c.kind === "EXPENSE").sort((a, b) => a.usd - b.usd);
+  const other = s.categories.filter((c) => c.kind === "TRANSFER" || c.kind === "NONE");
+  const net = s.income - s.expense;
+
+  return (
+    <>
       <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard icon={Landmark} label="Opening balance" value={formatMoney(s.openingUsd)} footer={<Hint>{t("All accounts at the start of the month (USD)")}</Hint>} />
         <KpiCard icon={ArrowDownCircle} tone="success" label="Income" value={formatMoney(s.income)} footer={<Hint>{t("Money received, net of refunds (USD)")}</Hint>} />
@@ -134,31 +203,6 @@ export function MonthlyView({ statement: s, recent, months }: { statement: Month
             {t("Past months are shown at today's rate, so their USD totals move when rates move.")}
           </p>
         </aside>
-      </div>
-
-      <section className="glass-panel neon-edge mt-6 rounded-card">
-        <div className="flex flex-wrap items-start justify-between gap-4 border-b border-line px-5 py-4">
-          <div>
-            <h2 className="text-base font-semibold text-ink">{t("Last 3 months")}</h2>
-            <p className="mt-0.5 text-[13px] text-ink-muted">
-              {t("{0} to {1} side by side, with the average and the change on the month before.", formatMonth(`${recent[0].month}-01`), formatMonth(`${s.month}-01`))}
-            </p>
-          </div>
-          <CopyImageButton target={compareRef} filename={`cash-report-${recent[0].month}-to-${s.month}`} />
-        </div>
-        <div className="px-5 pb-5">
-          <ComparisonReport stmts={recent} />
-        </div>
-      </section>
-
-      {/* Report layouts used for the images, kept off screen so they are never cropped. */}
-      <div aria-hidden className="pointer-events-none fixed left-[-100000px] top-0">
-        <div ref={monthRef} className="inline-block bg-surface p-6 text-ink">
-          <MonthReport stmt={s} recent={recent} />
-        </div>
-        <div ref={compareRef} className="inline-block bg-surface p-6 text-ink">
-          <ComparisonReport stmts={recent} framed />
-        </div>
       </div>
     </>
   );
