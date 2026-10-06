@@ -32,7 +32,7 @@ export function NotificationsBell({ alerts }: { alerts: ShellAlerts }) {
         <Bell className="h-4 w-4" />
         {total > 0 && (
           <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger px-1 text-[10px] font-bold leading-none text-white ring-2 ring-surface">
-            {total > 9 ? "9+" : total}
+            {total > 99 ? "99+" : total}
           </span>
         )}
       </button>

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Check, ChevronDown, LogOut, Menu, Plus, Search, Settings, UserRound } from "lucide-react";
+import { Check, ChevronDown, LogOut, Menu, Search, Settings, UserRound } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { LOCALES } from "@/lib/i18n";
 import { hasRole, ROLE_LABEL } from "@/lib/roles";
@@ -14,26 +14,12 @@ import { CommandPalette } from "@/components/command/command-palette";
 import { NotificationsBell } from "@/components/notifications/notifications-bell";
 import { initials, signOut, useCurrentUser } from "./user-context";
 
-function IconButton({ label, children, href }: { label: string; children: React.ReactNode; href: string }) {
-  return (
-    <Link
-      href={href}
-      aria-label={label}
-      title={label}
-      className="relative flex h-8 w-8 items-center justify-center rounded-control text-ink-muted transition-colors hover:bg-overlay/[0.06] hover:text-ink"
-    >
-      {children}
-    </Link>
-  );
-}
-
 export function Header({ alerts, onOpenNav }: { alerts: ShellAlerts; onOpenNav: () => void }) {
   const [profileOpen, setProfileOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [shortcutHint, setShortcutHint] = useState("⌘K");
   const { locale, setLocale, t } = useI18n();
   const user = useCurrentUser();
-  const canEdit = hasRole(user.role, "STAFF");
 
   const menuItems = [
     { label: "My account", icon: UserRound, href: "/account", show: true },
@@ -96,14 +82,6 @@ export function Header({ alerts, onOpenNav }: { alerts: ShellAlerts; onOpenNav: 
 
           <NotificationsBell alerts={alerts} />
 
-          {canEdit && (
-            <div className="hidden items-center gap-0.5 md:flex">
-              <IconButton label={t("New invoice")} href="/invoices/new">
-                <Plus className="h-4 w-4" />
-              </IconButton>
-            </div>
-          )}
-
           <div className="mx-1.5 hidden h-6 w-px bg-line md:block" />
 
           {/* Profile */}
@@ -152,16 +130,6 @@ export function Header({ alerts, onOpenNav }: { alerts: ShellAlerts; onOpenNav: 
                     </div>
                   </div>
                   <div className="py-1">
-                    {canEdit && (
-                      <Link
-                        href="/invoices/new"
-                        onClick={() => setProfileOpen(false)}
-                        className="flex items-center gap-2.5 rounded-control px-2.5 py-2 text-sm text-ink-muted transition-colors hover:bg-overlay/[0.05] hover:text-ink md:hidden"
-                      >
-                        <Plus className="h-4 w-4" />
-                        {t("New invoice")}
-                      </Link>
-                    )}
                     {menuItems.map(({ label, icon: Icon, href }) => (
                       <Link
                         key={label}
