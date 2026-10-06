@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Search } from "lucide-react";
+import { FileUp, Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { DataTable, type Column, type FilterDef } from "@/components/ui/data-table";
@@ -156,10 +156,19 @@ export function CashLedgerView({
           />
         </div>
         {canEdit && (
-          <Button className="ml-auto" variant="secondary" onClick={() => setEditing("new")}>
-            <Plus className="h-4 w-4" />
-            {t("Add cash line")}
-          </Button>
+          <div className="ml-auto flex gap-2">
+            <Link
+              href="/cash/import"
+              className="inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-control border border-overlay/10 bg-overlay/[0.04] px-4 text-sm font-medium text-ink transition-all hover:bg-overlay/[0.08]"
+            >
+              <FileUp className="h-4 w-4" />
+              {t("Import statement")}
+            </Link>
+            <Button variant="secondary" onClick={() => setEditing("new")}>
+              <Plus className="h-4 w-4" />
+              {t("Add cash line")}
+            </Button>
+          </div>
         )}
       </div>
 

@@ -210,11 +210,17 @@ async function main() {
           accountName: acc.accountName,
           accountNumber: "",
           bankName: acc.bankName,
+          ...acc.details,
           use: "BALANCE",
           companyId,
           sortOrder: maxSort + 1 + i,
         },
       });
+    } else if (acc.details) {
+      const fill: Record<string, string> = {};
+      const current = account as unknown as Record<string, unknown>;
+      for (const [key, value] of Object.entries(acc.details)) if (value && !current[key]) fill[key] = value;
+      if (Object.keys(fill).length) account = await prisma.bankAccount.update({ where: { id: account.id }, data: fill });
     }
 
     const accountId = account.id;
@@ -222,6 +228,33 @@ async function main() {
       prisma.cashTxn.deleteMany({ where: { sourceSheet: acc.sheet } }),
       prisma.cashTxn.createMany({ data: lines.map((l) => ({ ...l, accountId, sourceSheet: acc.sheet })) }),
     ]);
+
+    // Entries added from a bank statement that the workbook now has too: keep the workbook's copy.
+    // Statement interest and opening adjustments stay, since the workbook doesn't record interest.
+    const fromStatements = (await prisma.cashTxn.findMany({ where: { accountId, importKey: { not: null } } })).filter(
+      (t) => !t.importKey!.endsWith(":interest") && !t.importKey!.endsWith(":opening"),
+    );
+    if (fromStatements.length) {
+      const used = new Set<number>();
+      const caughtUp: string[] = [];
+      for (const t of fromStatements) {
+        const net = Math.round((Number(t.amountIn) - Number(t.amountOut)) * 100) / 100;
+        const idx = lines.findIndex(
+          (l, i) =>
+            !used.has(i) &&
+            Math.round((l.amountIn - l.amountOut) * 100) / 100 === net &&
+            Math.abs(l.date.getTime() - t.date.getTime()) <= 3 * 86_400_000,
+        );
+        if (idx >= 0) {
+          used.add(idx);
+          caughtUp.push(t.id);
+        }
+      }
+      if (caughtUp.length) {
+        await prisma.cashTxn.deleteMany({ where: { id: { in: caughtUp } } });
+        console.log(`${acc.sheet}: removed ${caughtUp.length} statement line(s) now also in the workbook.`);
+      }
+    }
   }
 
   const head = ["Sheet", "Account", "Lines", "Recomputed", "Workbook", "Check", "Invoices linked", "Other month", "", ""];

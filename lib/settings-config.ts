@@ -77,6 +77,7 @@ export const SETTINGS_ENTITIES = {
       { key: "accountName", label: "Account name", kind: "text", required: true },
       { key: "accountNumber", label: "Account number", kind: "text", required: true, mono: true },
       { key: "bankName", label: "Bank name", kind: "text" },
+      { key: "accountType", label: "Account type", kind: "text", hint: "e.g. ANEXT Business Account. Not printed on invoices" },
       { key: "bankAddress", label: "Bank address", kind: "text" },
       { key: "bankCode", label: "Bank code", kind: "text", mono: true },
       { key: "branchCode", label: "Branch code", kind: "text", mono: true },

@@ -132,6 +132,8 @@ model BankAccount {
   accountName     String
   accountNumber   String
   bankName        String   @default("")
+  /// e.g. "ANEXT Business Account". Not printed on invoices.
+  accountType     String   @default("")
   bankAddress     String   @default("")
   bankCode        String   @default("")
   branchCode      String   @default("")
@@ -149,6 +151,7 @@ model BankAccount {
   paymentRules    PaymentRule[]
   invoices        Invoice[]
   cashTxns        CashTxn[]
+  cashHints       CashHint[]
 }
 
 /// Default payment account. The most specific match wins:
@@ -471,6 +474,8 @@ model CashTxn {
   /// Workbook sheet and row the line came from, so the import can be re-run.
   sourceSheet String?
   sourceRow   Int?
+  /// Set on lines added from a bank statement, so the same statement can be imported again safely.
+  importKey   String?       @unique
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
@@ -480,4 +485,22 @@ model CashTxn {
   @@index([period])
   @@index([categoryId])
   @@index([invoiceId])
+}
+
+/// What a bank statement counterparty (e.g. "CENTRAL PROVIDENT FUND BOARD") was booked as,
+/// learned when statement entries match cash book lines. Kept apart from CashTxn so workbook
+/// re-imports don't erase it.
+model CashHint {
+  id           String   @id @default(cuid())
+  accountId    String
+  account      BankAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  counterparty String
+  /// "in" or "out".
+  direction    String
+  categoryId   String?
+  purpose      String   @default("")
+  party        String   @default("")
+  updatedAt    DateTime @updatedAt
+
+  @@unique([accountId, counterparty, direction])
 }

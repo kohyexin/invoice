@@ -3,6 +3,7 @@ import {
   CalendarRange,
   FilePlus2,
   FileText,
+  FileUp,
   Inbox,
   LayoutDashboard,
   Settings,
@@ -40,6 +41,7 @@ export const navGroups: NavGroup[] = [
       { label: "Cash position", href: "/cash", icon: Wallet },
       { label: "Cash book", href: "/cash/ledger", icon: BookOpen },
       { label: "Monthly statement", href: "/cash/monthly", icon: CalendarRange },
+      { label: "Import statement", href: "/cash/import", icon: FileUp, minRole: "STAFF" },
     ],
   },
   {

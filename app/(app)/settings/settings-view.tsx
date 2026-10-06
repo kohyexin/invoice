@@ -170,7 +170,15 @@ export function SettingsView(props: {
         { label: "Currency", render: (r) => String(r.currency), mono: true },
         { label: "Account name", render: (r) => String(r.accountName) },
         { label: "Account number", render: (r) => String(r.accountNumber), mono: true },
-        { label: "Bank", render: (r) => String(r.bankName || "—") },
+        {
+          label: "Bank",
+          render: (r) => (
+            <span>
+              {String(r.bankName || "—")}
+              {r.accountType ? <span className="block text-[12px] text-ink-soft">{String(r.accountType)}</span> : null}
+            </span>
+          ),
+        },
       ],
     },
     {
