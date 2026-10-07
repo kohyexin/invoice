@@ -61,7 +61,7 @@ function refresh(id?: string) {
 
 /** Defaults for a new ledger row once a client is picked. */
 export async function entryDefaults(clientId: string) {
-  await requireAccess("invoiceCreate", "EDIT");
+  await requireAccess("invoices", "EDIT");
   const [client, number, last, fallbackOwner, usedAlias] = await Promise.all([
     prisma.client.findUnique({ where: { id: clientId }, select: { alias: true, defaultOwnerId: true } }),
     suggestInvoiceNumber(clientId),
@@ -84,8 +84,7 @@ export async function entryDefaults(clientId: string) {
 }
 
 export async function saveEntry(id: string | null, input: EntryInput, confirmReuse = false): Promise<Result<{ id: string; reuse?: string }>> {
-  // A new ledger row is a new invoice; changing one is managing invoices.
-  const auth = id ? await authorize("invoices", "EDIT") : await authorize("invoiceCreate", "EDIT");
+  const auth = await authorize("invoices", "EDIT");
   if (!auth.ok) return auth;
   const number = input.number.trim();
   const invoiceDate = parseDateInput(input.invoiceDate);

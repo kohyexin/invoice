@@ -16,7 +16,7 @@ export const FEATURES = [
   {
     key: "invoices",
     label: "Invoices",
-    help: "View: list, details and PDFs. Edit: change ledger entries, mark paid, change status, delete, refresh FX.",
+    help: "View: list, details and PDFs. Edit: record invoices, change ledger entries, mark paid, change status, delete, refresh FX.",
     levels: ["NONE", "VIEW", "EDIT"],
   },
   {

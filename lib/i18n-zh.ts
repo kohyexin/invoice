@@ -1029,7 +1029,7 @@ export const ZH: Record<string, string> = {
   "Create invoices": "创建发票",
   "Cash position and monthly statement": "现金头寸与月度报表",
   "Basic shows counts only. Full adds amounts, best and median month, and the Balance tab.": "基础只显示数量；完整另含金额、最佳月份、月份中位数及余额标签页。",
-  "View: list, details and PDFs. Edit: change ledger entries, mark paid, change status, delete, refresh FX.": "查看：列表、详情和 PDF。编辑：修改台账、标记已付、更改状态、删除、刷新汇率。",
+  "View: list, details and PDFs. Edit: record invoices, change ledger entries, mark paid, change status, delete, refresh FX.": "查看：列表、详情和 PDF。编辑：登记发票、修改台账、标记已付、更改状态、删除、刷新汇率。",
   "New invoice, and editing invoices made in the app.": "新建发票，以及编辑在应用中创建的发票。",
   "View: the import queue and PDFs. Edit: check the mailbox, upload, approve, reject and restore.": "查看：导入队列和 PDF。编辑：检查邮箱、上传、批准、拒绝和恢复。",
   "Edit: add, change and delete clients, Jotform import.": "编辑：新增、修改和删除客户，Jotform 导入。",
