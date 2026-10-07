@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AlertCircle, CheckCircle2, Eye, EyeOff, ShieldCheck } from "lucide-react";
@@ -8,8 +8,6 @@ import { AuthError, AuthShell, EMAIL_RE, authFieldClass } from "@/components/aut
 import { useI18n } from "@/components/i18n/locale-provider";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
-
-const LAST_USED_KEY = "inv-last-login";
 
 /** `invited` is set when arriving from an accepted invitation. */
 export function LoginForm({ invited }: { invited?: string }) {
@@ -22,10 +20,6 @@ export function LoginForm({ invited }: { invited?: string }) {
   const [emailTouched, setEmailTouched] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [lastUsed, setLastUsed] = useState(false);
-
-  useEffect(() => setLastUsed(window.localStorage.getItem(LAST_USED_KEY) === "password"), []);
-
   const emailInvalid = emailTouched && email.length > 0 && !EMAIL_RE.test(email);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -44,7 +38,6 @@ export function LoginForm({ invited }: { invited?: string }) {
         body: JSON.stringify({ email, password, remember }),
       });
       if (res.ok) {
-        window.localStorage.setItem(LAST_USED_KEY, "password");
         const data = (await res.json().catch(() => null)) as { trusted?: boolean } | null;
         // A trusted browser (2FA within 48h) signs straight in.
         if (data?.trusted) window.location.assign("/dashboard");
@@ -149,16 +142,9 @@ export function LoginForm({ invited }: { invited?: string }) {
             {t("Remember me on this device")}
           </label>
 
-          <div className="relative">
-            {lastUsed && (
-              <span className="pointer-events-none absolute -top-2 right-2 z-10 rounded-full bg-brand-600 px-2 py-0.5 text-[10px] font-semibold leading-none text-white shadow-sm animate-fade-in dark:bg-brand-500">
-                {t("Last used")}
-              </span>
-            )}
-            <Button type="submit" size="lg" loading={loading} className="w-full">
-              {loading ? t("Verifying…") : t("Sign in")}
-            </Button>
-          </div>
+          <Button type="submit" size="lg" loading={loading} className="w-full">
+            {loading ? t("Verifying…") : t("Sign in")}
+          </Button>
         </form>
 
         <div className="mt-6 flex items-center gap-2.5 rounded-control border border-overlay/10 bg-overlay/[0.03] px-3.5 py-2.5">

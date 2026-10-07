@@ -885,7 +885,6 @@ export const ZH: Record<string, string> = {
   "Remember me on this device": "在此设备上记住我",
   "Sign in": "登录",
   "Signing in…": "正在登录…",
-  "Last used": "上次使用",
   "Enhanced security.": "增强安全保护。",
   "Need an account? Ask an admin to invite you.": "需要账户？请联系管理员邀请你。",
   "Invalid email address or password.": "邮箱地址或密码不正确。",
