@@ -1,10 +1,10 @@
 import { PageHeader } from "@/components/ui/page-header";
 import { prisma } from "@/lib/db";
-import { requirePageRole } from "@/lib/session";
+import { requirePage } from "@/lib/session";
 import { AccountView } from "./account-view";
 
 export default async function AccountPage() {
-  const user = await requirePageRole("VIEWER");
+  const user = await requirePage();
   const { totpEnabledAt } = await prisma.user.findUniqueOrThrow({ where: { id: user.id }, select: { totpEnabledAt: true } });
   return (
     <>

@@ -88,7 +88,7 @@ export function StatementImportView({
 function Uploader() {
   const { t } = useI18n();
   const router = useRouter();
-  const canEdit = useCan("STAFF");
+  const canEdit = useCan("statementImport", "EDIT");
   const fileRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
@@ -384,7 +384,7 @@ function Amount({ line: l }: { line: Pick<QueueLine, "amountIn" | "amountOut" | 
 function ApprovalQueue({ lines, categories }: { lines: QueueLine[]; categories: Category[] }) {
   const { t } = useI18n();
   const router = useRouter();
-  const canEdit = useCan("STAFF");
+  const canEdit = useCan("statementImport", "EDIT");
   const [edits, setEdits] = useState<Record<string, LineEdits>>({});
   const [bulk, setBulk] = useState<Progress | null>(null);
   const [bulkErrors, setBulkErrors] = useState<string[]>([]);
@@ -607,7 +607,7 @@ function Statements({ rows }: { rows: StatementCheck[] }) {
 function RejectedList({ rows }: { rows: QueueLine[] }) {
   const { t } = useI18n();
   const router = useRouter();
-  const canEdit = useCan("STAFF");
+  const canEdit = useCan("statementImport", "EDIT");
   const [busyId, setBusyId] = useState<string | null>(null);
   if (rows.length === 0) return null;
 

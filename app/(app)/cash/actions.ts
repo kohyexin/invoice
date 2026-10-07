@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { logActivity } from "@/lib/activity";
 import { prisma } from "@/lib/db";
 import { authorize } from "@/lib/session";
 import { parseDateInput, round2 } from "@/lib/utils";
@@ -33,7 +34,7 @@ function refresh() {
 }
 
 export async function saveCashTxn(id: string | null, input: CashTxnInput): Promise<Result> {
-  const auth = await authorize("STAFF");
+  const auth = await authorize("cashBook", "EDIT");
   if (!auth.ok) return auth;
 
   const date = parseDateInput(input.date);
@@ -82,13 +83,16 @@ export async function saveCashTxn(id: string | null, input: CashTxnInput): Promi
     invoiceId,
   };
 
+  const label = [input.date, data.party || data.purpose].filter(Boolean).join(" · ");
   if (id) {
-    const existing = await prisma.cashTxn.findUnique({ where: { id }, select: { accountId: true, seq: true } });
+    const existing = await prisma.cashTxn.findUnique({ where: { id } });
     if (!existing) return { ok: false, error: "That line no longer exists." };
     const seq = existing.accountId === account.id ? existing.seq : await nextSeq(account.id);
     await prisma.cashTxn.update({ where: { id }, data: { ...data, seq } });
+    await logActivity(auth.user, { action: "update", entity: "cash_entry", entityId: id, label, before: existing, after: data });
   } else {
-    await prisma.cashTxn.create({ data: { ...data, seq: await nextSeq(account.id) } });
+    const row = await prisma.cashTxn.create({ data: { ...data, seq: await nextSeq(account.id) } });
+    await logActivity(auth.user, { action: "create", entity: "cash_entry", entityId: row.id, label, after: data });
   }
   refresh();
   return { ok: true };
@@ -101,9 +105,17 @@ async function nextSeq(accountId: string) {
 }
 
 export async function deleteCashTxn(id: string): Promise<Result> {
-  const auth = await authorize("STAFF");
+  const auth = await authorize("cashBook", "EDIT");
   if (!auth.ok) return auth;
-  await prisma.cashTxn.delete({ where: { id } }).catch(() => null);
+  const before = await prisma.cashTxn.delete({ where: { id } }).catch(() => null);
+  if (before)
+    await logActivity(auth.user, {
+      action: "delete",
+      entity: "cash_entry",
+      entityId: id,
+      label: [before.date.toISOString().slice(0, 10), before.party || before.purpose].filter(Boolean).join(" · "),
+      before,
+    });
   refresh();
   return { ok: true };
 }

@@ -1,16 +1,20 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { FileDown, PencilLine } from "lucide-react";
+import { ActivityList } from "@/components/activity/activity-list";
 import { PageHeader } from "@/components/ui/page-header";
 import { GenerateBadge, StatusBadge } from "@/components/ui/badge";
 import { prisma } from "@/lib/db";
 import { getI18n } from "@/lib/i18n-server";
 import type { Translate } from "@/lib/i18n";
+import { can } from "@/lib/roles";
+import { requirePage } from "@/lib/session";
 import { formatDate, formatMoney, toDateInput } from "@/lib/utils";
 import { loadLookups } from "../lookups";
 import { InvoiceDetail } from "./invoice-detail";
 
 export default async function InvoicePage({ params }: { params: { id: string } }) {
+  const me = await requirePage("invoices");
   const [inv, lookups] = await Promise.all([
     prisma.invoice.findUnique({
       where: { id: params.id },
@@ -29,11 +33,14 @@ export default async function InvoicePage({ params }: { params: { id: string } }
   if (!inv) notFound();
   const { t } = getI18n();
 
-  const siblings = await prisma.invoice.findMany({
-    where: { number: inv.number, NOT: { id: inv.id } },
-    orderBy: { invoiceDate: "asc" },
-    select: { id: true, invoiceDate: true, usdAmount: true, status: true, client: { select: { name: true } }, type: { select: { name: true } } },
-  });
+  const [siblings, activity] = await Promise.all([
+    prisma.invoice.findMany({
+      where: { number: inv.number, NOT: { id: inv.id } },
+      orderBy: { invoiceDate: "asc" },
+      select: { id: true, invoiceDate: true, usdAmount: true, status: true, client: { select: { name: true } }, type: { select: { name: true } } },
+    }),
+    prisma.activityLog.findMany({ where: { entity: "invoice", entityId: inv.id }, orderBy: { createdAt: "desc" }, take: 50 }),
+  ]);
 
   const dec = (v: unknown) => (v === null || v === undefined ? "" : String(Number(v)));
   const composed = Boolean(inv.companyId && inv.lines.length > 0);
@@ -49,7 +56,7 @@ export default async function InvoicePage({ params }: { params: { id: string } }
           <div className="flex items-center gap-2">
             <GenerateBadge generate={inv.generate} />
             <StatusBadge status={inv.status} />
-            {composed && (
+            {composed && can(me.role, "invoiceCreate", "EDIT") && (
               <Link
                 href={`/invoices/${inv.id}/edit`}
                 className="inline-flex h-9 items-center gap-2 rounded-control bg-brand px-3.5 text-sm font-medium text-white hover:bg-brand/90"
@@ -131,6 +138,14 @@ export default async function InvoicePage({ params }: { params: { id: string } }
               <Row label={t("Created")} value={`${formatDateTime(inv.createdAt)} · ${inv.createdBy?.name ?? originLabel(inv, t)}`} />
               <Row label={t("Last changed")} value={`${formatDateTime(inv.updatedAt)} · ${inv.updatedBy?.name ?? originLabel(inv, t)}`} />
             </dl>
+            {activity.length > 0 && (
+              <div className="mt-3 border-t border-line/60">
+                <ActivityList
+                  showEntity={false}
+                  rows={activity.map((a) => ({ ...a, createdAt: a.createdAt.toISOString(), changes: (a.changes as Record<string, unknown> | null) ?? null }))}
+                />
+              </div>
+            )}
           </div>
 
           {siblings.length > 0 && (

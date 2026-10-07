@@ -1,17 +1,18 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { logActivity } from "@/lib/activity";
 import { prisma } from "@/lib/db";
 import { draftFromInput, draftTotal, type ComposerInput } from "@/lib/composer";
 import { fxRates, suggestInvoiceNumber, toUsd } from "@/lib/rules";
-import { authorize, requireRole } from "@/lib/session";
+import { authorize, requireAccess } from "@/lib/session";
 import { freezeGeneratedPdf } from "@/lib/documents";
 import { round2 } from "@/lib/utils";
 
 type Result<T = object> = ({ ok: true } & T) | { ok: false; error: string };
 
 export async function nextNumber(clientId: string, agreementNo?: string) {
-  await requireRole("STAFF");
+  await requireAccess("invoiceCreate", "EDIT");
   return suggestInvoiceNumber(clientId, agreementNo);
 }
 
@@ -82,6 +83,11 @@ async function learnClientDefaults(clientId: string, alias: string, ownerId: str
   if (Object.keys(data).length) await prisma.client.update({ where: { id: clientId }, data });
 }
 
+/** Lines as short text so the activity log shows what changed without the line ids. */
+function lineSummary(lines: { description: string; rate: number; quantity: number }[]) {
+  return lines.map((l) => `${l.description} · ${l.quantity} × ${l.rate}`);
+}
+
 function refresh(clientId: string, id?: string) {
   revalidatePath("/invoices");
   revalidatePath("/dashboard");
@@ -90,7 +96,7 @@ function refresh(clientId: string, id?: string) {
 }
 
 export async function createManualInvoice(input: ComposerInput, confirmReuse = false): Promise<Result<{ id: string; reuse?: string }>> {
-  const auth = await authorize("STAFF");
+  const auth = await authorize("invoiceCreate", "EDIT");
   if (!auth.ok) return auth;
   const p = await prepare(input, null, confirmReuse);
   if (!p.ok) return p;
@@ -107,6 +113,7 @@ export async function createManualInvoice(input: ComposerInput, confirmReuse = f
         lines: { create: p.lines },
       },
     });
+    await logActivity(auth.user, { action: "create", entity: "invoice", entityId: inv.id, label: inv.number, after: { ...p.data, lines: lineSummary(p.lines) } });
     await learnClientDefaults(p.data.clientId, p.data.alias, p.data.ownerId).catch(() => undefined);
     await freezeGeneratedPdf(inv.id).catch(() => undefined);
     refresh(p.data.clientId);
@@ -118,9 +125,9 @@ export async function createManualInvoice(input: ComposerInput, confirmReuse = f
 
 /** Saves edits to an invoice made in the app: replaces its lines and re-issues the PDF. Status and payment are kept. */
 export async function updateManualInvoice(id: string, input: ComposerInput, confirmReuse = false): Promise<Result<{ id: string; reuse?: string }>> {
-  const auth = await authorize("STAFF");
+  const auth = await authorize("invoiceCreate", "EDIT");
   if (!auth.ok) return auth;
-  const existing = await prisma.invoice.findUnique({ where: { id }, select: { clientId: true, companyId: true } });
+  const existing = await prisma.invoice.findUnique({ where: { id }, include: { lines: { orderBy: { sortOrder: "asc" } } } });
   if (!existing) return { ok: false, error: "That invoice no longer exists." };
   if (!existing.companyId) return { ok: false, error: "This invoice wasn't made in the app, so it has no lines to edit." };
   const p = await prepare(input, id, confirmReuse);
@@ -132,6 +139,15 @@ export async function updateManualInvoice(id: string, input: ComposerInput, conf
       prisma.invoiceLine.deleteMany({ where: { invoiceId: id } }),
       prisma.invoice.update({ where: { id }, data: { ...p.data, updatedById: auth.user.id, lines: { create: p.lines } } }),
     ]);
+    const { lines: beforeLines, ...before } = existing;
+    await logActivity(auth.user, {
+      action: "update",
+      entity: "invoice",
+      entityId: id,
+      label: p.data.number,
+      before: { ...before, lines: lineSummary(beforeLines.map((l) => ({ ...l, rate: Number(l.rate), quantity: Number(l.quantity) }))) },
+      after: { ...p.data, lines: lineSummary(p.lines) },
+    });
     await learnClientDefaults(p.data.clientId, p.data.alias, p.data.ownerId).catch(() => undefined);
     await freezeGeneratedPdf(id).catch(() => undefined);
     refresh(p.data.clientId, id);

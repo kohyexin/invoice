@@ -1,10 +1,10 @@
 import { PageHeader } from "@/components/ui/page-header";
-import { requirePageRole } from "@/lib/session";
+import { requirePage } from "@/lib/session";
 import { Composer } from "./composer";
 import { loadComposerProps } from "./load";
 
 export default async function NewInvoicePage({ searchParams }: { searchParams: { client?: string } }) {
-  await requirePageRole("STAFF");
+  await requirePage("invoiceCreate", "EDIT");
   const props = await loadComposerProps();
 
   return (

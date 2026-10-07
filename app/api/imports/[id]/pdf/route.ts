@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
-  const denied = await apiDenied("STAFF");
+  const denied = await apiDenied("systemImports");
   if (denied) return denied;
   const row = await prisma.importReview.findUnique({ where: { id: params.id }, select: { filename: true, pdf: true } });
   if (!row?.pdf) return NextResponse.json({ error: "Not found" }, { status: 404 });

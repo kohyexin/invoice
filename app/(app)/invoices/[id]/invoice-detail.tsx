@@ -30,7 +30,7 @@ export function InvoiceDetail({
   lookups: Lookups;
 }) {
   const router = useRouter();
-  const canEdit = useCan("STAFF");
+  const canEdit = useCan("invoices", "EDIT");
   const [pending, start] = useTransition();
   const { t } = useI18n();
 

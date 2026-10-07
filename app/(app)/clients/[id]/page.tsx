@@ -1,13 +1,15 @@
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/ui/page-header";
 import { prisma } from "@/lib/db";
-import { requirePageRole } from "@/lib/session";
+import { can } from "@/lib/roles";
+import { requirePage } from "@/lib/session";
 import { toDateInput } from "@/lib/utils";
 import { ClientForm } from "./client-form";
 
 export default async function ClientPage({ params }: { params: { id: string } }) {
   const isNew = params.id === "new";
-  if (isNew) await requirePageRole("STAFF");
+  const me = await requirePage("clients", isNew ? "EDIT" : "VIEW");
+  const showInvoices = can(me.role, "invoices");
   const [client, owners] = await Promise.all([
     isNew
       ? null
@@ -35,7 +37,7 @@ export default async function ClientPage({ params }: { params: { id: string } })
   ]);
   if (!isNew && !client) notFound();
 
-  const unpaid = client?.invoices.filter((i) => i.status === "SENT").reduce((s, i) => s + Number(i.usdAmount), 0) ?? 0;
+  const unpaid = !showInvoices ? 0 : client?.invoices.filter((i) => i.status === "SENT").reduce((s, i) => s + Number(i.usdAmount), 0) ?? 0;
 
   return (
     <>
@@ -70,7 +72,7 @@ export default async function ClientPage({ params }: { params: { id: string } })
           notes: client?.notes ?? "",
           fees: (client?.fees as Record<string, string>) ?? {},
         }}
-        invoices={(client?.invoices ?? []).map((i) => ({
+        invoices={(showInvoices ? client?.invoices ?? [] : []).map((i) => ({
           id: i.id,
           number: i.number,
           invoiceDate: i.invoiceDate.toISOString(),

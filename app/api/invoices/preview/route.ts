@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
-  const denied = await apiDenied("STAFF");
+  const denied = await apiDenied("invoiceCreate", "EDIT");
   if (denied) return denied;
   const input = (await req.json()) as ComposerInput;
   const res = draftFromInput(input);

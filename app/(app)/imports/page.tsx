@@ -1,13 +1,13 @@
 import { PageHeader } from "@/components/ui/page-header";
 import { prisma } from "@/lib/db";
-import { requirePageRole } from "@/lib/session";
+import { requirePage } from "@/lib/session";
 import { mailboxConfigured } from "@/lib/system-import";
 import { ImportsView } from "./imports-view";
 
 export const maxDuration = 60;
 
 export default async function ImportsPage() {
-  await requirePageRole("STAFF");
+  await requirePage("systemImports");
   const [pending, rejected, recent, clients] = await Promise.all([
     prisma.importReview.findMany({
       where: { status: "PENDING" },

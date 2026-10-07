@@ -8,7 +8,7 @@ import { useI18n } from "@/components/i18n/locale-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Field, fieldClass } from "@/components/ui/form-controls";
-import { ROLE_HELP, ROLE_LABEL, type RoleName } from "@/lib/roles";
+import { FEATURES, levelName, roleLabel, SYSTEM_ROLE_HELP, type RoleInfo } from "@/lib/roles";
 import { formatDate } from "@/lib/utils";
 import { changeMyPassword, confirmAuthenticatorChange, startAuthenticatorChange, updateMyName } from "./actions";
 
@@ -50,7 +50,7 @@ export function AccountView({
 }: {
   name: string;
   email: string;
-  role: RoleName;
+  role: RoleInfo;
   totpEnabledAt: string | null;
 }) {
   const { t } = useI18n();
@@ -107,9 +107,16 @@ export function AccountView({
           <div>
             <p className="mb-1.5 text-[13px] font-medium text-ink">{t("Role")}</p>
             <div className="flex items-center gap-2 text-[13px] text-ink-muted">
-              <Badge tone="brand">{t(ROLE_LABEL[role])}</Badge>
-              {t(ROLE_HELP[role])}
+              <Badge tone="brand">{roleLabel(t, role)}</Badge>
+              {role.system && t(SYSTEM_ROLE_HELP[role.system])}
             </div>
+            {!role.system && (
+              <p className="mt-1.5 text-[12px] text-ink-soft">
+                {FEATURES.filter((f) => role.permissions[f.key] !== "NONE")
+                  .map((f) => `${t(f.label)}: ${t(levelName(f.key, role.permissions[f.key]))}`)
+                  .join(" · ")}
+              </p>
+            )}
           </div>
           <Button type="submit" size="sm" loading={savingName} disabled={draftName.trim() === name}>
             {t("Save")}

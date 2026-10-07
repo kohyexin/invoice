@@ -34,7 +34,7 @@ export function CashLedgerView({
   initialAccount: string;
 }) {
   const { t } = useI18n();
-  const canEdit = useCan("STAFF");
+  const canEdit = useCan("cashBook", "EDIT");
   const [query, setQuery] = useState("");
   const [editing, setEditing] = useState<CashLedgerRow | "new" | null>(null);
 

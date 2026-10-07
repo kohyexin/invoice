@@ -3,8 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { navGroups } from "@/lib/nav";
-import { hasRole } from "@/lib/roles";
+import { canSee, navGroups } from "@/lib/nav";
 import { useI18n } from "@/components/i18n/locale-provider";
 import { useCurrentUser } from "./user-context";
 
@@ -27,7 +26,7 @@ export function SidebarNav({
   const { role } = useCurrentUser();
   const { t } = useI18n();
   const groups = navGroups
-    .map((g) => ({ ...g, items: g.items.filter((i) => i.sidebar !== false && (!i.minRole || hasRole(role, i.minRole))) }))
+    .map((g) => ({ ...g, items: g.items.filter((i) => i.sidebar !== false && canSee(i, role)) }))
     .filter((g) => g.items.length > 0);
 
   return (

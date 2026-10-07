@@ -134,7 +134,11 @@ export async function stageSystemPdf(src: ImportSource): Promise<StageOutcome> {
 }
 
 /** Posts an approved review item to the ledger. */
-export async function approveReview(id: string, clientId: string, actorId: string): Promise<{ ok: true; number: string } | { ok: false; error: string }> {
+export async function approveReview(
+  id: string,
+  clientId: string,
+  actorId: string
+): Promise<{ ok: true; number: string; invoiceId: string } | { ok: false; error: string }> {
   const row = await prisma.importReview.findUnique({ where: { id } });
   if (!row || row.status !== "PENDING") return { ok: false, error: "This item was already handled." };
   if (!row.pdf) return { ok: false, error: "The PDF for this item is missing." };
@@ -203,7 +207,7 @@ export async function approveReview(id: string, clientId: string, actorId: strin
   if (!client.alias) await prisma.client.update({ where: { id: client.id }, data: { alias: inv.clientName.toUpperCase() } });
   await syncDocument(created.id);
 
-  return { ok: true, number: inv.number };
+  return { ok: true, number: inv.number, invoiceId: created.id };
 }
 
 export async function rejectReview(id: string, actorId: string) {

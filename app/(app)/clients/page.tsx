@@ -1,8 +1,12 @@
 import { PageHeader } from "@/components/ui/page-header";
 import { prisma } from "@/lib/db";
+import { can } from "@/lib/roles";
+import { requirePage } from "@/lib/session";
 import { ClientsView } from "./clients-view";
 
 export default async function ClientsPage() {
+  const me = await requirePage("clients");
+  const showInvoices = can(me.role, "invoices");
   const [clients, stats] = await Promise.all([
     prisma.client.findMany({
       orderBy: { name: "asc" },
@@ -30,8 +34,8 @@ export default async function ClientsPage() {
     agreementNo: c.agreementNo,
     country: c.country,
     owner: c.defaultOwner?.name ?? "",
-    invoices: byClient.get(c.id)?.invoices ?? 0,
-    unpaid: byClient.get(c.id)?.unpaid ?? 0,
+    invoices: showInvoices ? byClient.get(c.id)?.invoices ?? 0 : 0,
+    unpaid: showInvoices ? byClient.get(c.id)?.unpaid ?? 0 : 0,
     submittedAt: c.submittedAt?.toISOString() ?? null,
   }));
 

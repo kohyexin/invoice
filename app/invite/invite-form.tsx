@@ -8,12 +8,12 @@ import { MIN_PASSWORD_LENGTH, NewPasswordField } from "@/components/auth/new-pas
 import { useI18n } from "@/components/i18n/locale-provider";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
-import { ROLE_LABEL, type RoleName } from "@/lib/roles";
+import { roleLabel, type SystemRoleName } from "@/lib/roles";
 
 type InviteState =
   | { status: "loading" }
   | { status: "invalid"; reason: "invalid" | "expired" }
-  | { status: "ready"; email: string; role: RoleName };
+  | { status: "ready"; email: string; role: { name: string; system: SystemRoleName | null } };
 
 export function InviteForm({ token }: { token: string }) {
   const { t } = useI18n();
@@ -27,9 +27,9 @@ export function InviteForm({ token }: { token: string }) {
     fetch(`/api/auth/invite/${token}`)
       .then(async (res) => {
         if (!res.ok) return setState({ status: "invalid", reason: res.status === 410 ? "expired" : "invalid" });
-        const body = (await res.json()) as { email: string; name: string; role: RoleName };
+        const body = (await res.json()) as { email: string; name: string; role: string; roleSystem: SystemRoleName | null };
         setName(body.name);
-        setState({ status: "ready", email: body.email, role: body.role });
+        setState({ status: "ready", email: body.email, role: { name: body.role, system: body.roleSystem } });
       })
       .catch(() => setState({ status: "invalid", reason: "invalid" }));
   }, [token]);
@@ -97,7 +97,7 @@ export function InviteForm({ token }: { token: string }) {
         </AuthIcon>
         <h2 className="mt-5 text-2xl font-bold tracking-tight text-ink">{t("Accept your invitation")}</h2>
         <p className="mt-1.5 text-sm leading-relaxed text-ink/50">
-          {t("You've been invited to join as {0}. Set your name and password for {1}.", t(ROLE_LABEL[state.role]), state.email)}
+          {t("You've been invited to join as {0}. Set your name and password for {1}.", roleLabel(t, state.role), state.email)}
         </p>
 
         <form onSubmit={handleSubmit} noValidate className="mt-5 space-y-4">

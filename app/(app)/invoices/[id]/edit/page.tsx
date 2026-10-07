@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/page-header";
 import { prisma } from "@/lib/db";
-import { requirePageRole } from "@/lib/session";
+import { requirePage } from "@/lib/session";
 import { billToFromClient, type BillTo } from "@/lib/bill-to";
 import type { ComposerInput } from "@/lib/composer";
 import { toDateInput } from "@/lib/utils";
@@ -9,7 +9,7 @@ import { Composer } from "../../new/composer";
 import { loadComposerProps } from "../../new/load";
 
 export default async function EditInvoicePage({ params }: { params: { id: string } }) {
-  await requirePageRole("STAFF");
+  await requirePage("invoiceCreate", "EDIT");
   const [inv, props] = await Promise.all([
     prisma.invoice.findUnique({
       where: { id: params.id },

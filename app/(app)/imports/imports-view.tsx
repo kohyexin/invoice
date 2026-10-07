@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Ban, CheckCheck, FileUp, Inbox, MailCheck, RefreshCw, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/components/i18n/locale-provider";
+import { useCan } from "@/components/shell/user-context";
 import { StatusBadge } from "@/components/ui/badge";
 import { fieldClass } from "@/components/ui/form-controls";
 import { cn, formatDate, formatMoney } from "@/lib/utils";
@@ -63,6 +64,7 @@ export function ImportsView({
   const [stopped, setStopped] = useState(false);
   const [uploading, startUpload] = useTransition();
   const { t } = useI18n();
+  const canEdit = useCan("systemImports", "EDIT");
   const busy = uploading || progress !== null;
 
   function reset() {
@@ -122,6 +124,7 @@ export function ImportsView({
 
   return (
     <div className="space-y-6">
+      {canEdit && (
       <div className="grid gap-6 lg:grid-cols-2">
         <section className={card}>
           <div className="flex items-start gap-3">
@@ -175,6 +178,7 @@ export function ImportsView({
           <input ref={fileRef} type="file" accept="application/pdf,.pdf" multiple className="hidden" onChange={(e) => upload(e.target.files)} />
         </section>
       </div>
+      )}
 
       {error && <p className="rounded-control border border-danger/30 bg-danger/10 px-3 py-2 text-[13px] text-rose-700 dark:text-rose-200">{t(error)}</p>}
       {outcomes && <ResultCard outcomes={outcomes} scan={scan} stopped={stopped} running={progress !== null} prefix={mailbox?.prefix ?? ""} />}
@@ -368,6 +372,7 @@ function ResultCard({ outcomes, scan, stopped, running, prefix }: { outcomes: Ou
 function ApprovalQueue({ pending, clients }: { pending: Pending[]; clients: ClientRef[] }) {
   const router = useRouter();
   const { t } = useI18n();
+  const canEdit = useCan("systemImports", "EDIT");
   const [bulk, setBulk] = useState<Progress | null>(null);
   const [bulkErrors, setBulkErrors] = useState<string[]>([]);
   const [done, setDone] = useState<Set<string>>(new Set());
@@ -399,7 +404,7 @@ function ApprovalQueue({ pending, clients }: { pending: Pending[]; clients: Clie
         <Inbox className="h-4 w-4 text-amber-600 dark:text-amber-300" />
         <h2 className="text-base font-semibold text-ink">{t("Waiting for approval")}</h2>
         <span className="rounded-full bg-overlay/[0.06] px-2 text-[12px] text-ink-muted">{visible.length}</span>
-        {ready.length > 1 && (
+        {canEdit && ready.length > 1 && (
           <Button size="sm" className="ml-auto" onClick={approveAll} loading={bulk !== null}>
             <CheckCheck className="h-4 w-4" />
             {t("Approve all ready ({0})", ready.length)}
@@ -436,6 +441,7 @@ function ReviewRow({ item, clients, disabled }: { item: Pending; clients: Client
   const match = clients.find((c) => c.name.toLowerCase() === text.trim().toLowerCase());
   const p = item.parsed;
   const ready = !item.reason && !!match && !!p.number;
+  const canEdit = useCan("systemImports", "EDIT");
 
   return (
     <div className="rounded-card border border-line/70 p-4">
@@ -469,6 +475,7 @@ function ReviewRow({ item, clients, disabled }: { item: Pending; clients: Client
           </div>
         ))}
       </dl>
+      {canEdit && (
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <input
           list={`review-clients-${item.id}`}
@@ -515,6 +522,7 @@ function ReviewRow({ item, clients, disabled }: { item: Pending; clients: Client
         </Button>
         {error && <span className="text-[12px] text-rose-600 dark:text-rose-300">{t(error)}</span>}
       </div>
+      )}
     </div>
   );
 }
@@ -523,6 +531,7 @@ function RejectedList({ rows }: { rows: Rejected[] }) {
   const router = useRouter();
   const { t } = useI18n();
   const [busyId, setBusyId] = useState<string | null>(null);
+  const canEdit = useCan("systemImports", "EDIT");
   if (rows.length === 0) return null;
 
   return (
@@ -559,7 +568,7 @@ function RejectedList({ rows }: { rows: Rejected[] }) {
                 <td className="py-2 pr-3 text-ink-muted">{formatDate(r.rejectedAt)}</td>
                 <td className="py-2 pr-3 text-ink-muted">{r.rejectedBy ?? t("Automatic")}</td>
                 <td className="py-2 text-right">
-                  <Button
+                  {canEdit && <Button
                     size="sm"
                     variant="ghost"
                     loading={busyId === r.id}
@@ -572,7 +581,7 @@ function RejectedList({ rows }: { rows: Rejected[] }) {
                   >
                     <RotateCcw className="h-3.5 w-3.5" />
                     {t("Restore")}
-                  </Button>
+                  </Button>}
                 </td>
               </tr>
             ))}

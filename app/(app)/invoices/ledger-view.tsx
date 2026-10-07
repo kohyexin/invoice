@@ -43,7 +43,8 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 
 export function LedgerView({ rows, lookups, initialQuery = "" }: { rows: LedgerRow[]; lookups: Lookups; initialQuery?: string }) {
   const router = useRouter();
-  const canEdit = useCan("STAFF");
+  const canEdit = useCan("invoices", "EDIT");
+  const canCreate = useCan("invoiceCreate", "EDIT");
   const { t } = useI18n();
   const [query, setQuery] = useState(initialQuery);
   const [adding, setAdding] = useState(false);
@@ -163,7 +164,7 @@ export function LedgerView({ rows, lookups, initialQuery = "" }: { rows: LedgerR
             className={cn(fieldClass, "pl-9")}
           />
         </div>
-        {canEdit && (
+        {canCreate && (
           <div className="ml-auto flex gap-2">
             <Button variant="secondary" onClick={() => setAdding(true)}>
               <Plus className="h-4 w-4" />

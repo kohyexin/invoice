@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Check, ChevronDown, LogOut, Menu, Search, Settings, UserRound } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { LOCALES } from "@/lib/i18n";
-import { hasRole, ROLE_LABEL } from "@/lib/roles";
+import { can, isManager, roleLabel } from "@/lib/roles";
 import type { ShellAlerts } from "@/lib/shell-alerts";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { LanguageToggle } from "@/components/i18n/language-toggle";
@@ -23,7 +23,7 @@ export function Header({ alerts, onOpenNav }: { alerts: ShellAlerts; onOpenNav: 
 
   const menuItems = [
     { label: "My account", icon: UserRound, href: "/account", show: true },
-    { label: "Settings", icon: Settings, href: "/settings", show: hasRole(user.role, "ADMIN") },
+    { label: "Settings", icon: Settings, href: "/settings", show: can(user.role, "settings") || isManager(user.role) },
   ].filter((m) => m.show);
 
   // Global ⌘K / Ctrl+K opens the command palette.
@@ -105,7 +105,7 @@ export function Header({ alerts, onOpenNav }: { alerts: ShellAlerts; onOpenNav: 
                     <p className="text-sm font-semibold text-ink">{user.name}</p>
                     <p className="truncate text-xs text-ink-muted">{user.email}</p>
                     <p className="mt-1 inline-flex items-center gap-1 rounded-full bg-brand-500/10 px-2 py-0.5 text-[11px] font-medium text-brand-600 dark:bg-brand-500/15 dark:text-brand-300">
-                      {t(ROLE_LABEL[user.role])}
+                      {roleLabel(t, user.role)}
                     </p>
                   </div>
                   {/* Mobile-only: utilities that leave the header bar below md */}

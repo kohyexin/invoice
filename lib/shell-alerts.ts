@@ -1,6 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/db";
-import { hasRole, type RoleName } from "@/lib/roles";
+import { can, type RoleInfo } from "@/lib/roles";
 import { addDays, todayUtc } from "@/lib/utils";
 
 export type ShellAlerts = {
@@ -14,18 +14,20 @@ export type ShellAlerts = {
 const TAKE = 12;
 
 /** What the header bell shows: open work, not a message history. */
-export async function loadShellAlerts(role: RoleName): Promise<ShellAlerts> {
+export async function loadShellAlerts(role: RoleInfo): Promise<ShellAlerts> {
   const today = todayUtc();
   // Same rule as the ledger: no due date means invoice date + 7 days.
   const [sent, imports, statementLines] = await Promise.all([
-    prisma.invoice.findMany({
-      where: {
-        status: "SENT",
-        OR: [{ dueDate: { lt: today } }, { dueDate: null, invoiceDate: { lt: addDays(today, -7) } }],
-      },
-      select: { id: true, number: true, invoiceDate: true, dueDate: true, usdAmount: true, client: { select: { name: true } } },
-    }),
-    hasRole(role, "STAFF")
+    can(role, "invoices")
+      ? prisma.invoice.findMany({
+          where: {
+            status: "SENT",
+            OR: [{ dueDate: { lt: today } }, { dueDate: null, invoiceDate: { lt: addDays(today, -7) } }],
+          },
+          select: { id: true, number: true, invoiceDate: true, dueDate: true, usdAmount: true, client: { select: { name: true } } },
+        })
+      : [],
+    can(role, "systemImports", "EDIT")
       ? Promise.all([
           prisma.importReview.count({ where: { status: "PENDING" } }),
           prisma.importReview.findMany({
@@ -36,7 +38,7 @@ export async function loadShellAlerts(role: RoleName): Promise<ShellAlerts> {
           }),
         ])
       : null,
-    hasRole(role, "STAFF") ? prisma.statementLine.count({ where: { status: "PENDING" } }) : null,
+    can(role, "statementImport", "EDIT") ? prisma.statementLine.count({ where: { status: "PENDING" } }) : null,
   ]);
 
   const overdue = sent

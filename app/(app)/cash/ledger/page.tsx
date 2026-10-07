@@ -1,8 +1,10 @@
 import { PageHeader } from "@/components/ui/page-header";
 import { loadCashLedger } from "@/lib/cash";
+import { requirePage } from "@/lib/session";
 import { CashLedgerView } from "./cash-ledger-view";
 
 export default async function CashLedgerPage({ searchParams }: { searchParams: { account?: string } }) {
+  await requirePage("cashBook");
   const data = await loadCashLedger();
   return (
     <>

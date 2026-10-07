@@ -43,19 +43,43 @@ enum InvoiceStatus {
  * ------------------------------- Users -------------------------------
  */
 
-/// ADMIN: everything incl. users and settings. STAFF: invoices, clients,
-/// imports. VIEWER: read-only.
+/// Superseded by AppRole; kept until the deployed app stops reading User.role.
 enum Role {
   ADMIN
   STAFF
   VIEWER
 }
 
+/// OWNER: full access and the only one who can manage Owners. ADMIN: fixed
+/// preset, everything except editing the cash book and statement imports.
+enum SystemRole {
+  OWNER
+  ADMIN
+}
+
+/// A role and the access it grants per feature (see FEATURES in lib/roles.ts).
+model AppRole {
+  id          String      @id @default(cuid())
+  name        String      @unique
+  description String      @default("")
+  /// Set on the two fixed roles; their permissions come from code, not `permissions`.
+  system      SystemRole? @unique
+  /// { feature: "NONE" | "VIEW" | "EDIT" }
+  permissions Json        @default("{}")
+  sortOrder   Int         @default(0)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  users User[]
+}
+
 model User {
   id             String    @id @default(cuid())
   email          String    @unique
   name           String
-  role           Role      @default(STAFF)
+  legacyRole     Role      @default(STAFF) @map("role")
+  roleId         String    @default("role_staff")
+  role           AppRole   @relation(fields: [roleId], references: [id], onDelete: Restrict)
   passwordHash   String
   active         Boolean   @default(true)
   /// Bumped on password change or deactivation; sessions carrying an older
@@ -90,6 +114,29 @@ model User {
   importDecisions    ImportReview[]
   statementUploads   StatementImport[]    @relation("StatementUploads")
   statementDecisions StatementLine[]      @relation("StatementDecisions")
+}
+
+/// Who changed what. Append-only: rows are never edited or deleted. No foreign
+/// keys, so entries outlive the records and users they mention.
+model ActivityLog {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  actorId   String?
+  /// Name or email at the time, kept in case the user is renamed.
+  actorName String
+  /// create | update | delete, or a verb such as approve, reject, mark_paid.
+  action    String
+  /// invoice, client, user, role, setting:<entity>, cash_entry, statement, import ...
+  entity    String
+  entityId  String?
+  /// Human label for the record, e.g. the invoice number or client name.
+  label     String   @default("")
+  /// { field: [before, after] } for updates; extra detail otherwise.
+  changes   Json?
+
+  @@index([createdAt])
+  @@index([entity, entityId])
+  @@index([actorId])
 }
 
 /// One-time "forgot password" link; only the sha256 of the token is kept.

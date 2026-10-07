@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { BarChart3, CalendarDays, CheckCircle2, Hourglass, Receipt, Trophy, Users, XCircle } from "lucide-react";
+import { BarChart3, CalendarDays, Check, CheckCircle2, Hourglass, Receipt, Trophy, Users, XCircle } from "lucide-react";
 import { Bar, CartesianGrid, ComposedChart, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { useChartTheme } from "@/components/dashboard/use-chart-theme";
@@ -35,7 +35,8 @@ const RANGES = [
   { value: "all", label: "All" },
 ] as const;
 
-export function DashboardView({ data }: { data: DashboardData }) {
+/** `basic`: the server sent counts only, so every amount is shown as a count instead. */
+export function DashboardView({ data, basic = false }: { data: DashboardData; basic?: boolean }) {
   const chart = useChartTheme();
   const { locale, t } = useI18n();
   const monthLabel = (m: string) => formatMonth(locale, m);
@@ -64,6 +65,16 @@ export function DashboardView({ data }: { data: DashboardData }) {
 
   return (
     <div className="space-y-6">
+      {basic ? (
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <KpiCard icon={Receipt} label="Invoices issued" value={String(totals.all.count)} footer={hint(t("All time"))} />
+          <KpiCard icon={CheckCircle2} tone="success" label="Paid" value={String(totals.paid.count)} footer={hint(t("Invoices"))} />
+          <KpiCard icon={Hourglass} tone="warning" label="Unpaid" value={String(totals.unpaid.count)} footer={hint(t("Invoices sent, not paid"))} />
+          <KpiCard icon={XCircle} tone="danger" label="End / lost" value={String(totals.endLost.count)} footer={hint(t("{0} waived", totals.waived.count))} />
+          <KpiCard icon={Users} label="Clients" value={String(data.clientCount)} footer={hint(t("{0} billed in the last 3 months", data.activeClients))} />
+          <KpiCard icon={CalendarDays} label={t("This month · {0}", monthLabel(data.thisMonth.month))} value={String(data.thisMonth.count)} footer={hint(t("Invoices"))} />
+        </div>
+      ) : (
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard icon={Receipt} label="Total invoiced" value={formatMoney(totals.all.amount)} footer={hint(t("{0} invoices issued", totals.all.count))} />
         <KpiCard icon={CheckCircle2} tone="success" label="Paid" value={formatMoney(totals.paid.amount)} footer={hint(t("{0} invoices", totals.paid.count))} />
@@ -91,12 +102,13 @@ export function DashboardView({ data }: { data: DashboardData }) {
         />
         <KpiCard icon={BarChart3} label="Median month" value={formatMoney(data.medianMonth)} footer={hint(t("Across completed months"))} />
       </div>
+      )}
 
       <section className="glass-panel neon-edge rounded-card p-5">
         <div className="mb-4 flex flex-wrap items-center gap-3">
           <div className="mr-auto">
-            <h2 className="text-base font-semibold text-ink">{t("Invoiced and received per month")}</h2>
-            <p className="text-[13px] text-ink-muted">{t("Bars by invoice date, line by received date.")}</p>
+            <h2 className="text-base font-semibold text-ink">{t(basic ? "Invoices per month" : "Invoiced and received per month")}</h2>
+            <p className="text-[13px] text-ink-muted">{t(basic ? "Number of invoices by invoice date." : "Bars by invoice date, line by received date.")}</p>
           </div>
           <Segmented value={range} options={RANGES.map((r) => ({ value: r.value, label: r.label }))} onChange={setRange} />
         </div>
@@ -105,15 +117,29 @@ export function DashboardView({ data }: { data: DashboardData }) {
             <ComposedChart data={series} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
               <CartesianGrid stroke={chart.grid} vertical={false} />
               <XAxis dataKey="label" stroke={chart.axis} tick={{ fontSize: 11 }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
-              <YAxis stroke={chart.axis} tick={{ fontSize: 11 }} tickLine={false} axisLine={false} tickFormatter={(v) => formatCompact(Number(v))} width={52} />
+              <YAxis
+                stroke={chart.axis}
+                tick={{ fontSize: 11 }}
+                tickLine={false}
+                axisLine={false}
+                tickFormatter={(v) => (basic ? String(v) : formatCompact(Number(v)))}
+                allowDecimals={!basic}
+                width={52}
+              />
               <Tooltip
                 cursor={{ fill: "rgba(84,112,214,0.08)" }}
                 contentStyle={{ background: chart.tooltipBg, border: `1px solid ${chart.tooltipBorder}`, borderRadius: 8, color: chart.tooltipText, fontSize: 12 }}
-                formatter={(v: number, name: string) => [formatMoney(v), name]}
+                formatter={(v: number, name: string) => [basic ? String(v) : formatMoney(v), name]}
               />
               <Legend wrapperStyle={{ fontSize: 12, color: chart.axis }} />
-              <Bar dataKey="billed" name={t("Invoiced")} fill={chart.brand} radius={[4, 4, 0, 0]} maxBarSize={28} />
-              <Line dataKey="received" name={t("Received")} stroke={chart.brandBright} strokeWidth={2} dot={false} style={{ filter: "drop-shadow(0 0 5px rgba(34,211,238,0.6))" }} />
+              {basic ? (
+                <Bar dataKey="count" name={t("Invoices")} fill={chart.brand} radius={[4, 4, 0, 0]} maxBarSize={28} />
+              ) : (
+                <Bar dataKey="billed" name={t("Invoiced")} fill={chart.brand} radius={[4, 4, 0, 0]} maxBarSize={28} />
+              )}
+              {!basic && (
+                <Line dataKey="received" name={t("Received")} stroke={chart.brandBright} strokeWidth={2} dot={false} style={{ filter: "drop-shadow(0 0 5px rgba(34,211,238,0.6))" }} />
+              )}
             </ComposedChart>
           </ResponsiveContainer>
         </div>
@@ -128,14 +154,16 @@ export function DashboardView({ data }: { data: DashboardData }) {
                 {t(unpaidView === "summary" ? "Invoices with status SENT, by client A–Z." : "Unpaid USD by invoice month, by client A–Z.")}
               </p>
             </div>
-            <Segmented
-              value={unpaidView}
-              options={[
-                { value: "summary", label: "Summary" },
-                { value: "months", label: "By month" },
-              ]}
-              onChange={setUnpaidView}
-            />
+            {!basic && (
+              <Segmented
+                value={unpaidView}
+                options={[
+                  { value: "summary", label: "Summary" },
+                  { value: "months", label: "By month" },
+                ]}
+                onChange={setUnpaidView}
+              />
+            )}
           </div>
           {unpaidView === "months" ? (
             <UnpaidByMonth rows={data.unpaid} monthLabel={monthLabel} />
@@ -147,7 +175,7 @@ export function DashboardView({ data }: { data: DashboardData }) {
                   <th className="py-2 pr-3">{t("Client")}</th>
                   <th className="py-2 pr-3 text-right">{t("Invoices")}</th>
                   <th className="py-2 pr-3">{t("Oldest")}</th>
-                  <th className="py-2 text-right">{t("Unpaid")}</th>
+                  {!basic && <th className="py-2 text-right">{t("Unpaid")}</th>}
                 </tr>
               </thead>
               <tbody>
@@ -160,12 +188,12 @@ export function DashboardView({ data }: { data: DashboardData }) {
                     </td>
                     <td className="tnum py-2 pr-3 text-right text-ink-muted">{u.count}</td>
                     <td className="py-2 pr-3 text-ink-muted">{formatDate(u.oldest)}</td>
-                    <td className="tnum py-2 text-right text-amber-600 dark:text-amber-300">{formatMoney(u.amount)}</td>
+                    {!basic && <td className="tnum py-2 text-right text-amber-600 dark:text-amber-300">{formatMoney(u.amount)}</td>}
                   </tr>
                 ))}
                 {data.unpaid.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="py-8 text-center text-ink-soft">
+                    <td colSpan={basic ? 3 : 4} className="py-8 text-center text-ink-soft">
                       {t("Nothing outstanding.")}
                     </td>
                   </tr>
@@ -240,7 +268,7 @@ export function DashboardView({ data }: { data: DashboardData }) {
                   </td>
                   {data.recentMonths.map((m) => (
                     <td key={m} className={cn("tnum py-2 pr-3 text-right", c.months[m] ? "text-ink" : "text-rose-600 dark:text-rose-300/70")}>
-                      {c.months[m] ? formatMoney(c.months[m]) : "—"}
+                      {!c.months[m] ? "—" : basic ? <Check className="ml-auto h-4 w-4 text-emerald-600 dark:text-emerald-300" aria-label={t("Billed")} /> : formatMoney(c.months[m])}
                     </td>
                   ))}
                 </tr>

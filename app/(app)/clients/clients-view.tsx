@@ -29,7 +29,7 @@ type Row = {
 
 export function ClientsView({ rows }: { rows: Row[] }) {
   const router = useRouter();
-  const canEdit = useCan("STAFF");
+  const canEdit = useCan("clients", "EDIT");
   const { t } = useI18n();
   const [query, setQuery] = useState("");
   const [importOpen, setImportOpen] = useState(false);

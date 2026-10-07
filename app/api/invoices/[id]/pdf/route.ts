@@ -8,7 +8,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request, { params }: { params: { id: string } }) {
-  const denied = await apiDenied("VIEWER");
+  const denied = await apiDenied("invoices");
   if (denied) return denied;
   const inv = await prisma.invoice.findUnique({
     where: { id: params.id },

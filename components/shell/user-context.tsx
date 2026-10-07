@@ -1,9 +1,9 @@
 "use client";
 
 import { createContext, useContext } from "react";
-import { hasRole, type RoleName } from "@/lib/roles";
+import { can, isManager, type Feature, type Level, type RoleInfo } from "@/lib/roles";
 
-export type SessionUser = { id: string; email: string; name: string; role: RoleName };
+export type SessionUser = { id: string; email: string; name: string; role: RoleInfo };
 
 const UserContext = createContext<SessionUser | null>(null);
 
@@ -17,10 +17,15 @@ export function useCurrentUser() {
   return user;
 }
 
-/** Whether the signed-in user may do things that need `min`. Display only;
+/** Whether the signed-in user reaches `level` on `feature`. Display only;
  *  the server checks again. */
-export function useCan(min: RoleName) {
-  return hasRole(useCurrentUser().role, min);
+export function useCan(feature: Feature, level: Level = "VIEW") {
+  return can(useCurrentUser().role, feature, level);
+}
+
+/** Owner or Admin. */
+export function useIsManager() {
+  return isManager(useCurrentUser().role);
 }
 
 export function initials(name: string) {

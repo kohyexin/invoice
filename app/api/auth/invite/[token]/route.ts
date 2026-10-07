@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { logActivity } from "@/lib/activity";
 import { prisma } from "@/lib/db";
 import { sha256 } from "@/lib/mfa";
 import { hashPassword, passwordProblem } from "@/lib/passwords";
@@ -8,7 +9,7 @@ export const runtime = "nodejs";
 async function findInvite(token: string) {
   const user = await prisma.user.findUnique({
     where: { inviteTokenHash: sha256(token) },
-    select: { id: true, email: true, name: true, role: true, active: true, passwordHash: true, inviteExpiresAt: true },
+    select: { id: true, email: true, name: true, role: { select: { name: true, system: true } }, active: true, passwordHash: true, inviteExpiresAt: true },
   });
   if (!user || !user.active || user.passwordHash) return { status: 404 as const };
   if (!user.inviteExpiresAt || user.inviteExpiresAt < new Date()) return { status: 410 as const };
@@ -19,7 +20,7 @@ export async function GET(_req: Request, { params }: { params: { token: string }
   const found = await findInvite(params.token);
   if (found.status !== 200) return NextResponse.json({ error: "Invalid link." }, { status: found.status });
   const { email, name, role } = found.user;
-  return NextResponse.json({ email, name, role });
+  return NextResponse.json({ email, name, role: role.name, roleSystem: role.system });
 }
 
 /** Accepts the invitation: sets the name and password and retires the link.
@@ -47,5 +48,9 @@ export async function POST(req: Request, { params }: { params: { token: string }
     },
   });
   if (accepted.count === 0) return NextResponse.json({ error: "This invitation is invalid or has expired." }, { status: 404 });
+  await logActivity(
+    { id: found.user.id, name: trimmed, email: found.user.email },
+    { action: "accept_invite", entity: "user", entityId: found.user.id, label: found.user.email }
+  );
   return NextResponse.json({ ok: true, email: found.user.email });
 }

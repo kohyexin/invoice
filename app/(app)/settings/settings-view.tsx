@@ -2,15 +2,18 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Building2, Check, Coins, Copy, FolderTree, KeyRound, Landmark, ListChecks, Mail, Plus, RefreshCw, Route, ShieldCheck, Tags, UserPlus, UserRound, X } from "lucide-react";
+import { Building2, Check, Coins, Copy, FolderTree, History, KeyRound, Landmark, ListChecks, Mail, Plus, RefreshCw, Route, ShieldCheck, Tags, UserPlus, UserRound, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { RecordPanel } from "@/components/ui/record-panel";
-import { ROLE_HELP, ROLE_LABEL, type RoleName } from "@/lib/roles";
+import { FEATURES, levelName, roleLabel, SYSTEM_ROLE_HELP } from "@/lib/roles";
 import { ACCOUNT_USE_OPTIONS, CASH_KIND_OPTIONS, SETTINGS_ENTITIES, type FieldDef, type SettingsEntity } from "@/lib/settings-config";
 import { cn, formatDate } from "@/lib/utils";
 import { useI18n } from "@/components/i18n/locale-provider";
 import { deleteSetting, saveSetting } from "./actions";
+import { ActivityView } from "./activity-view";
+import { RolePanel, type RoleRow } from "./role-panel";
+import { deleteRole, saveRole } from "./roles-actions";
 import { inviteUser, resendInvite, saveUser } from "./users-actions";
 import { refreshRates } from "../invoices/fx-actions";
 
@@ -18,19 +21,12 @@ type Row = Record<string, unknown> & { id: string };
 
 type Column = { label: string; render: (r: Row) => React.ReactNode; mono?: boolean; align?: "right" };
 
-type TabId = SettingsEntity | "user";
+type TabId = SettingsEntity | "user" | "role" | "activity";
 
-const ROLES: RoleName[] = ["ADMIN", "STAFF", "VIEWER"];
 type UserMode = "invite" | "pending" | "edit";
 
-function userFields(t: (s: string) => string, mode: UserMode): FieldDef[] {
-  const role: FieldDef = {
-    key: "role",
-    label: "Role",
-    kind: "select",
-    required: true,
-    options: ROLES.map((r) => ({ value: r, label: `${t(ROLE_LABEL[r])}: ${t(ROLE_HELP[r])}` })),
-  };
+function userFields(mode: UserMode, roleOptions: { value: string; label: string }[]): FieldDef[] {
+  const role: FieldDef = { key: "roleId", label: "Role", kind: "select", required: true, options: roleOptions };
   if (mode === "invite")
     return [
       { key: "email", label: "Email", kind: "text", required: true, hint: "We'll email them a link to set their name and password. It is valid for 72 hours." },
@@ -45,8 +41,6 @@ function userFields(t: (s: string) => string, mode: UserMode): FieldDef[] {
   return mode === "pending" ? [...base, ...PENDING_USER_EXTRA] : [...base, ...EDIT_USER_EXTRA];
 }
 
-const INVITE_DEFAULTS = { role: "STAFF" };
-
 const PENDING_USER_EXTRA: FieldDef[] = [
   { key: "active", label: "Active (untick to cancel the invitation)", kind: "checkbox" },
   { key: "resendInvite", label: "Resend invitation (the previous link stops working)", kind: "checkbox" },
@@ -57,7 +51,14 @@ const EDIT_USER_EXTRA: FieldDef[] = [
   { key: "resetTwoFactor", label: "Reset two-factor (they set up a new authenticator at next sign-in)", kind: "checkbox" },
 ];
 
-const ROLE_TONE: Record<RoleName, "brand" | "outline" | "neutral"> = { ADMIN: "brand", STAFF: "outline", VIEWER: "neutral" };
+const roleTone = (system: unknown) => (system === "OWNER" ? "brand" : system === "ADMIN" ? "outline" : "neutral");
+
+/** One line per role: what it can reach, for the Roles table and the role picker. */
+function accessSummary(t: (s: string) => string, role: RoleRow) {
+  if (role.system) return t(SYSTEM_ROLE_HELP[role.system]);
+  const parts = FEATURES.filter((f) => role.permissions[f.key] !== "NONE").map((f) => `${t(f.label)} ${t(levelName(f.key, role.permissions[f.key])).toLowerCase()}`);
+  return parts.join(", ");
+}
 
 type Tab = {
   id: TabId;
@@ -90,12 +91,20 @@ export function SettingsView(props: {
   items: Row[];
   users: Row[];
   cashCategories: Row[];
+  roles: RoleRow[];
   meId: string;
+  /** Owner or Admin: sees Users and Roles. */
+  manager: boolean;
+  owner: boolean;
+  /** Settings at View or Edit: sees the setting lists. */
+  showSettings: boolean;
+  canEdit: boolean;
 }) {
   const router = useRouter();
   const { t } = useI18n();
-  const [tabId, setTabId] = useState<TabId>("user");
+  const [tabId, setTabId] = useState<TabId>(props.manager ? "user" : "company");
   const [editing, setEditing] = useState<{ entity: TabId; row: Row | null } | null>(null);
+  const [editingRole, setEditingRole] = useState<{ role: RoleRow | null } | null>(null);
   const [issued, setIssued] = useState<
     { kind: "password"; email: string; password: string } | { kind: "invite"; email: string; link: string; emailed: "sent" | "logged" | "failed" } | null
   >(null);
@@ -109,14 +118,23 @@ export function SettingsView(props: {
     [props.companies, props.bankAccounts, props.types]
   );
   const typeName = useMemo(() => new Map(props.types.map((ty) => [ty.id, String(ty.name)])), [props.types]);
+  // Only an Owner can hand out the Owner role.
+  const roleOptions = useMemo(
+    () =>
+      props.roles
+        .filter((r) => r.system !== "OWNER" || props.owner)
+        .map((r) => ({ value: r.id, label: `${roleLabel(t, r)}: ${r.description || accessSummary(t, r)}` })),
+    [props.roles, props.owner, t]
+  );
+  const defaultRoleId = props.roles.find((r) => r.id === "role_staff")?.id ?? props.roles.find((r) => !r.system)?.id ?? "";
 
-  const tabs: Tab[] = [
+  const allTabs: Tab[] = [
     {
       id: "user",
       label: "Users",
       icon: ShieldCheck,
       description:
-        "Who can sign in. Admin: everything, including users and settings. Staff: invoices, clients, payments and imports. Viewer: read-only. Disable people instead of deleting them so their name stays on the invoices they touched.",
+        "Who can sign in and with which role. Only an Owner can make someone an Owner or change an Owner. Disable people instead of deleting them so their name stays on the invoices they touched.",
       rows: props.users,
       columns: [
         {
@@ -138,7 +156,7 @@ export function SettingsView(props: {
           ),
         },
         { label: "Email", render: (r) => String(r.email) },
-        { label: "Role", render: (r) => <Badge tone={ROLE_TONE[r.role as RoleName]}>{t(ROLE_LABEL[r.role as RoleName])}</Badge> },
+        { label: "Role", render: (r) => <Badge tone={roleTone(r.roleSystem)}>{roleLabel(t, { name: String(r.roleName), system: r.roleSystem as RoleRow["system"] })}</Badge> },
         {
           label: "Two-factor",
           render: (r) =>
@@ -156,6 +174,34 @@ export function SettingsView(props: {
           align: "right",
         },
       ],
+    },
+    {
+      id: "role",
+      label: "Roles",
+      icon: KeyRound,
+      description:
+        "What each role can see and change. Owner and Admin are fixed; Admin can view but not change the cash book and statement imports. Add roles like Finance and pick None, View or Edit for each feature.",
+      rows: props.roles as unknown as Row[],
+      columns: [
+        {
+          label: "Name",
+          render: (r) => (
+            <span className="flex items-center gap-2">
+              {roleLabel(t, r as RoleRow)} {r.system ? <Badge tone="outline">{t("Fixed")}</Badge> : null}
+            </span>
+          ),
+        },
+        { label: "Access", render: (r) => <span className="text-[13px] text-ink-muted">{String(r.description || accessSummary(t, r as RoleRow))}</span> },
+        { label: "Users", render: (r) => String(r.users), mono: true, align: "right" },
+      ],
+    },
+    {
+      id: "activity",
+      label: "Activity",
+      icon: History,
+      description: "Every change made in the app: who, when, and what changed. Entries can't be edited or deleted.",
+      rows: [],
+      columns: [],
     },
     {
       id: "company",
@@ -298,12 +344,23 @@ export function SettingsView(props: {
     },
   ];
 
-  const tab = tabs.find((x) => x.id === tabId)!;
+  const isPeopleTab = (id: TabId) => id === "user" || id === "role" || id === "activity";
+  const tabs = allTabs.filter((x) => (isPeopleTab(x.id) ? props.manager : props.showSettings));
+  const tab = tabs.find((x) => x.id === tabId) ?? tabs[0];
+  const canAdd = tab.id !== "activity" && (isPeopleTab(tab.id) ? props.manager : props.canEdit);
   const config = !editing
     ? null
     : editing.entity === "user"
-      ? { title: "User", fields: userFields(t, !editing.row ? "invite" : editing.row.pending ? "pending" : "edit") }
-      : SETTINGS_ENTITIES[editing.entity];
+      ? { title: "User", fields: userFields(!editing.row ? "invite" : editing.row.pending ? "pending" : "edit", roleOptions) }
+      : SETTINGS_ENTITIES[editing.entity as SettingsEntity];
+  // An Admin can see Owners but not change them.
+  const readOnly =
+    !editing || editing.entity === "user" ? Boolean(editing?.row && editing.row.roleSystem === "OWNER" && !props.owner) : !props.canEdit;
+
+  function open(entity: TabId, row: Row | null) {
+    if (entity === "role") setEditingRole({ role: row as RoleRow | null });
+    else setEditing({ entity, row });
+  }
 
   return (
     <div className="grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
@@ -323,7 +380,7 @@ export function SettingsView(props: {
             >
               <Icon className="h-4 w-4" />
               {t(x.label)}
-              <span className="ml-auto font-mono text-[11px] text-ink-soft">{x.rows.length}</span>
+              {x.id !== "activity" && <span className="ml-auto font-mono text-[11px] text-ink-soft">{x.rows.length}</span>}
             </button>
           );
         })}
@@ -373,13 +430,19 @@ export function SettingsView(props: {
             <p className="mt-0.5 max-w-2xl text-[13px] text-ink-muted">{t(tab.description)}</p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            {tab.id === "fxRate" && <RefreshFxButton />}
-            <Button size="sm" onClick={() => setEditing({ entity: tab.id, row: null })}>
-              {tab.id === "user" ? <UserPlus className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-              {tab.id === "user" ? t("Invite user") : t("Add")}
-            </Button>
+            {tab.id === "fxRate" && props.canEdit && <RefreshFxButton />}
+            {!canAdd && !isPeopleTab(tab.id) && <Badge tone="neutral">{t("View only")}</Badge>}
+            {canAdd && (
+              <Button size="sm" onClick={() => open(tab.id, null)}>
+                {tab.id === "user" ? <UserPlus className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                {tab.id === "user" ? t("Invite user") : tab.id === "role" ? t("New role") : t("Add")}
+              </Button>
+            )}
           </div>
         </div>
+        {tab.id === "activity" ? (
+          <ActivityView users={props.users.map((u) => ({ id: u.id, name: String(u.name || u.email) }))} />
+        ) : (
         <div className="relative overflow-x-auto px-5 pb-2">
           <table className="tnum w-full text-sm">
             <thead>
@@ -401,7 +464,7 @@ export function SettingsView(props: {
               {tab.rows.map((r) => (
                 <tr
                   key={r.id}
-                  onClick={() => setEditing({ entity: tab.id, row: r })}
+                  onClick={() => open(tab.id, r)}
                   className="cursor-pointer border-b border-line/60 transition-colors last:border-0 hover:bg-overlay/[0.03]"
                 >
                   {tab.columns.map((c) => (
@@ -428,15 +491,44 @@ export function SettingsView(props: {
             </tbody>
           </table>
         </div>
+        )}
       </section>
+
+      {editingRole && (
+        <RolePanel
+          role={editingRole.role}
+          onClose={() => setEditingRole(null)}
+          onSave={async (values) => {
+            const res = await saveRole(editingRole.role?.id ?? null, values);
+            if (!res.ok) return res.error;
+            router.refresh();
+            return null;
+          }}
+          onDelete={
+            editingRole.role && !editingRole.role.system
+              ? async () => {
+                  const res = await deleteRole(editingRole.role!.id);
+                  if (!res.ok) return res.error;
+                  router.refresh();
+                  return null;
+                }
+              : undefined
+          }
+        />
+      )}
 
       {editing && config && (
         <RecordPanel
           open
-          title={editing.entity === "user" && !editing.row ? t("Invite user") : t(editing.row ? "Edit {0}" : "Add {0}", t(config.title).toLowerCase())}
+          readOnly={readOnly}
+          title={
+            editing.entity === "user" && !editing.row
+              ? t("Invite user")
+              : t(readOnly ? "View {0}" : editing.row ? "Edit {0}" : "Add {0}", t(config.title).toLowerCase())
+          }
           saveLabel={editing.entity === "user" && !editing.row ? "Send invitation" : "Save"}
           fields={config.fields as FieldDef[]}
-          initial={editing.row ?? (editing.entity === "user" ? INVITE_DEFAULTS : null)}
+          initial={editing.row ?? (editing.entity === "user" ? { roleId: defaultRoleId } : null)}
           options={options}
           onClose={() => setEditing(null)}
           onSave={async (values) => {
@@ -460,13 +552,13 @@ export function SettingsView(props: {
               router.refresh();
               return null;
             }
-            const res = await saveSetting(editing.entity, editing.entity === "fxRate" ? null : editing.row?.id ?? null, values);
+            const res = await saveSetting(editing.entity as SettingsEntity, editing.entity === "fxRate" ? null : editing.row?.id ?? null, values);
             if (!res.ok) return res.error;
             router.refresh();
             return null;
           }}
           onDelete={
-            editing.row && editing.entity !== "user"
+            editing.row && editing.entity !== "user" && !readOnly
               ? async () => {
                   const res = await deleteSetting(editing.entity as SettingsEntity, editing.row!.id);
                   if (!res.ok) return res.error;

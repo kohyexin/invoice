@@ -1,11 +1,12 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { logActivity } from "@/lib/activity";
 import { prisma } from "@/lib/db";
 import type { Currency, Generate, InvoiceStatus } from "@/lib/generated/prisma/client";
 import { CURRENCIES, STATUSES, parseDateInput, round2 } from "@/lib/utils";
 import { fxRates, suggestInvoiceNumber, toUsd } from "@/lib/rules";
-import { authorize, requireRole } from "@/lib/session";
+import { authorize, requireAccess } from "@/lib/session";
 import { discardDocument, refreshDocument } from "@/lib/documents";
 
 type Result<T = object> = ({ ok: true } & T) | { ok: false; error: string };
@@ -60,7 +61,7 @@ function refresh(id?: string) {
 
 /** Defaults for a new ledger row once a client is picked. */
 export async function entryDefaults(clientId: string) {
-  await requireRole("STAFF");
+  await requireAccess("invoiceCreate", "EDIT");
   const [client, number, last, fallbackOwner, usedAlias] = await Promise.all([
     prisma.client.findUnique({ where: { id: clientId }, select: { alias: true, defaultOwnerId: true } }),
     suggestInvoiceNumber(clientId),
@@ -83,7 +84,8 @@ export async function entryDefaults(clientId: string) {
 }
 
 export async function saveEntry(id: string | null, input: EntryInput, confirmReuse = false): Promise<Result<{ id: string; reuse?: string }>> {
-  const auth = await authorize("STAFF");
+  // A new ledger row is a new invoice; changing one is managing invoices.
+  const auth = id ? await authorize("invoices", "EDIT") : await authorize("invoiceCreate", "EDIT");
   if (!auth.ok) return auth;
   const number = input.number.trim();
   const invoiceDate = parseDateInput(input.invoiceDate);
@@ -149,9 +151,11 @@ export async function saveEntry(id: string | null, input: EntryInput, confirmReu
   }
 
   try {
+    const before = id ? await prisma.invoice.findUnique({ where: { id } }) : null;
     const row = id
       ? await prisma.invoice.update({ where: { id }, data })
       : await prisma.invoice.create({ data: { ...data, createdById: auth.user.id } });
+    await logActivity(auth.user, { action: id ? "update" : "create", entity: "invoice", entityId: row.id, label: row.number, before, after: data });
     if (id) await refreshDocument(row.id).catch(() => undefined);
     refresh(row.id);
     return { ok: true, id: row.id };
@@ -161,25 +165,25 @@ export async function saveEntry(id: string | null, input: EntryInput, confirmReu
 }
 
 export async function markPaid(id: string, input: PaymentInput): Promise<Result> {
-  const auth = await authorize("STAFF");
+  const auth = await authorize("invoices", "EDIT");
   if (!auth.ok) return auth;
   const receivedDate = parseDateInput(input.receivedDate);
   const receivedAmount = money(input.receivedAmount);
   if (!receivedDate) return { ok: false, error: "Received date is required." };
   if (receivedAmount === null) return { ok: false, error: "Received amount is required." };
   try {
-    await prisma.invoice.update({
-      where: { id },
-      data: {
-        status: "PAID",
-        receivedDate,
-        receivedAmount,
-        receivedCurrency: currencyOrNull(input.receivedCurrency),
-        fee: money(input.fee),
-        paymentNote: input.paymentNote.trim(),
-        updatedById: auth.user.id,
-      },
-    });
+    const before = await prisma.invoice.findUnique({ where: { id } });
+    const data = {
+      status: "PAID" as const,
+      receivedDate,
+      receivedAmount,
+      receivedCurrency: currencyOrNull(input.receivedCurrency),
+      fee: money(input.fee),
+      paymentNote: input.paymentNote.trim(),
+      updatedById: auth.user.id,
+    };
+    const row = await prisma.invoice.update({ where: { id }, data });
+    await logActivity(auth.user, { action: "mark_paid", entity: "invoice", entityId: id, label: row.number, before, after: data });
     refresh(id);
     return { ok: true };
   } catch (e) {
@@ -188,23 +192,24 @@ export async function markPaid(id: string, input: PaymentInput): Promise<Result>
 }
 
 export async function setStatus(id: string, status: InvoiceStatus): Promise<Result> {
-  const auth = await authorize("STAFF");
+  const auth = await authorize("invoices", "EDIT");
   if (!auth.ok) return auth;
   if (!(STATUSES as readonly string[]).includes(status)) return { ok: false, error: "Unknown status." };
   const cleared = status === "SENT" ? { receivedDate: null, receivedAmount: null, receivedCurrency: null, fee: null } : {};
-  await prisma.invoice.update({
-    where: { id },
-    data: { status, ...cleared, updatedById: auth.user.id },
-  });
+  const before = await prisma.invoice.findUnique({ where: { id } });
+  const data = { status, ...cleared, updatedById: auth.user.id };
+  const row = await prisma.invoice.update({ where: { id }, data });
+  await logActivity(auth.user, { action: "update", entity: "invoice", entityId: id, label: row.number, before, after: data });
   refresh(id);
   return { ok: true };
 }
 
 export async function deleteEntry(id: string): Promise<Result> {
-  const auth = await authorize("STAFF");
+  const auth = await authorize("invoices", "EDIT");
   if (!auth.ok) return auth;
   await discardDocument(id);
-  await prisma.invoice.delete({ where: { id } });
+  const before = await prisma.invoice.delete({ where: { id } });
+  await logActivity(auth.user, { action: "delete", entity: "invoice", entityId: id, label: before.number, before });
   refresh();
   return { ok: true };
 }

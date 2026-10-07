@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { jwtVerify } from "jose";
+import { logActivity } from "@/lib/activity";
 import { connectDrive, googleRedirectUri } from "@/lib/gdrive";
 import { syncPendingDocuments } from "@/lib/documents";
 import { getCurrentUser } from "@/lib/session";
-import { hasRole } from "@/lib/roles";
+import { can } from "@/lib/roles";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,7 +15,7 @@ export async function GET(req: Request) {
   const back = (params: Record<string, string>) => NextResponse.redirect(new URL(`/settings?${new URLSearchParams(params)}`, req.url));
 
   const user = await getCurrentUser();
-  if (!user || !hasRole(user.role, "ADMIN")) return back({ drive: "error", reason: "You do not have permission to do this." });
+  if (!user || !can(user.role, "settings", "EDIT")) return back({ drive: "error", reason: "You do not have permission to do this." });
   if (url.searchParams.get("error")) return back({ drive: "error", reason: "Google sign-in was cancelled." });
 
   try {
@@ -29,6 +30,7 @@ export async function GET(req: Request) {
   } catch (e) {
     return back({ drive: "error", reason: e instanceof Error ? e.message : "Couldn't connect Google Drive." });
   }
+  await logActivity(user, { action: "connect", entity: "setting:googleDrive", label: "Google Drive" });
   await syncPendingDocuments(30_000).catch(() => undefined);
   return back({ drive: "connected" });
 }

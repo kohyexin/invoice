@@ -1,9 +1,11 @@
 import { PageHeader } from "@/components/ui/page-header";
 import { prisma } from "@/lib/db";
+import { requirePage } from "@/lib/session";
 import { LedgerView } from "./ledger-view";
 import { loadLookups } from "./lookups";
 
 export default async function InvoicesPage({ searchParams }: { searchParams: { q?: string } }) {
+  await requirePage("invoices");
   const [invoices, lookups] = await Promise.all([
     prisma.invoice.findMany({
       orderBy: [{ invoiceDate: "desc" }, { number: "desc" }],

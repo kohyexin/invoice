@@ -1,7 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { authorize, requireRole } from "@/lib/session";
+import { logActivity } from "@/lib/activity";
+import { prisma } from "@/lib/db";
+import { authorize, requireAccess } from "@/lib/session";
 import {
   approveReview,
   listMailbox,
@@ -26,7 +28,7 @@ const errorText = (e: unknown) => (e instanceof Error ? e.message : "Mailbox fet
 
 /** Step 1 of a mailbox check: which emails are new, and which were handled before. */
 export async function scanMailbox(): Promise<({ ok: true } & MailboxScan) | { ok: false; error: string }> {
-  const auth = await authorize("STAFF");
+  const auth = await authorize("systemImports", "EDIT");
   if (!auth.ok) return auth;
   try {
     return { ok: true, ...(await listMailbox()) };
@@ -37,7 +39,7 @@ export async function scanMailbox(): Promise<({ ok: true } & MailboxScan) | { ok
 
 /** Step 2, called repeatedly by the page with a few emails at a time so no single request runs long. */
 export async function stageMailboxBatch(uids: number[]): Promise<Summary> {
-  const auth = await authorize("STAFF");
+  const auth = await authorize("systemImports", "EDIT");
   if (!auth.ok) return auth;
   try {
     const outcomes = await stageMailboxUids(uids.slice(0, 10));
@@ -48,7 +50,7 @@ export async function stageMailboxBatch(uids: number[]): Promise<Summary> {
 }
 
 export async function finishMailboxCheck() {
-  await requireRole("STAFF");
+  await requireAccess("systemImports", "EDIT");
   refresh();
 }
 
@@ -60,7 +62,7 @@ function uploadName(name: string) {
 }
 
 export async function uploadPdfs(form: FormData): Promise<Summary> {
-  const auth = await authorize("STAFF");
+  const auth = await authorize("systemImports", "EDIT");
   if (!auth.ok) return auth;
   const files = form.getAll("files").filter((f): f is File => f instanceof File && f.size > 0);
   if (!files.length) return { ok: false, error: "Choose one or more PDF files." };
@@ -70,27 +72,39 @@ export async function uploadPdfs(form: FormData): Promise<Summary> {
     const outcome = await stageSystemPdf({ data: new Uint8Array(await f.arrayBuffer()), filename: name, subject: name });
     outcomes.push({ ...outcome, label: name });
   }
+  await logActivity(auth.user, { action: "upload", entity: "import", label: outcomes.map((o) => o.label).join(", "), changes: { files: outcomes.length } });
   refresh();
   return { ok: true, outcomes };
 }
 
 /** Approves one item. The page calls this once per item, so "approve all" can show progress. */
 export async function approveImport(id: string, clientId: string, refreshAfter = true): Promise<{ ok: true; number: string } | { ok: false; error: string }> {
-  const auth = await authorize("STAFF");
+  const auth = await authorize("systemImports", "EDIT");
   if (!auth.ok) return auth;
   const res = await approveReview(id, clientId, auth.user.id);
+  if (res.ok) {
+    await logActivity(auth.user, { action: "approve", entity: "import", entityId: id, label: res.number, changes: { invoiceId: res.invoiceId } });
+    await logActivity(auth.user, { action: "import", entity: "invoice", entityId: res.invoiceId, label: res.number, changes: { source: "System import" } });
+  }
   if (refreshAfter) refresh();
-  return res;
+  return res.ok ? { ok: true as const, number: res.number } : res;
+}
+
+async function importLabel(id: string) {
+  const row = await prisma.importReview.findUnique({ where: { id }, select: { subject: true } });
+  return row?.subject ?? "";
 }
 
 export async function rejectImport(id: string) {
-  const user = await requireRole("STAFF");
+  const user = await requireAccess("systemImports", "EDIT");
   await rejectReview(id, user.id);
+  await logActivity(user, { action: "reject", entity: "import", entityId: id, label: await importLabel(id) });
   refresh();
 }
 
 export async function restoreImport(id: string) {
-  await requireRole("STAFF");
+  const user = await requireAccess("systemImports", "EDIT");
   await restoreReview(id);
+  await logActivity(user, { action: "restore", entity: "import", entityId: id, label: await importLabel(id) });
   refresh();
 }

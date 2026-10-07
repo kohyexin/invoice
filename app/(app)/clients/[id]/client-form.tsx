@@ -57,7 +57,7 @@ export function ClientForm({
   unpaid: number;
 }) {
   const router = useRouter();
-  const canEdit = useCan("STAFF");
+  const canEdit = useCan("clients", "EDIT");
   const { t } = useI18n();
   const [values, setValues] = useState<ClientInput>(initial);
   const [fees, setFees] = useState<[string, string][]>(Object.entries(initial.fees));

@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { logActivity } from "@/lib/activity";
 import { prisma } from "@/lib/db";
 import { authorize } from "@/lib/session";
 import { SETTINGS_ENTITIES, type FieldDef, type SettingsEntity } from "@/lib/settings-config";
@@ -55,47 +56,75 @@ function friendly(e: unknown) {
   return msg;
 }
 
+type AnyRow = Record<string, unknown> & { id?: string };
+
+/** The stored row for the activity log (fxRate is keyed by currency). */
+async function findRow(entity: SettingsEntity, id: string): Promise<AnyRow | null> {
+  const where = entity === "fxRate" ? { currency: id } : { id };
+  const model = (prisma as unknown as Record<string, { findUnique(args: { where: object }): Promise<AnyRow | null> }>)[entity];
+  return model.findUnique({ where }).catch(() => null);
+}
+
+function labelOf(row: AnyRow | null) {
+  if (!row) return "";
+  return String(row.legalName ?? row.label ?? row.name ?? row.labelEn ?? row.nameZh ?? row.currency ?? row.id ?? "");
+}
+
 export async function saveSetting(entity: SettingsEntity, id: string | null, input: Record<string, unknown>): Promise<Result> {
-  const auth = await authorize("ADMIN");
+  const auth = await authorize("settings", "EDIT");
   if (!auth.ok) return auth;
   try {
     const data = build(entity, input);
+    const key = entity === "fxRate" ? String(data.currency) : id;
+    const before = key ? await findRow(entity, key) : null;
+    let saved: AnyRow;
     switch (entity) {
       case "company":
-        await (id ? prisma.company.update({ where: { id }, data: data as never }) : prisma.company.create({ data: data as never }));
+        saved = await (id ? prisma.company.update({ where: { id }, data: data as never }) : prisma.company.create({ data: data as never }));
         break;
       case "bankAccount":
-        await (id ? prisma.bankAccount.update({ where: { id }, data: data as never }) : prisma.bankAccount.create({ data: data as never }));
+        saved = await (id ? prisma.bankAccount.update({ where: { id }, data: data as never }) : prisma.bankAccount.create({ data: data as never }));
         break;
       case "paymentRule":
-        await (id ? prisma.paymentRule.update({ where: { id }, data: data as never }) : prisma.paymentRule.create({ data: data as never }));
+        saved = await (id ? prisma.paymentRule.update({ where: { id }, data: data as never }) : prisma.paymentRule.create({ data: data as never }));
         break;
       case "owner": {
-        const saved = await (id ? prisma.owner.update({ where: { id }, data: data as never }) : prisma.owner.create({ data: data as never }));
+        saved = await (id ? prisma.owner.update({ where: { id }, data: data as never }) : prisma.owner.create({ data: data as never }));
         if (data.isDefault) await prisma.owner.updateMany({ where: { NOT: { id: saved.id } }, data: { isDefault: false } });
         break;
       }
       case "invoiceType":
-        await (id ? prisma.invoiceType.update({ where: { id }, data: data as never }) : prisma.invoiceType.create({ data: data as never }));
+        saved = await (id ? prisma.invoiceType.update({ where: { id }, data: data as never }) : prisma.invoiceType.create({ data: data as never }));
         break;
       case "invoiceItem":
-        await (id ? prisma.invoiceItem.update({ where: { id }, data: data as never }) : prisma.invoiceItem.create({ data: data as never }));
+        saved = await (id ? prisma.invoiceItem.update({ where: { id }, data: data as never }) : prisma.invoiceItem.create({ data: data as never }));
         break;
       case "cashCategory":
-        await (id ? prisma.cashCategory.update({ where: { id }, data: data as never }) : prisma.cashCategory.create({ data: data as never }));
+        saved = await (id ? prisma.cashCategory.update({ where: { id }, data: data as never }) : prisma.cashCategory.create({ data: data as never }));
         break;
       case "fxRate": {
         const perUsd = Number(data.perUsd);
         if (!(perUsd > 0)) throw new Error("Units per 1 USD must be above zero.");
         const currency = data.currency as never;
-        await prisma.fxRate.upsert({
+        saved = await prisma.fxRate.upsert({
           where: { currency },
           update: { usdPerUnit: 1 / perUsd, source: "MANUAL" },
           create: { currency, usdPerUnit: 1 / perUsd, source: "MANUAL" },
         });
+        delete data.perUsd;
+        data.usdPerUnit = saved.usdPerUnit;
+        data.source = "MANUAL";
         break;
       }
     }
+    await logActivity(auth.user, {
+      action: before ? "update" : "create",
+      entity: `setting:${entity}`,
+      entityId: entity === "fxRate" ? key : saved.id,
+      label: labelOf(saved),
+      before,
+      after: data,
+    });
     revalidatePath("/settings");
     if (entity === "bankAccount" || entity === "cashCategory" || entity === "fxRate") revalidatePath("/cash", "layout");
     return { ok: true };
@@ -105,9 +134,10 @@ export async function saveSetting(entity: SettingsEntity, id: string | null, inp
 }
 
 export async function deleteSetting(entity: SettingsEntity, id: string): Promise<Result> {
-  const auth = await authorize("ADMIN");
+  const auth = await authorize("settings", "EDIT");
   if (!auth.ok) return auth;
   try {
+    const before = await findRow(entity, id);
     switch (entity) {
       case "company":
         await prisma.company.delete({ where: { id } });
@@ -134,6 +164,7 @@ export async function deleteSetting(entity: SettingsEntity, id: string): Promise
         await prisma.fxRate.delete({ where: { currency: id as never } });
         break;
     }
+    await logActivity(auth.user, { action: "delete", entity: `setting:${entity}`, entityId: id, label: labelOf(before), before });
     revalidatePath("/settings");
     return { ok: true };
   } catch (e) {

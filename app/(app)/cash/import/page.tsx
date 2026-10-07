@@ -1,6 +1,6 @@
 import { PageHeader } from "@/components/ui/page-header";
 import { prisma } from "@/lib/db";
-import { requirePageRole } from "@/lib/session";
+import { requirePage } from "@/lib/session";
 import { round2 } from "@/lib/utils";
 import { accountNameWithCurrency } from "@/lib/account-name";
 import { StatementImportView } from "./import-view";
@@ -9,7 +9,7 @@ const iso = (d: Date) => d.toISOString().slice(0, 10);
 const net = (r: { _sum: { amountIn: unknown; amountOut: unknown } }) => Number(r._sum.amountIn ?? 0) - Number(r._sum.amountOut ?? 0);
 
 export default async function StatementImportPage() {
-  await requirePageRole("STAFF");
+  await requirePage("statementImport");
   const lineSelect = {
     id: true,
     key: true,

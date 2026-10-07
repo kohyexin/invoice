@@ -11,17 +11,25 @@ import {
   Wallet,
   type LucideIcon,
 } from "lucide-react";
-import type { RoleName } from "@/lib/roles";
+import { can, isManager, type Feature, type Level, type RoleInfo } from "@/lib/roles";
 
 export type NavItem = {
   label: string;
   href: string;
   icon: LucideIcon;
-  minRole?: RoleName;
+  /** Feature and level needed to see the item; none means everyone. */
+  need?: [Feature, Level];
+  /** Also shown to Owners and Admins without `need` (Settings holds Users and Roles). */
+  managers?: boolean;
   /** false: reachable from the profile menu and command palette only. */
   sidebar?: boolean;
 };
 export type NavGroup = { label?: string; items: NavItem[] };
+
+export function canSee(item: NavItem, role: RoleInfo) {
+  if (!item.need) return true;
+  return can(role, ...item.need) || (Boolean(item.managers) && isManager(role));
+}
 
 export const navGroups: NavGroup[] = [
   {
@@ -30,25 +38,25 @@ export const navGroups: NavGroup[] = [
   {
     label: "Invoicing",
     items: [
-      { label: "Invoices", href: "/invoices", icon: FileText },
-      { label: "New invoice", href: "/invoices/new", icon: FilePlus2, minRole: "STAFF" },
-      { label: "System imports", href: "/imports", icon: Inbox, minRole: "STAFF" },
+      { label: "Invoices", href: "/invoices", icon: FileText, need: ["invoices", "VIEW"] },
+      { label: "New invoice", href: "/invoices/new", icon: FilePlus2, need: ["invoiceCreate", "EDIT"] },
+      { label: "System imports", href: "/imports", icon: Inbox, need: ["systemImports", "VIEW"] },
     ],
   },
   {
     label: "Balance sheet",
     items: [
-      { label: "Cash position", href: "/cash", icon: Wallet },
-      { label: "Cash book", href: "/cash/ledger", icon: BookOpen },
-      { label: "Monthly statement", href: "/cash/monthly", icon: CalendarRange },
-      { label: "Import statement", href: "/cash/import", icon: FileUp, minRole: "STAFF" },
+      { label: "Cash position", href: "/cash", icon: Wallet, need: ["cashReports", "VIEW"] },
+      { label: "Cash book", href: "/cash/ledger", icon: BookOpen, need: ["cashBook", "VIEW"] },
+      { label: "Monthly statement", href: "/cash/monthly", icon: CalendarRange, need: ["cashReports", "VIEW"] },
+      { label: "Import statement", href: "/cash/import", icon: FileUp, need: ["statementImport", "VIEW"] },
     ],
   },
   {
     label: "Records",
     items: [
-      { label: "Clients", href: "/clients", icon: Users },
-      { label: "Settings", href: "/settings", icon: Settings, minRole: "ADMIN", sidebar: false },
+      { label: "Clients", href: "/clients", icon: Users, need: ["clients", "VIEW"] },
+      { label: "Settings", href: "/settings", icon: Settings, need: ["settings", "VIEW"], managers: true, sidebar: false },
     ],
   },
 ];

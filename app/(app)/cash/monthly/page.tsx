@@ -1,5 +1,6 @@
 import { PageHeader } from "@/components/ui/page-header";
 import { cashMonths, loadMonthlyStatement } from "@/lib/cash";
+import { requirePage } from "@/lib/session";
 import { MonthlyView } from "./monthly-view";
 
 function monthsBefore(ym: string, n: number) {
@@ -9,6 +10,7 @@ function monthsBefore(ym: string, n: number) {
 }
 
 export default async function MonthlyStatementPage({ searchParams }: { searchParams: { month?: string; view?: string } }) {
+  await requirePage("cashReports");
   const months = await cashMonths();
   const today = new Date().toISOString().slice(0, 7);
   const requested = searchParams.month && /^\d{4}-\d{2}$/.test(searchParams.month) ? searchParams.month : null;

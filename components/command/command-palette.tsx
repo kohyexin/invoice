@@ -19,8 +19,8 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { cn, formatCurrency } from "@/lib/utils";
-import { navGroups } from "@/lib/nav";
-import { hasRole } from "@/lib/roles";
+import { canSee, navGroups } from "@/lib/nav";
+import { can } from "@/lib/roles";
 import { useI18n } from "@/components/i18n/locale-provider";
 import { signOut, useCurrentUser } from "@/components/shell/user-context";
 
@@ -52,7 +52,8 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   const router = useRouter();
   const { resolvedTheme, setTheme } = useTheme();
   const user = useCurrentUser();
-  const canEdit = hasRole(user.role, "STAFF");
+  const canCreateInvoice = can(user.role, "invoiceCreate", "EDIT");
+  const canAddClient = can(user.role, "clients", "EDIT");
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const [results, setResults] = useState<SearchResult>(EMPTY);
@@ -92,18 +93,16 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
 
     const navigation: Item[] = navGroups
       .flatMap((g) => g.items)
-      .filter((i) => !i.minRole || hasRole(user.role, i.minRole))
+      .filter((i) => canSee(i, user.role))
       .filter((i) => matches(t(i.label), i.label))
       .map((i) => ({ id: `nav-${i.href}`, icon: i.icon, label: t(i.label), perform: go(i.href) }));
 
     const isDark = resolvedTheme === "dark";
     const actions: Item[] = [
-      ...(canEdit
-        ? [
-            { id: "new-invoice", icon: FilePlus2, label: t("New invoice"), keywords: "new invoice create", perform: go("/invoices/new") },
-            { id: "new-client", icon: UserPlus, label: t("New client"), keywords: "new client add", perform: go("/clients/new") },
-          ]
+      ...(canCreateInvoice
+        ? [{ id: "new-invoice", icon: FilePlus2, label: t("New invoice"), keywords: "new invoice create", perform: go("/invoices/new") }]
         : []),
+      ...(canAddClient ? [{ id: "new-client", icon: UserPlus, label: t("New client"), keywords: "new client add", perform: go("/clients/new") }] : []),
       {
         id: "theme",
         icon: isDark ? Sun : Moon,
@@ -155,7 +154,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
       { label: results.invoiceTotal ? `${t("Invoices")} (${results.invoiceTotal})` : t("Invoices"), items: invoices },
       { label: t("Clients"), items: clients },
     ].filter((g) => g.items.length > 0);
-  }, [query, results, locale, resolvedTheme, canEdit, user.role, router, setTheme, setLocale, t]);
+  }, [query, results, locale, resolvedTheme, canCreateInvoice, canAddClient, user.role, router, setTheme, setLocale, t]);
 
   const flat = useMemo(() => groups.flatMap((g) => g.items), [groups]);
 

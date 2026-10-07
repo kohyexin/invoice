@@ -22,10 +22,13 @@ export function RecordPanel({
   onSave,
   onDelete,
   saveLabel = "Save",
+  readOnly = false,
 }: {
   open: boolean;
   title: string;
   saveLabel?: string;
+  /** Shows the values with every input disabled and no Save or Delete. */
+  readOnly?: boolean;
   fields: FieldDef[];
   initial: Record<string, unknown> | null;
   options?: Options;
@@ -82,6 +85,11 @@ export function RecordPanel({
       onClose={onClose}
       title={title}
       footer={
+        readOnly ? (
+          <Button variant="secondary" size="sm" onClick={onClose}>
+            {t("Close")}
+          </Button>
+        ) : (
         <>
           {onDelete && (
             <Button variant={confirmDelete ? "danger" : "ghost"} size="sm" onClick={remove} disabled={pending} className="mr-auto">
@@ -95,9 +103,10 @@ export function RecordPanel({
             {t(saveLabel)}
           </Button>
         </>
+        )
       }
     >
-      <div className="space-y-4">
+      <fieldset disabled={readOnly} className="space-y-4">
         {error && (
           <p className="rounded-control border border-danger/30 bg-danger/10 px-3 py-2 text-[13px] text-rose-700 dark:text-rose-200">{t(error)}</p>
         )}
@@ -157,7 +166,7 @@ export function RecordPanel({
             </Field>
           );
         })}
-      </div>
+      </fieldset>
     </SidePanel>
   );
 }

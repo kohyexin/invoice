@@ -13,9 +13,10 @@ type Props = {
   connection: { email: string; connectedAt: string; folderUrl: string } | null;
   stats: { total: number; onDrive: number; waiting: number; failing: number; withoutPdf: number; lastError: string | null };
   notice: { kind: "connected" | "error" | "not-configured"; reason?: string } | null;
+  canEdit: boolean;
 };
 
-export function DocumentStorage({ configured, connection, stats, notice }: Props) {
+export function DocumentStorage({ configured, connection, stats, notice, canEdit }: Props) {
   const router = useRouter();
   const { t } = useI18n();
   const [pending, start] = useTransition();
@@ -51,7 +52,16 @@ export function DocumentStorage({ configured, connection, stats, notice }: Props
           </p>
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2">
-          {connection ? (
+          {!canEdit ? (
+            connection && (
+              <a href={connection.folderUrl} target="_blank" rel="noreferrer">
+                <Button size="sm" variant="secondary">
+                  <ExternalLink className="h-4 w-4" />
+                  {t("Open folder")}
+                </Button>
+              </a>
+            )
+          ) : connection ? (
             <>
               {expired && (
                 <a href="/api/google/connect">

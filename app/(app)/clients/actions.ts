@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { logActivity } from "@/lib/activity";
 import { prisma } from "@/lib/db";
 import { normalizeAgreements } from "@/lib/client-import";
 import { importClientRows } from "@/lib/client-import-db";
@@ -12,10 +13,11 @@ type Result<T = object> = ({ ok: true } & T) | { ok: false; error: string };
 export async function importJotformRows(
   rows: Record<string, string>[]
 ): Promise<Result<{ created: number; updated: number; skipped: number }>> {
-  const auth = await authorize("STAFF");
+  const auth = await authorize("clients", "EDIT");
   if (!auth.ok) return auth;
   try {
     const res = await importClientRows(prisma, rows);
+    await logActivity(auth.user, { action: "import", entity: "client", label: "Jotform import", changes: res });
     revalidatePath("/clients");
     return { ok: true, ...res };
   } catch (e) {
@@ -47,7 +49,7 @@ export type ClientInput = {
 };
 
 export async function saveClient(id: string | null, input: ClientInput): Promise<Result<{ id: string }>> {
-  const auth = await authorize("STAFF");
+  const auth = await authorize("clients", "EDIT");
   if (!auth.ok) return auth;
   const name = input.name.trim();
   if (!name) return { ok: false, error: "Client name is required." };
@@ -80,9 +82,11 @@ export async function saveClient(id: string | null, input: ClientInput): Promise
     fees,
   };
   try {
+    const before = id ? await prisma.client.findUnique({ where: { id } }) : null;
     const row = id
       ? await prisma.client.update({ where: { id }, data })
       : await prisma.client.create({ data });
+    await logActivity(auth.user, { action: id ? "update" : "create", entity: "client", entityId: row.id, label: row.name, before, after: data });
     revalidatePath("/clients");
     revalidatePath(`/clients/${row.id}`);
     return { ok: true, id: row.id };
@@ -93,11 +97,12 @@ export async function saveClient(id: string | null, input: ClientInput): Promise
 }
 
 export async function deleteClient(id: string): Promise<Result> {
-  const auth = await authorize("STAFF");
+  const auth = await authorize("clients", "EDIT");
   if (!auth.ok) return auth;
   const count = await prisma.invoice.count({ where: { clientId: id } });
   if (count > 0) return { ok: false, error: `This client has ${count} invoice(s). Delete or move them first.` };
-  await prisma.client.delete({ where: { id } });
+  const before = await prisma.client.delete({ where: { id } });
+  await logActivity(auth.user, { action: "delete", entity: "client", entityId: id, label: before.name, before });
   revalidatePath("/clients");
   return { ok: true };
 }
