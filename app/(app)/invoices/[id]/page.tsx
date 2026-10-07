@@ -139,9 +139,10 @@ export default async function InvoicePage({ params }: { params: { id: string } }
               <Row label={t("Last changed")} value={`${formatDateTime(inv.updatedAt)} · ${inv.updatedBy?.name ?? originLabel(inv, t)}`} />
             </dl>
             {activity.length > 0 && (
-              <div className="mt-3 border-t border-line/60">
+              <div className="mt-4 border-t border-line/60 pt-4">
                 <ActivityList
                   showEntity={false}
+                  compact
                   rows={activity.map((a) => ({ ...a, createdAt: a.createdAt.toISOString(), changes: (a.changes as Record<string, unknown> | null) ?? null }))}
                 />
               </div>
