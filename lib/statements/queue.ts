@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/db";
+import { settleInvoices, type SettledInvoice } from "./invoices";
 import type { StatementPreview } from "./reconcile";
 
 /* The approval queue for statement lines: nothing reaches the cash book
@@ -139,9 +140,10 @@ export async function saveLine(id: string, edits: LineEdits) {
   if (!res.count) throw new Error("This line is no longer waiting for approval.");
 }
 
-export async function approveLine(id: string, edits: LineEdits, actorId: string | null) {
+/** Adds the line to the cash book; returns the invoices it marked paid. */
+export async function approveLine(id: string, edits: LineEdits, actorId: string | null, opts: { markPaid: boolean } = { markPaid: false }) {
   const data = await cleanEdits(edits);
-  await prisma.$transaction(async (tx) => {
+  return prisma.$transaction(async (tx): Promise<SettledInvoice[]> => {
     const line = await tx.statementLine.findUnique({ where: { id } });
     if (!line || line.status !== "PENDING") throw new Error("This line is no longer waiting for approval.");
     if (await tx.cashTxn.findUnique({ where: { importKey: line.key }, select: { id: true } })) {
@@ -176,6 +178,7 @@ export async function approveLine(id: string, edits: LineEdits, actorId: string 
       where: { id },
       data: { ...data, status: "IMPORTED", cashTxnId: txn.id, decidedAt: new Date(), decidedById: actorId },
     });
+    return settleInvoices(tx, { ...txn, amountIn: Number(txn.amountIn) }, { markPaid: opts.markPaid, actorId });
   });
 }
 

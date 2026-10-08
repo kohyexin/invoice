@@ -529,6 +529,7 @@ function PendingRow({
         <label className="space-y-1">
           <span className="text-[11px] uppercase tracking-wider text-ink-soft">{t("Party")}</span>
           <input value={v.party} onChange={(e) => set({ party: e.target.value })} disabled={disabled} className={cn(fieldClass, "h-9")} />
+          {l.suggested === "invoice" && <span className="block text-[11px] text-ink-soft">{t("Unpaid invoice for the same amount")}</span>}
         </label>
         <label className="space-y-1 sm:col-span-2 lg:col-span-4">
           <span className="text-[11px] uppercase tracking-wider text-ink-soft">{t("Memo")}</span>

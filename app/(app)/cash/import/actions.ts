@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { logActivity } from "@/lib/activity";
 import { prisma } from "@/lib/db";
+import { can } from "@/lib/roles";
 import { authorize } from "@/lib/session";
 import { approveLine, rejectLine, restoreLine, saveLine, stageStatements, type LineEdits } from "@/lib/statements/queue";
 import { MAX_FILES, readStatementFiles } from "@/lib/statements/read";
@@ -118,8 +119,9 @@ export async function approveStatementLine(id: string, edits: LineEdits, refresh
   if (!auth.ok) return auth;
   try {
     const line = await lineForLog(id);
-    await approveLine(id, edits, auth.user.id);
+    const paid = await approveLine(id, edits, auth.user.id, { markPaid: can(auth.user.role, "invoices", "EDIT") });
     if (line) await logActivity(auth.user, { action: "approve", entity: "statement_line", entityId: id, label: line.label, before: line.fields, after: edits });
+    for (const p of paid) await logActivity(auth.user, { action: "mark_paid", entity: "invoice", entityId: p.id, label: p.number, before: p.before, after: p.after });
     if (refreshAfter) refresh();
     return { ok: true };
   } catch (e) {

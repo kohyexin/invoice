@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { round2 } from "@/lib/utils";
 import { BALANCE_USES } from "@/lib/cash";
 import { accountName, accountNameWithCurrency } from "@/lib/account-name";
+import { invoiceNumbers, openInvoices, type OpenInvoice } from "./invoices";
 import type { ParsedStatement, StatementEntry } from "./types";
 
 /* Compares statements with the cash book and the approval queue. Nothing here
@@ -26,8 +27,8 @@ export type ProposedLine = {
   /** The statement's own wording, for entries. */
   description: string;
   counterparty: string;
-  /** Where the suggested category came from. */
-  suggested: "history" | "rule" | "none";
+  /** Where the suggestion came from; "invoice" means an unpaid invoice for the same amount. */
+  suggested: "invoice" | "history" | "rule" | "none";
 };
 
 export type MatchedEntry = {
@@ -113,7 +114,7 @@ export async function reconcileStatements(
   files: { name: string; statement: ParsedStatement }[],
   accountChoices: Record<string, string> = {},
 ): Promise<Omit<StatementPreview, "errors">> {
-  const [accounts, categories, dbHints] = await Promise.all([
+  const [accounts, categories, dbHints, unpaid, waitingParties] = await Promise.all([
     prisma.bankAccount.findMany({
       where: { use: { in: [...BALANCE_USES] } },
       orderBy: [{ sortOrder: "asc" }, { label: "asc" }],
@@ -121,8 +122,34 @@ export async function reconcileStatements(
     }),
     prisma.cashCategory.findMany({ select: { id: true, nameZh: true } }),
     prisma.cashHint.findMany(),
+    prisma.invoice.findMany({
+      where: { status: "SENT" },
+      select: { number: true, currency: true, amount: true, amountPaid: true, alias: true, clientId: true, invoiceDate: true },
+    }),
+    prisma.statementLine.findMany({ where: { status: "PENDING" }, select: { party: true } }),
   ]);
   const zijin = categories.find((c) => c.nameZh === "资金相关")?.id ?? "";
+  const income = categories.find((c) => c.nameZh === "营业收入")?.id ?? "";
+
+  // Each unpaid invoice is offered to one receipt only, and not if a waiting line already names it.
+  const open = openInvoices(unpaid);
+  const claimed = new Set(waitingParties.flatMap((l) => invoiceNumbers(l.party)));
+  const clientsOf = new Map<string, string[]>();
+  const clientsFor = async (party: string) => {
+    if (!clientsOf.has(party)) {
+      const numbers = invoiceNumbers(party);
+      const rows = numbers.length ? await prisma.invoice.findMany({ where: { number: { in: numbers } }, select: { clientId: true } }) : [];
+      clientsOf.set(party, [...new Set(rows.map((r) => r.clientId))]);
+    }
+    return clientsOf.get(party)!;
+  };
+  /** Prefers the client this payer paid for before, then the oldest invoice. */
+  const invoiceFor = async (currency: string, amount: number, hint: Hint | undefined): Promise<OpenInvoice | undefined> => {
+    const found = open.filter((i) => i.currency === currency && i.due === amount && !claimed.has(i.number));
+    if (!found.length) return undefined;
+    const usual = hint?.party ? await clientsFor(hint.party) : [];
+    return found.sort((a, b) => Number(usual.includes(b.clientId)) - Number(usual.includes(a.clientId)) || a.invoiceDate.getTime() - b.invoiceDate.getTime())[0];
+  };
 
   const candidates: StatementPreview["candidates"] = {};
   for (const a of accounts) (candidates[a.currency] ??= []).push({ id: a.id, label: `${accountName(a)} (${a.label})` });
@@ -307,7 +334,14 @@ export async function reconcileStatements(
           continue;
         }
         if (keys.has(key)) continue;
-        add(e.isInterest ? interestLine(key, e, amount, zijin) : entryLine(key, e, amount, hints.get(`${account.id}|${e.counterparty}|${dir}`)));
+        if (e.isInterest) {
+          add(interestLine(key, e, amount, zijin));
+          continue;
+        }
+        const hint = hints.get(`${account.id}|${e.counterparty}|${dir}`);
+        const invoice = amount > 0 ? await invoiceFor(section.currency, amount, hint) : undefined;
+        if (invoice) claimed.add(invoice.number);
+        add(entryLine(key, e, amount, hint, invoice && { ...invoice, categoryId: income }));
       }
 
       // Lines in the book for this period that the bank doesn't have.
@@ -348,20 +382,26 @@ function entryKey(prefix: string, date: string, amount: number, n: number) {
   return `${prefix}:${date}:${amount.toFixed(2)}:${n}`;
 }
 
-function entryLine(key: string, e: StatementEntry, amount: number, hint: Hint | undefined): Omit<ProposedLine, "accountId"> {
+function entryLine(
+  key: string,
+  e: StatementEntry,
+  amount: number,
+  hint: Hint | undefined,
+  invoice?: { number: string; alias: string; categoryId: string },
+): Omit<ProposedLine, "accountId"> {
   return {
     key,
     kind: "entry",
     date: e.date,
     amountIn: Math.max(amount, 0),
     amountOut: Math.max(-amount, 0),
-    categoryId: hint?.categoryId ?? "",
-    purpose: hint?.purpose || e.description,
-    party: hint?.party || e.counterparty,
-    memo: e.description,
+    categoryId: hint?.categoryId || invoice?.categoryId || "",
+    purpose: hint?.purpose || (invoice ? e.counterparty : "") || e.description,
+    party: invoice?.number || hint?.party || e.counterparty,
+    memo: invoice?.alias || e.description,
     description: e.description,
     counterparty: e.counterparty,
-    suggested: hint ? "history" : "none",
+    suggested: invoice ? "invoice" : hint ? "history" : "none",
   };
 }
 
