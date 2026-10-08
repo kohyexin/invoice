@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { Building2, Coins, Landmark, Wallet } from "lucide-react";
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { Badge } from "@/components/ui/badge";
+import { SortButton, sortRows, type SortAccessors, type SortState, nextSort } from "@/components/ui/sortable";
 import { useI18n } from "@/components/i18n/locale-provider";
 import { cn, formatDate, formatMoney } from "@/lib/utils";
 import type { CashAccountRow } from "@/lib/cash";
@@ -20,6 +21,8 @@ export function CashPositionView({
 }) {
   const { t } = useI18n();
   const [showEmpty, setShowEmpty] = useState(false);
+  const [sort, setSort] = useState<SortState>(null);
+  const onSort = (key: string) => setSort((prev) => nextSort(prev, key));
 
   const total = accounts.reduce((s, a) => s + a.usd, 0);
 
@@ -94,15 +97,29 @@ export function CashPositionView({
             <table className="tnum w-full min-w-[640px] text-sm">
               <thead>
                 <tr className="border-b border-line text-left text-[11px] uppercase tracking-wider text-ink-soft">
-                  <th className="py-2.5 pr-3 font-semibold">{t("Account")}</th>
-                  <th className="px-3 py-2.5 font-semibold">{t("Currency")}</th>
-                  <th className="px-3 py-2.5 text-right font-semibold">{t("Balance")}</th>
-                  <th className="px-3 py-2.5 text-right font-semibold">USD</th>
-                  <th className="py-2.5 pl-3 text-right font-semibold">{t("Last line")}</th>
+                  <th className="py-2.5 pr-3 font-semibold">
+                    <SortButton sortKey="name" sort={sort} onSort={onSort}>{t("Account")}</SortButton>
+                  </th>
+                  <th className="px-3 py-2.5 font-semibold">
+                    <SortButton sortKey="currency" sort={sort} onSort={onSort}>{t("Currency")}</SortButton>
+                  </th>
+                  <th className="px-3 py-2.5 text-right font-semibold">
+                    <SortButton sortKey="balance" sort={sort} onSort={onSort}>{t("Balance")}</SortButton>
+                  </th>
+                  <th className="px-3 py-2.5 text-right font-semibold">
+                    <SortButton sortKey="usd" sort={sort} onSort={onSort}>USD</SortButton>
+                  </th>
+                  <th className="py-2.5 pl-3 text-right font-semibold">
+                    <SortButton sortKey="lastDate" sort={sort} onSort={onSort}>{t("Last line")}</SortButton>
+                  </th>
                 </tr>
               </thead>
               {companies.map((c) => {
-                const rows = c.accounts.filter((a) => showEmpty || Math.abs(a.balance) >= 0.005);
+                const rows = sortRows(
+                  c.accounts.filter((a) => showEmpty || Math.abs(a.balance) >= 0.005),
+                  sort,
+                  ACCOUNT_SORT
+                );
                 if (rows.length === 0) return null;
                 return (
                   <tbody key={c.name}>
@@ -187,6 +204,14 @@ export function CashPositionView({
     </>
   );
 }
+
+const ACCOUNT_SORT: SortAccessors<CashAccountRow> = {
+  name: (a) => a.name,
+  currency: (a) => a.currency,
+  balance: (a) => a.balance,
+  usd: (a) => a.usd,
+  lastDate: (a) => a.lastDate,
+};
 
 function Hint({ children }: { children: React.ReactNode }) {
   return <p className="text-[12px] text-ink-soft">{children}</p>;

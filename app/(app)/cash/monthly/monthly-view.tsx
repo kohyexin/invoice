@@ -7,6 +7,7 @@ import { ArrowDownCircle, ArrowUpCircle, ChevronDown, ChevronLeft, ChevronRight,
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { Badge } from "@/components/ui/badge";
 import { CopyImageButton } from "@/components/ui/copy-image-button";
+import { SortButton, useSort } from "@/components/ui/sortable";
 import { ComparisonReport, MonthReport } from "./cash-report";
 import { Segmented, Select } from "@/components/ui/form-controls";
 import { useI18n } from "@/components/i18n/locale-provider";
@@ -258,6 +259,14 @@ function CategoryRow({ category: c, negate }: { category: MonthlyCategory; negat
   const [open, setOpen] = useState(false);
   const shown = (n: number) => (Math.abs(n) < 0.005 ? 0 : negate ? -n : n);
   const natives = Object.entries(c.native).filter(([cur, n]) => cur !== "USD" && Math.abs(n) >= 0.005);
+  const { sorted, sort, toggle } = useSort(c.lines, {
+    date: (l) => l.date,
+    account: (l) => l.account,
+    purpose: (l) => l.purpose,
+    detail: (l) => [l.invoice?.number, l.party, l.memo].filter(Boolean).join(" · "),
+    amount: (l) => shown(l.net),
+    usd: (l) => shown(l.usd),
+  });
 
   return (
     <li>
@@ -292,16 +301,28 @@ function CategoryRow({ category: c, negate }: { category: MonthlyCategory; negat
             <table className="tnum w-full min-w-[560px] text-[13px]">
               <thead>
                 <tr className="text-left text-[11px] uppercase tracking-wider text-ink-soft">
-                  <th className="py-1.5 pr-3 font-semibold">{t("Date")}</th>
-                  <th className="px-3 py-1.5 font-semibold">{t("Account")}</th>
-                  <th className="px-3 py-1.5 font-semibold">{t("Purpose")}</th>
-                  <th className="px-3 py-1.5 font-semibold">{t("Detail")}</th>
-                  <th className="px-3 py-1.5 text-right font-semibold">{t("Amount")}</th>
-                  <th className="py-1.5 pl-3 text-right font-semibold">USD</th>
+                  <th className="py-1.5 pr-3 font-semibold">
+                    <SortButton sortKey="date" sort={sort} onSort={toggle}>{t("Date")}</SortButton>
+                  </th>
+                  <th className="px-3 py-1.5 font-semibold">
+                    <SortButton sortKey="account" sort={sort} onSort={toggle}>{t("Account")}</SortButton>
+                  </th>
+                  <th className="px-3 py-1.5 font-semibold">
+                    <SortButton sortKey="purpose" sort={sort} onSort={toggle}>{t("Purpose")}</SortButton>
+                  </th>
+                  <th className="px-3 py-1.5 font-semibold">
+                    <SortButton sortKey="detail" sort={sort} onSort={toggle}>{t("Detail")}</SortButton>
+                  </th>
+                  <th className="px-3 py-1.5 text-right font-semibold">
+                    <SortButton sortKey="amount" sort={sort} onSort={toggle}>{t("Amount")}</SortButton>
+                  </th>
+                  <th className="py-1.5 pl-3 text-right font-semibold">
+                    <SortButton sortKey="usd" sort={sort} onSort={toggle}>USD</SortButton>
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {c.lines.map((l) => (
+                {sorted.map((l) => (
                   <tr key={l.id} className="border-t border-line/50">
                     <td className="whitespace-nowrap py-2 pr-3 text-ink-muted">
                       {formatDate(l.date)}

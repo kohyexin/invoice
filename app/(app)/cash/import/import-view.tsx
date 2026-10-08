@@ -7,6 +7,7 @@ import { AlertTriangle, Ban, CheckCheck, CheckCircle2, ChevronDown, FileUp, Inbo
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, fieldClass } from "@/components/ui/form-controls";
+import { SortButton, useSort, type SortAccessors } from "@/components/ui/sortable";
 import { useCan } from "@/components/shell/user-context";
 import { useI18n } from "@/components/i18n/locale-provider";
 import { cn, formatDate, formatMoney, formatMonth, round2 } from "@/lib/utils";
@@ -898,6 +899,15 @@ function AmountInput({ value, onChange, disabled }: { value: number; onChange: (
 
 function Statements({ rows }: { rows: StatementCheck[] }) {
   const { t } = useI18n();
+  const { sorted, sort, toggle } = useSort(rows, {
+    month: (s) => s.periodStart,
+    account: (s) => s.account,
+    bank: (s) => s.bankClosing,
+    book: (s) => s.bookClosing,
+    // Matches first, then "matches once approved", then by size of the gap.
+    check: (s) => (same(s.bookClosing, s.bankClosing) ? -2 : same(s.afterApproval, s.bankClosing) ? -1 : Math.abs(s.bookClosing - s.bankClosing)),
+    uploaded: (s) => s.uploadedAt,
+  });
   if (rows.length === 0) return null;
   return (
     <section className={cn(card, "p-5")}>
@@ -907,16 +917,28 @@ function Statements({ rows }: { rows: StatementCheck[] }) {
         <table className="tnum w-full min-w-[640px] text-[13px]">
           <thead>
             <tr className="border-b border-line text-left text-[11px] uppercase tracking-wider text-ink-soft">
-              <th className="py-2 pr-3">{t("Month")}</th>
-              <th className="py-2 pr-3">{t("Account")}</th>
-              <th className="py-2 pr-3 text-right">{t("Bank closing")}</th>
-              <th className="py-2 pr-3 text-right">{t("Book now")}</th>
-              <th className="py-2 pr-3">{t("Check")}</th>
-              <th className="py-2">{t("Uploaded")}</th>
+              <th className="py-2 pr-3">
+                <SortButton sortKey="month" sort={sort} onSort={toggle}>{t("Month")}</SortButton>
+              </th>
+              <th className="py-2 pr-3">
+                <SortButton sortKey="account" sort={sort} onSort={toggle}>{t("Account")}</SortButton>
+              </th>
+              <th className="py-2 pr-3 text-right">
+                <SortButton sortKey="bank" sort={sort} onSort={toggle}>{t("Bank closing")}</SortButton>
+              </th>
+              <th className="py-2 pr-3 text-right">
+                <SortButton sortKey="book" sort={sort} onSort={toggle}>{t("Book now")}</SortButton>
+              </th>
+              <th className="py-2 pr-3">
+                <SortButton sortKey="check" sort={sort} onSort={toggle}>{t("Check")}</SortButton>
+              </th>
+              <th className="py-2">
+                <SortButton sortKey="uploaded" sort={sort} onSort={toggle}>{t("Uploaded")}</SortButton>
+              </th>
             </tr>
           </thead>
           <tbody>
-            {rows.map((s) => {
+            {sorted.map((s) => {
               const ok = same(s.bookClosing, s.bankClosing);
               const okLater = !ok && same(s.afterApproval, s.bankClosing);
               return (
@@ -955,6 +977,11 @@ function RejectedList({ rows }: { rows: QueueLine[] }) {
   const router = useRouter();
   const canEdit = useCan("statementImport", "EDIT");
   const [busyId, setBusyId] = useState<string | null>(null);
+  const { sorted, sort, toggle } = useSort(rows, {
+    ...LINE_SORT,
+    decided: (r) => r.decidedAt,
+    by: (r) => r.decidedBy,
+  });
   if (rows.length === 0) return null;
 
   return (
@@ -969,16 +996,26 @@ function RejectedList({ rows }: { rows: QueueLine[] }) {
         <table className="w-full text-[13px]">
           <thead className="sticky top-0 bg-surface">
             <tr className="border-b border-line text-left text-[11px] uppercase tracking-wider text-ink-soft">
-              <th className="py-2 pr-3">{t("Date")}</th>
-              <th className="py-2 pr-3">{t("Line")}</th>
-              <th className="py-2 pr-3 text-right">{t("Amount")}</th>
-              <th className="py-2 pr-3">{t("Rejected")}</th>
-              <th className="py-2 pr-3">{t("By")}</th>
+              <th className="py-2 pr-3">
+                <SortButton sortKey="date" sort={sort} onSort={toggle}>{t("Date")}</SortButton>
+              </th>
+              <th className="py-2 pr-3">
+                <SortButton sortKey="line" sort={sort} onSort={toggle}>{t("Line")}</SortButton>
+              </th>
+              <th className="py-2 pr-3 text-right">
+                <SortButton sortKey="amount" sort={sort} onSort={toggle}>{t("Amount")}</SortButton>
+              </th>
+              <th className="py-2 pr-3">
+                <SortButton sortKey="decided" sort={sort} onSort={toggle}>{t("Rejected")}</SortButton>
+              </th>
+              <th className="py-2 pr-3">
+                <SortButton sortKey="by" sort={sort} onSort={toggle}>{t("By")}</SortButton>
+              </th>
               <th className="py-2" />
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
+            {sorted.map((r) => (
               <tr key={r.id} className="border-b border-line/60 last:border-0">
                 <td className="whitespace-nowrap py-2 pr-3 text-ink-muted">{formatDate(r.date)}</td>
                 <td className="max-w-[320px] py-2 pr-3">
@@ -1020,8 +1057,19 @@ function RejectedList({ rows }: { rows: QueueLine[] }) {
   );
 }
 
+const LINE_SORT: SortAccessors<QueueLine> = {
+  date: (r) => r.date,
+  line: (r) => r.purpose || r.description,
+  amount: (r) => r.amountIn - r.amountOut,
+};
+
 function RecentList({ rows }: { rows: QueueLine[] }) {
   const { t } = useI18n();
+  const { sorted, sort, toggle } = useSort(rows, {
+    ...LINE_SORT,
+    status: (r) => r.status,
+    decided: (r) => r.decidedAt,
+  });
   return (
     <section className={cn(card, "p-5")}>
       <h2 className="text-base font-semibold text-ink">{t("Recently imported")}</h2>
@@ -1029,15 +1077,25 @@ function RecentList({ rows }: { rows: QueueLine[] }) {
         <table className="w-full min-w-[640px] text-[13px]">
           <thead>
             <tr className="border-b border-line text-left text-[11px] uppercase tracking-wider text-ink-soft">
-              <th className="py-2 pr-3">{t("Date")}</th>
-              <th className="py-2 pr-3">{t("Line")}</th>
-              <th className="py-2 pr-3 text-right">{t("Amount")}</th>
-              <th className="py-2 pr-3">{t("Status")}</th>
-              <th className="py-2">{t("Imported")}</th>
+              <th className="py-2 pr-3">
+                <SortButton sortKey="date" sort={sort} onSort={toggle}>{t("Date")}</SortButton>
+              </th>
+              <th className="py-2 pr-3">
+                <SortButton sortKey="line" sort={sort} onSort={toggle}>{t("Line")}</SortButton>
+              </th>
+              <th className="py-2 pr-3 text-right">
+                <SortButton sortKey="amount" sort={sort} onSort={toggle}>{t("Amount")}</SortButton>
+              </th>
+              <th className="py-2 pr-3">
+                <SortButton sortKey="status" sort={sort} onSort={toggle}>{t("Status")}</SortButton>
+              </th>
+              <th className="py-2">
+                <SortButton sortKey="decided" sort={sort} onSort={toggle}>{t("Imported")}</SortButton>
+              </th>
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
+            {sorted.map((r) => (
               <tr key={r.id} className="border-b border-line/60 last:border-0">
                 <td className="whitespace-nowrap py-2 pr-3 text-ink-muted">{formatDate(r.date)}</td>
                 <td className="max-w-[360px] py-2 pr-3">

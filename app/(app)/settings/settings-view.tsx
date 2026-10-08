@@ -6,6 +6,7 @@ import { Building2, Check, Coins, Copy, FolderTree, History, KeyRound, Landmark,
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { RecordPanel } from "@/components/ui/record-panel";
+import { nextSort, SortButton, sortRows, type SortState, type SortValue } from "@/components/ui/sortable";
 import { FEATURES, levelName, roleLabel, SYSTEM_ROLE_HELP } from "@/lib/roles";
 import { ACCOUNT_USE_OPTIONS, CASH_KIND_OPTIONS, SETTINGS_ENTITIES, type FieldDef, type SettingsEntity } from "@/lib/settings-config";
 import { cn, formatDate } from "@/lib/utils";
@@ -19,7 +20,9 @@ import { refreshRates } from "../invoices/fx-actions";
 
 type Row = Record<string, unknown> & { id: string };
 
-type Column = { label: string; render: (r: Row) => React.ReactNode; mono?: boolean; align?: "right" };
+type Column = { label: string; render: (r: Row) => React.ReactNode; sort?: (r: Row) => SortValue; mono?: boolean; align?: "right" };
+
+const field = (key: string) => (r: Row) => r[key] as SortValue;
 
 type TabId = SettingsEntity | "user" | "role" | "activity";
 
@@ -103,6 +106,7 @@ export function SettingsView(props: {
   const router = useRouter();
   const { t } = useI18n();
   const [tabId, setTabId] = useState<TabId>(props.manager ? "user" : "company");
+  const [sort, setSort] = useState<SortState>(null);
   const [editing, setEditing] = useState<{ entity: TabId; row: Row | null } | null>(null);
   const [editingRole, setEditingRole] = useState<{ role: RoleRow | null } | null>(null);
   const [issued, setIssued] = useState<
@@ -139,6 +143,7 @@ export function SettingsView(props: {
       columns: [
         {
           label: "Name",
+          sort: field("name"),
           render: (r) => (
             <span className="flex items-center gap-2">
               {r.name ? String(r.name) : <span className="text-ink-soft">{t("Not set yet")}</span>}
@@ -155,10 +160,11 @@ export function SettingsView(props: {
             </span>
           ),
         },
-        { label: "Email", render: (r) => String(r.email) },
-        { label: "Role", render: (r) => <Badge tone={roleTone(r.roleSystem)}>{roleLabel(t, { name: String(r.roleName), system: r.roleSystem as RoleRow["system"] })}</Badge> },
+        { label: "Email", sort: field("email"), render: (r) => String(r.email) },
+        { label: "Role", sort: (r) => roleLabel(t, { name: String(r.roleName), system: r.roleSystem as RoleRow["system"] }), render: (r) => <Badge tone={roleTone(r.roleSystem)}>{roleLabel(t, { name: String(r.roleName), system: r.roleSystem as RoleRow["system"] })}</Badge> },
         {
           label: "Two-factor",
+          sort: (r) => (r.pending ? null : r.totpEnabledAt ? 1 : 0),
           render: (r) =>
             r.pending ? (
               <span className="text-ink-soft">—</span>
@@ -170,6 +176,7 @@ export function SettingsView(props: {
         },
         {
           label: "Last sign-in",
+          sort: (r) => (r.lastLoginAt ? String(r.lastLoginAt) : null),
           render: (r) => (r.lastLoginAt ? formatDate(String(r.lastLoginAt)) : <span className="text-ink-soft">{t("Never")}</span>),
           align: "right",
         },
@@ -185,14 +192,19 @@ export function SettingsView(props: {
       columns: [
         {
           label: "Name",
+          sort: (r) => roleLabel(t, r as RoleRow),
           render: (r) => (
             <span className="flex items-center gap-2">
               {roleLabel(t, r as RoleRow)} {r.system ? <Badge tone="outline">{t("Fixed")}</Badge> : null}
             </span>
           ),
         },
-        { label: "Access", render: (r) => <span className="text-[13px] text-ink-muted">{String(r.description || accessSummary(t, r as RoleRow))}</span> },
-        { label: "Users", render: (r) => String(r.users), mono: true, align: "right" },
+        {
+          label: "Access",
+          sort: (r) => String(r.description || accessSummary(t, r as RoleRow)),
+          render: (r) => <span className="text-[13px] text-ink-muted">{String(r.description || accessSummary(t, r as RoleRow))}</span>,
+        },
+        { label: "Users", sort: (r) => Number(r.users), render: (r) => String(r.users), mono: true, align: "right" },
       ],
     },
     {
@@ -210,17 +222,18 @@ export function SettingsView(props: {
       description: "Issuers printed on the invoice letterhead, and companies that only hold cash for the balance sheet.",
       rows: props.companies,
       columns: [
-        { label: "Code", render: (r) => String(r.code), mono: true },
+        { label: "Code", sort: field("code"), render: (r) => String(r.code), mono: true },
         {
           label: "Legal name",
+          sort: field("legalName"),
           render: (r) => (
             <span className="flex items-center gap-2">
               {String(r.legalName)} {r.invoicing === false ? <Badge tone="outline">{t("Cash only")}</Badge> : null} {inactive(r)}
             </span>
           ),
         },
-        { label: "Address", render: (r) => (r.addressLines as string[]).join(", ") },
-        { label: "Language", render: (r) => (r.defaultLang === "ZH" ? t("Chinese") : t("English")) },
+        { label: "Address", sort: (r) => (r.addressLines as string[]).join(", "), render: (r) => (r.addressLines as string[]).join(", ") },
+        { label: "Language", sort: (r) => (r.defaultLang === "ZH" ? t("Chinese") : t("English")), render: (r) => (r.defaultLang === "ZH" ? t("Chinese") : t("English")) },
       ],
     },
     {
@@ -231,14 +244,19 @@ export function SettingsView(props: {
         "Every bank account. Invoice accounts can appear under Payment Details; balance-sheet accounts appear in the cash book. An account can be both.",
       rows: props.bankAccounts,
       columns: [
-        { label: "Label", render: (r) => <span className="flex items-center gap-2">{String(r.label)} {r.compact ? <Badge tone="outline">{t("Compact")}</Badge> : null} {inactive(r)}</span> },
-        { label: "Used for", render: (r) => <Badge tone={USE_TONE[String(r.use)] ?? "neutral"}>{t(USE_LABEL[String(r.use)] ?? String(r.use))}</Badge> },
-        { label: "Company", render: (r) => (r.companyName ? String(r.companyName) : <span className="text-ink-soft">—</span>) },
-        { label: "Currency", render: (r) => String(r.currency), mono: true },
-        { label: "Account name", render: (r) => String(r.accountName) },
-        { label: "Account number", render: (r) => String(r.accountNumber), mono: true },
+        { label: "Label", sort: field("label"), render: (r) => <span className="flex items-center gap-2">{String(r.label)} {r.compact ? <Badge tone="outline">{t("Compact")}</Badge> : null} {inactive(r)}</span> },
+        {
+          label: "Used for",
+          sort: (r) => t(USE_LABEL[String(r.use)] ?? String(r.use)),
+          render: (r) => <Badge tone={USE_TONE[String(r.use)] ?? "neutral"}>{t(USE_LABEL[String(r.use)] ?? String(r.use))}</Badge>,
+        },
+        { label: "Company", sort: field("companyName"), render: (r) => (r.companyName ? String(r.companyName) : <span className="text-ink-soft">—</span>) },
+        { label: "Currency", sort: field("currency"), render: (r) => String(r.currency), mono: true },
+        { label: "Account name", sort: field("accountName"), render: (r) => String(r.accountName) },
+        { label: "Account number", sort: field("accountNumber"), render: (r) => String(r.accountNumber), mono: true },
         {
           label: "Bank",
+          sort: field("bankName"),
           render: (r) => (
             <span>
               {String(r.bankName || "—")}
@@ -256,9 +274,9 @@ export function SettingsView(props: {
         "Which account an invoice uses by default. Company and currency together beat company only, which beats currency only. The payable currency is used (the second amount-due currency when there is one).",
       rows: props.rules,
       columns: [
-        { label: "Company", render: (r) => (r.companyName ? String(r.companyName) : <span className="text-ink-soft">{t("Any")}</span>) },
-        { label: "Currency", render: (r) => (r.currency ? String(r.currency) : <span className="text-ink-soft">{t("Any")}</span>), mono: true },
-        { label: "Bank account", render: (r) => String(r.accountLabel) },
+        { label: "Company", sort: field("companyName"), render: (r) => (r.companyName ? String(r.companyName) : <span className="text-ink-soft">{t("Any")}</span>) },
+        { label: "Currency", sort: field("currency"), render: (r) => (r.currency ? String(r.currency) : <span className="text-ink-soft">{t("Any")}</span>), mono: true },
+        { label: "Bank account", sort: field("accountLabel"), render: (r) => String(r.accountLabel) },
       ],
     },
     {
@@ -269,10 +287,14 @@ export function SettingsView(props: {
         "Pulled from Yahoo Finance once a day and whenever someone refreshes the rate on an invoice. A rate typed here is used until the next pull. Each invoice can still override the booked USD.",
       rows: props.fx,
       columns: [
-        { label: "Currency", render: (r) => String(r.currency), mono: true },
-        { label: "Units per 1 USD", render: (r) => String(r.perUsd), mono: true, align: "right" },
-        { label: "Source", render: (r) => (r.source === "YAHOO" ? <Badge tone="brand">Yahoo Finance</Badge> : <Badge tone="outline">{t("Manual")}</Badge>) },
-        { label: "Updated", render: (r) => formatDateTime(String(r.updatedAt)), align: "right" },
+        { label: "Currency", sort: field("currency"), render: (r) => String(r.currency), mono: true },
+        { label: "Units per 1 USD", sort: (r) => Number(r.perUsd), render: (r) => String(r.perUsd), mono: true, align: "right" },
+        {
+          label: "Source",
+          sort: (r) => (r.source === "YAHOO" ? "Yahoo Finance" : t("Manual")),
+          render: (r) => (r.source === "YAHOO" ? <Badge tone="brand">Yahoo Finance</Badge> : <Badge tone="outline">{t("Manual")}</Badge>),
+        },
+        { label: "Updated", sort: (r) => String(r.updatedAt), render: (r) => formatDateTime(String(r.updatedAt)), align: "right" },
       ],
     },
     {
@@ -284,6 +306,7 @@ export function SettingsView(props: {
       columns: [
         {
           label: "Name",
+          sort: field("name"),
           render: (r) => (
             <span className="flex items-center gap-2">
               {String(r.name)} {r.isDefault ? <Badge tone="brand">{t("Default")}</Badge> : null} {inactive(r)}
@@ -299,8 +322,8 @@ export function SettingsView(props: {
       description: "Type of each invoice. The subtype is free text; the hint tells you what to write for that type.",
       rows: props.types,
       columns: [
-        { label: "Name", render: (r) => <span className="flex items-center gap-2">{String(r.name)} {inactive(r)}</span> },
-        { label: "Subtype hint", render: (r) => (r.subtypeHint ? String(r.subtypeHint) : <span className="text-ink-soft">—</span>) },
+        { label: "Name", sort: field("name"), render: (r) => <span className="flex items-center gap-2">{String(r.name)} {inactive(r)}</span> },
+        { label: "Subtype hint", sort: field("subtypeHint"), render: (r) => (r.subtypeHint ? String(r.subtypeHint) : <span className="text-ink-soft">—</span>) },
       ],
     },
     {
@@ -311,10 +334,11 @@ export function SettingsView(props: {
         "Line items for manual invoices, with the English and Chinese label printed for each language. The ledger type and subtype fill in the invoice's type when the item is its first line.",
       rows: props.items,
       columns: [
-        { label: "English", render: (r) => <span className="flex items-center gap-2">{String(r.labelEn)} {inactive(r)}</span> },
-        { label: "Chinese", render: (r) => (r.labelZh ? String(r.labelZh) : <span className="text-ink-soft">{t("Uses English")}</span>) },
+        { label: "English", sort: field("labelEn"), render: (r) => <span className="flex items-center gap-2">{String(r.labelEn)} {inactive(r)}</span> },
+        { label: "Chinese", sort: field("labelZh"), render: (r) => (r.labelZh ? String(r.labelZh) : <span className="text-ink-soft">{t("Uses English")}</span>) },
         {
           label: "Ledger type",
+          sort: (r) => (r.typeId ? [typeName.get(String(r.typeId)), r.subtype].filter(Boolean).join(" · ") : null),
           render: (r) =>
             r.typeId ? (
               <span>
@@ -325,8 +349,8 @@ export function SettingsView(props: {
               <span className="text-ink-soft">—</span>
             ),
         },
-        { label: "Detail hint", render: (r) => (r.detailHint ? String(r.detailHint) : "—") },
-        { label: "Client fee", render: (r) => (r.clientFee ? String(r.clientFee) : "—"), mono: true },
+        { label: "Detail hint", sort: field("detailHint"), render: (r) => (r.detailHint ? String(r.detailHint) : "—") },
+        { label: "Client fee", sort: (r) => (r.clientFee ? Number(r.clientFee) : null), render: (r) => (r.clientFee ? String(r.clientFee) : "—"), mono: true },
       ],
     },
     {
@@ -337,9 +361,9 @@ export function SettingsView(props: {
         "Categories for cash book lines (the 摘要 column). Income and expense make up the monthly statement; transfers move money between accounts and are shown separately.",
       rows: props.cashCategories,
       columns: [
-        { label: "Chinese", render: (r) => <span className="flex items-center gap-2">{String(r.nameZh)} {inactive(r)}</span> },
-        { label: "English", render: (r) => (r.nameEn ? String(r.nameEn) : <span className="text-ink-soft">—</span>) },
-        { label: "Kind", render: (r) => <Badge tone={KIND_TONE[String(r.kind)] ?? "neutral"}>{t(KIND_LABEL[String(r.kind)] ?? String(r.kind))}</Badge> },
+        { label: "Chinese", sort: field("nameZh"), render: (r) => <span className="flex items-center gap-2">{String(r.nameZh)} {inactive(r)}</span> },
+        { label: "English", sort: field("nameEn"), render: (r) => (r.nameEn ? String(r.nameEn) : <span className="text-ink-soft">—</span>) },
+        { label: "Kind", sort: (r) => t(KIND_LABEL[String(r.kind)] ?? String(r.kind)), render: (r) => <Badge tone={KIND_TONE[String(r.kind)] ?? "neutral"}>{t(KIND_LABEL[String(r.kind)] ?? String(r.kind))}</Badge> },
       ],
     },
   ];
@@ -347,6 +371,11 @@ export function SettingsView(props: {
   const isPeopleTab = (id: TabId) => id === "user" || id === "role" || id === "activity";
   const tabs = allTabs.filter((x) => (isPeopleTab(x.id) ? props.manager : props.showSettings));
   const tab = tabs.find((x) => x.id === tabId) ?? tabs[0];
+  const sortedRows = sortRows(
+    tab.rows,
+    sort,
+    Object.fromEntries(tab.columns.flatMap((c) => (c.sort ? [[c.label, c.sort]] : [])))
+  );
   const canAdd = tab.id !== "activity" && (isPeopleTab(tab.id) ? props.manager : props.canEdit);
   const config = !editing
     ? null
@@ -370,7 +399,10 @@ export function SettingsView(props: {
           return (
             <button
               key={x.id}
-              onClick={() => setTabId(x.id)}
+              onClick={() => {
+                setTabId(x.id);
+                setSort(null);
+              }}
               className={cn(
                 "flex shrink-0 items-center gap-2.5 rounded-control px-3 py-2 text-left text-sm font-medium transition-colors",
                 x.id === tabId
@@ -455,13 +487,19 @@ export function SettingsView(props: {
                       c.align === "right" ? "text-right" : "text-left"
                     )}
                   >
-                    {t(c.label)}
+                    {c.sort ? (
+                      <SortButton sortKey={c.label} sort={sort} onSort={(key) => setSort((prev) => nextSort(prev, key))}>
+                        {t(c.label)}
+                      </SortButton>
+                    ) : (
+                      t(c.label)
+                    )}
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {tab.rows.map((r) => (
+              {sortedRows.map((r) => (
                 <tr
                   key={r.id}
                   onClick={() => open(tab.id, r)}

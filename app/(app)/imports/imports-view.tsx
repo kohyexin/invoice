@@ -9,6 +9,7 @@ import { useI18n } from "@/components/i18n/locale-provider";
 import { useCan } from "@/components/shell/user-context";
 import { StatusBadge } from "@/components/ui/badge";
 import { fieldClass } from "@/components/ui/form-controls";
+import { SortButton, useSort } from "@/components/ui/sortable";
 import { cn, formatDate, formatMoney } from "@/lib/utils";
 import {
   approveImport,
@@ -66,6 +67,14 @@ export function ImportsView({
   const { t } = useI18n();
   const canEdit = useCan("systemImports", "EDIT");
   const busy = uploading || progress !== null;
+  const recentSort = useSort(recent, {
+    number: (r) => r.number,
+    client: (r) => r.client,
+    date: (r) => r.invoiceDate,
+    usd: (r) => r.usdAmount,
+    status: (r) => r.status,
+    imported: (r) => r.importedAt,
+  });
 
   function reset() {
     setError(null);
@@ -192,16 +201,28 @@ export function ImportsView({
           <table className="w-full text-[13px]">
             <thead>
               <tr className="border-b border-line text-left text-[11px] uppercase tracking-wider text-ink-soft">
-                <th className="py-2 pr-3">{t("Invoice no.")}</th>
-                <th className="py-2 pr-3">{t("Client")}</th>
-                <th className="py-2 pr-3">{t("Date")}</th>
-                <th className="py-2 pr-3 text-right">USD</th>
-                <th className="py-2 pr-3">{t("Status")}</th>
-                <th className="py-2">{t("Imported")}</th>
+                <th className="py-2 pr-3">
+                  <SortButton sortKey="number" sort={recentSort.sort} onSort={recentSort.toggle}>{t("Invoice no.")}</SortButton>
+                </th>
+                <th className="py-2 pr-3">
+                  <SortButton sortKey="client" sort={recentSort.sort} onSort={recentSort.toggle}>{t("Client")}</SortButton>
+                </th>
+                <th className="py-2 pr-3">
+                  <SortButton sortKey="date" sort={recentSort.sort} onSort={recentSort.toggle}>{t("Date")}</SortButton>
+                </th>
+                <th className="py-2 pr-3 text-right">
+                  <SortButton sortKey="usd" sort={recentSort.sort} onSort={recentSort.toggle}>USD</SortButton>
+                </th>
+                <th className="py-2 pr-3">
+                  <SortButton sortKey="status" sort={recentSort.sort} onSort={recentSort.toggle}>{t("Status")}</SortButton>
+                </th>
+                <th className="py-2">
+                  <SortButton sortKey="imported" sort={recentSort.sort} onSort={recentSort.toggle}>{t("Imported")}</SortButton>
+                </th>
               </tr>
             </thead>
             <tbody>
-              {recent.map((r) => (
+              {recentSort.sorted.map((r) => (
                 <tr key={r.id} className="border-b border-line/60 last:border-0">
                   <td className="py-2 pr-3">
                     <Link href={`/invoices/${r.id}`} className="font-mono text-brand-700 hover:text-brand-900 dark:text-brand-200 dark:hover:text-brand-100">
@@ -532,6 +553,13 @@ function RejectedList({ rows }: { rows: Rejected[] }) {
   const { t } = useI18n();
   const [busyId, setBusyId] = useState<string | null>(null);
   const canEdit = useCan("systemImports", "EDIT");
+  const { sorted, sort, toggle } = useSort(rows, {
+    number: (r) => r.number,
+    subject: (r) => r.subject,
+    client: (r) => r.client,
+    rejected: (r) => r.rejectedAt,
+    by: (r) => r.rejectedBy ?? t("Automatic"),
+  });
   if (rows.length === 0) return null;
 
   return (
@@ -548,16 +576,26 @@ function RejectedList({ rows }: { rows: Rejected[] }) {
         <table className="w-full text-[13px]">
           <thead className="sticky top-0 bg-surface">
             <tr className="border-b border-line text-left text-[11px] uppercase tracking-wider text-ink-soft">
-              <th className="py-2 pr-3">{t("Invoice no.")}</th>
-              <th className="py-2 pr-3">{t("Subject")}</th>
-              <th className="py-2 pr-3">{t("Client")}</th>
-              <th className="py-2 pr-3">{t("Rejected")}</th>
-              <th className="py-2 pr-3">{t("By")}</th>
+              <th className="py-2 pr-3">
+                <SortButton sortKey="number" sort={sort} onSort={toggle}>{t("Invoice no.")}</SortButton>
+              </th>
+              <th className="py-2 pr-3">
+                <SortButton sortKey="subject" sort={sort} onSort={toggle}>{t("Subject")}</SortButton>
+              </th>
+              <th className="py-2 pr-3">
+                <SortButton sortKey="client" sort={sort} onSort={toggle}>{t("Client")}</SortButton>
+              </th>
+              <th className="py-2 pr-3">
+                <SortButton sortKey="rejected" sort={sort} onSort={toggle}>{t("Rejected")}</SortButton>
+              </th>
+              <th className="py-2 pr-3">
+                <SortButton sortKey="by" sort={sort} onSort={toggle}>{t("By")}</SortButton>
+              </th>
               <th className="py-2" />
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
+            {sorted.map((r) => (
               <tr key={r.id} className="border-b border-line/60 last:border-0">
                 <td className="py-2 pr-3 font-mono text-ink">{r.number ?? "—"}</td>
                 <td className="max-w-[280px] truncate py-2 pr-3 text-ink-muted" title={r.subject}>

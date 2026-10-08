@@ -9,6 +9,7 @@ import { useChartTheme } from "@/components/dashboard/use-chart-theme";
 import { BrandLogo } from "@/components/brand/brand-logo";
 import { CopyImageButton } from "@/components/ui/copy-image-button";
 import { Segmented } from "@/components/ui/form-controls";
+import { SortButton, useSort, type SortState } from "@/components/ui/sortable";
 import { useI18n } from "@/components/i18n/locale-provider";
 import { formatMonth } from "@/lib/i18n";
 import { cn, formatCompact, formatDate, formatMoney } from "@/lib/utils";
@@ -61,6 +62,16 @@ export function DashboardView({ data, basic = false }: { data: DashboardData; ba
       }
       return { ...c, months };
     });
+  const unpaidSort = useSort(data.unpaid, {
+    name: (u) => u.name,
+    count: (u) => u.count,
+    oldest: (u) => u.oldest,
+    amount: (u) => u.amount,
+  });
+  const recentSort = useSort(recent, {
+    name: (c) => c.name,
+    ...Object.fromEntries(data.recentMonths.map((m) => [m, (c: (typeof recent)[number]) => c.months[m] ?? 0])),
+  });
   const hint = (text: React.ReactNode) => <p className="text-[12px] text-ink-soft">{text}</p>;
 
   return (
@@ -172,14 +183,24 @@ export function DashboardView({ data, basic = false }: { data: DashboardData; ba
             <table className="w-full text-[13px]">
               <thead>
                 <tr className="border-b border-line text-left text-[11px] uppercase tracking-wider text-ink-soft">
-                  <th className="py-2 pr-3">{t("Client")}</th>
-                  <th className="py-2 pr-3 text-right">{t("Invoices")}</th>
-                  <th className="py-2 pr-3">{t("Oldest")}</th>
-                  {!basic && <th className="py-2 text-right">{t("Unpaid")}</th>}
+                  <th className="py-2 pr-3">
+                    <SortButton sortKey="name" sort={unpaidSort.sort} onSort={unpaidSort.toggle}>{t("Client")}</SortButton>
+                  </th>
+                  <th className="py-2 pr-3 text-right">
+                    <SortButton sortKey="count" sort={unpaidSort.sort} onSort={unpaidSort.toggle}>{t("Invoices")}</SortButton>
+                  </th>
+                  <th className="py-2 pr-3">
+                    <SortButton sortKey="oldest" sort={unpaidSort.sort} onSort={unpaidSort.toggle}>{t("Oldest")}</SortButton>
+                  </th>
+                  {!basic && (
+                    <th className="py-2 text-right">
+                      <SortButton sortKey="amount" sort={unpaidSort.sort} onSort={unpaidSort.toggle}>{t("Unpaid")}</SortButton>
+                    </th>
+                  )}
                 </tr>
               </thead>
               <tbody>
-                {data.unpaid.map((u) => (
+                {unpaidSort.sorted.map((u) => (
                   <tr key={u.clientId} className="border-b border-line/60 last:border-0">
                     <td className="py-2 pr-3">
                       <Link href={`/clients/${u.clientId}`} className="text-ink hover:text-brand-700 dark:hover:text-brand-200">
@@ -250,16 +271,18 @@ export function DashboardView({ data, basic = false }: { data: DashboardData; ba
           <table className="w-full text-[13px]">
             <thead className="sticky top-0 bg-surface">
               <tr className="border-b border-line text-left text-[11px] uppercase tracking-wider text-ink-soft">
-                <th className="py-2 pr-3">{t("Client")}</th>
+                <th className="py-2 pr-3">
+                  <SortButton sortKey="name" sort={recentSort.sort} onSort={recentSort.toggle}>{t("Client")}</SortButton>
+                </th>
                 {data.recentMonths.map((m) => (
                   <th key={m} className="py-2 pr-3 text-right">
-                    {monthLabel(m)}
+                    <SortButton sortKey={m} sort={recentSort.sort} onSort={recentSort.toggle}>{monthLabel(m)}</SortButton>
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {recent.map((c) => (
+              {recentSort.sorted.map((c) => (
                 <tr key={c.clientId} className="border-b border-line/60 last:border-0">
                   <td className="py-2 pr-3">
                     <Link href={`/clients/${c.clientId}`} className="text-ink hover:text-brand-700 dark:hover:text-brand-200">
@@ -287,6 +310,12 @@ type UnpaidRows = DashboardData["unpaid"];
 function UnpaidByMonth({ rows, monthLabel }: { rows: UnpaidRows; monthLabel: (m: string) => string }) {
   const { t } = useI18n();
   const captureRef = useRef<HTMLDivElement>(null);
+  const months = useMemo(() => Array.from(new Set(rows.flatMap((r) => Object.keys(r.byMonth)))).sort(), [rows]);
+  const { sorted, sort, toggle } = useSort(rows, {
+    name: (r) => r.name,
+    total: (r) => r.amount,
+    ...Object.fromEntries(months.map((m) => [m, (r: UnpaidRows[number]) => r.byMonth[m] ?? 0])),
+  });
 
   if (rows.length === 0) return <p className="py-8 text-center text-[13px] text-ink-soft">{t("Nothing outstanding.")}</p>;
 
@@ -297,7 +326,7 @@ function UnpaidByMonth({ rows, monthLabel }: { rows: UnpaidRows; monthLabel: (m:
       </div>
 
       <div className="mt-2 max-h-[560px] overflow-auto">
-        <PivotTable rows={rows} monthLabel={monthLabel} interactive />
+        <PivotTable rows={sorted} months={months} monthLabel={monthLabel} sort={sort} onSort={toggle} />
       </div>
 
       {/* Uncropped copy used for the image: no scroll box, no sticky cells, no truncation. */}
@@ -310,16 +339,37 @@ function UnpaidByMonth({ rows, monthLabel }: { rows: UnpaidRows; monthLabel: (m:
             </div>
             <BrandLogo className="h-6" />
           </div>
-          <PivotTable rows={rows} monthLabel={monthLabel} />
+          <PivotTable rows={sorted} months={months} monthLabel={monthLabel} />
         </div>
       </div>
     </>
   );
 }
 
-function PivotTable({ rows, monthLabel, interactive = false }: { rows: UnpaidRows; monthLabel: (m: string) => string; interactive?: boolean }) {
+/** Interactive (sticky cells, links, sortable headers) when `onSort` is given. */
+function PivotTable({
+  rows,
+  months,
+  monthLabel,
+  sort = null,
+  onSort,
+}: {
+  rows: UnpaidRows;
+  months: string[];
+  monthLabel: (m: string) => string;
+  sort?: SortState;
+  onSort?: (key: string) => void;
+}) {
   const { t } = useI18n();
-  const months = Array.from(new Set(rows.flatMap((r) => Object.keys(r.byMonth)))).sort();
+  const interactive = Boolean(onSort);
+  const head = (key: string, label: string) =>
+    onSort ? (
+      <SortButton sortKey={key} sort={sort} onSort={onSort}>
+        {label}
+      </SortButton>
+    ) : (
+      label
+    );
   const colTotal = (m: string) => rows.reduce((s, r) => s + (r.byMonth[m] ?? 0), 0);
   const grand = rows.reduce((s, r) => s + r.amount, 0);
   const sticky = interactive ? "sticky left-0 z-[1] bg-surface" : "";
@@ -329,13 +379,13 @@ function PivotTable({ rows, monthLabel, interactive = false }: { rows: UnpaidRow
     <table className="w-full whitespace-nowrap text-[13px]">
       <thead className={cn(interactive && "sticky top-0 z-[2] bg-surface")}>
         <tr className="border-b border-line text-left text-[11px] uppercase tracking-wider text-ink-soft">
-          <th className={cn(sticky, stickyHead, "py-2 pr-4")}>{t("Client")}</th>
+          <th className={cn(sticky, stickyHead, "py-2 pr-4")}>{head("name", t("Client"))}</th>
           {months.map((m) => (
             <th key={m} className="px-3 py-2 text-right">
-              {monthLabel(m)}
+              {head(m, monthLabel(m))}
             </th>
           ))}
-          <th className="py-2 pl-3 text-right">{t("Total")}</th>
+          <th className="py-2 pl-3 text-right">{head("total", t("Total"))}</th>
         </tr>
       </thead>
       <tbody>
