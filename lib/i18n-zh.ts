@@ -869,7 +869,7 @@ export const ZH: Record<string, string> = {
   "Terms (Chinese)": "条款（中文）",
   "Sort order": "排序",
   Label: "名称",
-  "Shown in pickers, e.g. USD (SCB Bank)": "显示在选择列表中，例如 USD (SCB Bank)",
+  "Shown in pickers, e.g. USD (Airwallex)": "显示在选择列表中，例如 USD (Airwallex)",
   "Account name": "账户名称",
   "Account number": "账号",
   "Bank name": "银行名称",

@@ -80,9 +80,9 @@ type Account = {
 };
 
 const accounts: Account[] = [
-  { label: "USD (SCB Bank)", currency: "USD", accountName: "Star SaaS Limited", accountNumber: "47417790780", ...SCB, branchCode: "474" },
-  { label: "HKD (SCB Bank)", currency: "HKD", accountName: "Star SaaS Limited", accountNumber: "47416857504", ...SCB, branchCode: "474" },
-  { label: "EUR (SCB Bank)", currency: "EUR", accountName: "Star SaaS Limited", accountNumber: "57210157094", ...SCB, branchCode: "572" },
+  { label: "USD (Airwallex)", currency: "USD", accountName: "Star SaaS Limited", accountNumber: "47417790780", ...SCB, branchCode: "474" },
+  { label: "HKD (Airwallex)", currency: "HKD", accountName: "Star SaaS Limited", accountNumber: "47416857504", ...SCB, branchCode: "474" },
+  { label: "EUR (Airwallex)", currency: "EUR", accountName: "Star SaaS Limited", accountNumber: "57210157094", ...SCB, branchCode: "572" },
   { label: "USD (DBS Bank)", currency: "USD", accountName: "STAR SAAS LIMITED", accountNumber: "7983668446", ...DBS },
   { label: "HKD (DBS Bank)", currency: "HKD", accountName: "STAR SAAS LIMITED", accountNumber: "7983668446", ...DBS },
   { label: "USD (IBC Bank)", currency: "USD", accountNumber: "129961400100075317", ...IBC },
@@ -92,15 +92,15 @@ const accounts: Account[] = [
   { label: "HKD (GEP)", currency: "HKD", accountName: "STAR SAAS LIMITED", accountNumber: "799002738", ...DBS },
   { label: "EUR (GEP)", currency: "EUR", accountName: "STAR SAAS LIMITED", accountNumber: "799002738", ...DBS },
   { label: "USD (SPARK DBS)", currency: "USD", accountName: "SPARK PSP LIMITED", accountNumber: "7950125534", ...DBS },
-  { label: "Airwallex Pay", currency: "USD", accountName: "Star SaaS Limited", accountNumber: "47417790780", compact: true },
+  { label: "Airwallex Pay", currency: "USD", accountName: "Star SaaS Limited", accountNumber: "1011107325955705", compact: true },
 ];
 
 /** [company code | null, currency | null, account label] */
 const rules: [string | null, Currency | null, string][] = [
   ["SPARK", null, "USD (SPARK DBS)"],
-  ["STAR", null, "USD (SCB Bank)"],
-  ["STAR", "HKD", "HKD (SCB Bank)"],
-  ["STAR", "EUR", "EUR (SCB Bank)"],
+  ["STAR", null, "USD (Airwallex)"],
+  ["STAR", "HKD", "HKD (Airwallex)"],
+  ["STAR", "EUR", "EUR (Airwallex)"],
   ["XIAMEN", null, "CNY (IBC Bank)"],
   [null, "CNY", "CNY (IBC Bank)"],
 ];

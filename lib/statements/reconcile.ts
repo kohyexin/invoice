@@ -187,8 +187,9 @@ export async function reconcileStatements(
   ]);
   const zijin = categories.find((c) => c.nameZh === "资金相关")?.id ?? "";
   const income = categories.find((c) => c.nameZh === "营业收入")?.id ?? "";
-  const isAirwallex = (a: { label: string; bankName: string }) => /airwallex/i.test(`${a.label} ${a.bankName}`);
-  const airwallexIds = accounts.filter(isAirwallex).map((a) => a.id);
+  /** GA wallet on the balance sheet — not the compact Airwallex Pay invoice extra. */
+  const airwallexWallet = (a: { label: string; currency: string }) => / \(Airwallex\)$/i.test(a.label) && a.label !== "Airwallex Pay";
+  const airwallexIds = accounts.filter(airwallexWallet).map((a) => a.id);
 
   // Each unpaid invoice is offered to one receipt only, and not if a waiting line already names it.
   const open = openInvoices(unpaid);
@@ -285,7 +286,7 @@ export async function reconcileStatements(
         accounts.find((a) => a.id === accountChoices[choiceKey]) ??
         accounts.find((a) => a.accountNumber.replace(/[\s-]/g, "") === s.accountNumber && a.currency === section.currency) ??
         // Airwallex reports name the platform account, not each wallet: one Airwallex balance account per currency.
-        (s.bank === "AIRWALLEX" ? accounts.find((a) => a.currency === section.currency && isAirwallex(a)) : undefined);
+        (s.bank === "AIRWALLEX" ? accounts.find((a) => a.currency === section.currency && airwallexWallet(a)) : undefined);
       const ym = s.periodStart.slice(0, 7);
       const prefix = `${s.bank}:${s.accountNumber}:${section.currency}:${ym}`;
       // Banks that give each transaction an id: every line, interest included, is keyed and matched on its own.
@@ -333,7 +334,7 @@ export async function reconcileStatements(
           label: accountNameWithCurrency(account),
           fields: [
             field("accountName", "Account name", s.accountName),
-            field("bankName", "Bank name", s.bankName),
+            ...(s.bank === "AIRWALLEX" ? [] : [field("bankName", "Bank name", s.bankName)]),
             field("accountType", "Account type", s.accountType),
             // An Airwallex report's account id isn't any wallet's account number.
             field("accountNumber", "Account number", s.bank === "AIRWALLEX" ? "" : s.accountNumber),

@@ -63,7 +63,7 @@ export const SETTINGS_ENTITIES = {
   bankAccount: {
     title: "Bank account",
     fields: [
-      { key: "label", label: "Label", kind: "text", required: true, hint: "Shown in pickers, e.g. USD (SCB Bank)" },
+      { key: "label", label: "Label", kind: "text", required: true, hint: "Shown in pickers, e.g. USD (Airwallex)" },
       { key: "currency", label: "Currency", kind: "select", options: ACCOUNT_CURRENCY_OPTIONS, required: true, hint: "CNH is for balance-sheet accounts only" },
       {
         key: "use",

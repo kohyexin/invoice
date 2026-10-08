@@ -60,13 +60,23 @@ const CIB = {
   swiftCode: "FJIBCNBA260",
   accountLocation: "厦门",
 };
-/** Airwallex Global Accounts (receiving details held at Standard Chartered Hong Kong). */
-const AIRWALLEX_GA = {
+/** Airwallex Global Accounts at Standard Chartered Hong Kong (from Airwallex account details). */
+const AIRWALLEX_SCB_HK = {
+  bankName: "Standard Chartered Bank (Hong Kong) Ltd",
+  accountName: "Star SaaS Limited",
   accountType: "Airwallex Global Account",
   bankAddress: "32nd Floor, 4-4A Des Voeux Road Central",
   bankCode: "003",
   swiftCode: "SCBLHKHH",
   accountLocation: "Hong Kong SAR",
+};
+
+/** Compact USD account for the invoice “Also show Airwallex Pay” box (not the GA wallet). */
+export const AIRWALLEX_PAY = {
+  label: "Airwallex Pay",
+  currency: "USD" as Currency,
+  accountName: "Star SaaS Limited",
+  accountNumber: "1011107325955705",
 };
 
 /** The live sheets. S-, Others and Jason are closed and left out. */
@@ -96,34 +106,58 @@ export const CASH_ACCOUNTS: CashAccountSeed[] = [
   { sheet: "O - ￥", label: "CNY (OTT)", company: "STAR", bankName: "OTT", accountName: STAR, currency: "CNY" },
   {
     sheet: "A - $",
-    label: "Airwallex Pay",
+    label: "USD (Airwallex)",
     existing: true,
     company: "STAR",
-    bankName: "Airwallex",
-    accountName: STAR,
+    bankName: AIRWALLEX_SCB_HK.bankName,
+    accountName: AIRWALLEX_SCB_HK.accountName,
     currency: "USD",
-    details: { accountNumber: "47417790780", branchCode: "474", ...AIRWALLEX_GA },
+    details: { accountNumber: "47417790780", branchCode: "474", ...AIRWALLEX_SCB_HK },
   },
   {
     sheet: "A - €",
     label: "EUR (Airwallex)",
     company: "STAR",
-    bankName: "Airwallex",
-    accountName: STAR,
+    bankName: AIRWALLEX_SCB_HK.bankName,
+    accountName: AIRWALLEX_SCB_HK.accountName,
     currency: "EUR",
-    details: { accountNumber: "57210157094", branchCode: "572", ...AIRWALLEX_GA },
+    details: { accountNumber: "57210157094", branchCode: "572", ...AIRWALLEX_SCB_HK },
   },
   {
     sheet: "A - H$",
     label: "HKD (Airwallex)",
     company: "STAR",
-    bankName: "Airwallex",
-    accountName: STAR,
+    bankName: AIRWALLEX_SCB_HK.bankName,
+    accountName: AIRWALLEX_SCB_HK.accountName,
     currency: "HKD",
-    details: { accountNumber: "47416857504", branchCode: "474", ...AIRWALLEX_GA },
+    details: { accountNumber: "47416857504", branchCode: "474", ...AIRWALLEX_SCB_HK },
   },
-  { sheet: "A - S$", label: "SGD (Airwallex)", company: "STAR", bankName: "Airwallex", accountName: STAR, currency: "SGD" },
-  { sheet: "A - ¥", label: "CNY (Airwallex)", company: "STAR", bankName: "Airwallex", accountName: STAR, currency: "CNY" },
+  {
+    sheet: "A - S$",
+    label: "SGD (Airwallex)",
+    company: "STAR",
+    bankName: "DBS Bank Ltd",
+    accountName: "Star SaaS Limited",
+    currency: "SGD",
+    details: {
+      accountNumber: "8853871215",
+      accountType: "Airwallex Global Account",
+      bankCode: "7171",
+      branchCode: "072",
+      swiftCode: "DBSSSGSG",
+      bankAddress: "12 Marina Boulevard, DBS Asia Central, Marina Bay Financial Centre Tower 3",
+      accountLocation: "Singapore",
+    },
+  },
+  {
+    sheet: "A - ¥",
+    label: "CNY (Airwallex)",
+    company: "STAR",
+    bankName: AIRWALLEX_SCB_HK.bankName,
+    accountName: AIRWALLEX_SCB_HK.accountName,
+    currency: "CNY",
+    details: { accountNumber: "57210132962", branchCode: "572", ...AIRWALLEX_SCB_HK },
+  },
   { sheet: "XMXY - $", label: "USD (XMXY)", company: "XIAMEN", bankName: "", accountName: XIAMEN, currency: "USD", details: { accountNumber: "129961400100075317", ...CIB } },
   { sheet: "XMXY - ¥", label: "CNY (XMXY)", company: "XIAMEN", bankName: "", accountName: XIAMEN, currency: "CNY", details: { accountNumber: "129960100100474016", ...CIB } },
 ];

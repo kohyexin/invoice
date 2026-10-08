@@ -186,7 +186,7 @@ enum AccountUse {
 
 model BankAccount {
   id              String     @id @default(cuid())
-  /// Short label shown in pickers, e.g. "USD (SCB Bank)".
+  /// Short label shown in pickers, e.g. "USD (Airwallex)".
   label           String     @unique
   currency        Currency
   accountName     String
