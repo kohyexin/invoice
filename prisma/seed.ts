@@ -16,14 +16,8 @@ const TERMS_EN = [
 ];
 const TERMS_ZH = ["• 请在发票开具之日起7天内付款。", "• 转账费用由资金发送方承担"];
 
+// Order of the Issuer picker on New invoice; the first one is the default.
 const companies = [
-  {
-    code: "SPARK",
-    legalName: "SPARK PSP LIMITED",
-    addressLines: ["Unit 1402A, 14/F The Belgian Bank Building", "No. 721- 725, Nathan Road", "Mongkok Hong Kong"],
-    logoPath: "/logos/spark.png",
-    defaultLang: "EN" as const,
-  },
   {
     code: "STAR",
     legalName: "STAR SAAS LIMITED",
@@ -37,6 +31,13 @@ const companies = [
     addressLines: ["厦门市翔安区新店镇东界宋洋里156号"],
     logoPath: "/logos/star.png",
     defaultLang: "ZH" as const,
+  },
+  {
+    code: "SPARK",
+    legalName: "SPARK PSP LIMITED",
+    addressLines: ["Unit 1402A, 14/F The Belgian Bank Building", "No. 721- 725, Nathan Road", "Mongkok Hong Kong"],
+    logoPath: "/logos/spark.png",
+    defaultLang: "EN" as const,
   },
 ];
 
