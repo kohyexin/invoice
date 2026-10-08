@@ -92,7 +92,7 @@ const accounts: Account[] = [
   { label: "HKD (GEP)", currency: "HKD", accountName: "STAR SAAS LIMITED", accountNumber: "799002738", ...DBS },
   { label: "EUR (GEP)", currency: "EUR", accountName: "STAR SAAS LIMITED", accountNumber: "799002738", ...DBS },
   { label: "USD (SPARK DBS)", currency: "USD", accountName: "SPARK PSP LIMITED", accountNumber: "7950125534", ...DBS },
-  { label: "Airwallex Pay", currency: "USD", accountName: "Star SaaS Limited", accountNumber: "1011107325955705", compact: true },
+  { label: "Airwallex Pay", currency: "USD", accountName: "Star SaaS Limited", accountNumber: "47417790780", compact: true },
 ];
 
 /** [company code | null, currency | null, account label] */

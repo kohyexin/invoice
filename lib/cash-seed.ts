@@ -94,7 +94,16 @@ export const CASH_ACCOUNTS: CashAccountSeed[] = [
   { sheet: "O - €", label: "EUR (OTT)", company: "STAR", bankName: "OTT", accountName: STAR, currency: "EUR" },
   { sheet: "O - H$", label: "HKD (OTT)", company: "STAR", bankName: "OTT", accountName: STAR, currency: "HKD" },
   { sheet: "O - ￥", label: "CNY (OTT)", company: "STAR", bankName: "OTT", accountName: STAR, currency: "CNY" },
-  { sheet: "A - $", label: "Airwallex Pay", existing: true, company: "STAR", bankName: "Airwallex", accountName: STAR, currency: "USD" },
+  {
+    sheet: "A - $",
+    label: "Airwallex Pay",
+    existing: true,
+    company: "STAR",
+    bankName: "Airwallex",
+    accountName: STAR,
+    currency: "USD",
+    details: { accountNumber: "47417790780", branchCode: "474", ...AIRWALLEX_GA },
+  },
   {
     sheet: "A - €",
     label: "EUR (Airwallex)",
