@@ -3,7 +3,8 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FilePlus2, Plus, Trash2 } from "lucide-react";
+import { FilePlus2, HandCoins, Plus, Trash2 } from "lucide-react";
+import { RecordPaymentPanel } from "../../invoices/record-payment";
 import { useCan } from "@/components/shell/user-context";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/components/i18n/locale-provider";
@@ -43,21 +44,30 @@ const TEXT_FIELDS: { key: keyof ClientInput; label: string; mono?: boolean; wide
   { key: "transferName", label: "Transfer name", hint: "Payer name when funds arrive under a different name" },
 ];
 
+export type ClientCreditView = {
+  balances: { currency: string; amount: number }[];
+  history: { id: string; date: string; currency: string; amount: number; note: string; invoice: { id: string; number: string } | null }[];
+};
+
 export function ClientForm({
   id,
   initial,
   owners,
   invoices,
   unpaid,
+  credit,
 }: {
   id: string | null;
   initial: ClientInput;
   owners: { value: string; label: string }[];
   invoices: InvoiceRow[];
   unpaid: number;
+  credit: ClientCreditView;
 }) {
   const router = useRouter();
   const canEdit = useCan("clients", "EDIT");
+  const canPay = useCan("invoices", "EDIT");
+  const [recording, setRecording] = useState(false);
   const { t } = useI18n();
   const [values, setValues] = useState<ClientInput>(initial);
   const [fees, setFees] = useState<[string, string][]>(Object.entries(initial.fees));
@@ -214,7 +224,44 @@ export function ClientForm({
               <FilePlus2 className="h-4 w-4" />
               {t("New invoice")}
             </Link>}
+            {canPay && (
+              <Button variant="secondary" size="sm" className="ml-2 mt-4" onClick={() => setRecording(true)}>
+                <HandCoins className="h-4 w-4" />
+                {t("Record payment")}
+              </Button>
+            )}
           </div>
+          {(credit.balances.length > 0 || credit.history.length > 0) && (
+            <div className="glass-panel neon-edge rounded-card p-5">
+              <h2 className="font-mono text-[11px] uppercase tracking-[0.16em] text-ink-soft">{t("Credit")}</h2>
+              <p className="tnum mt-1 text-2xl font-bold text-ink">
+                {credit.balances.length ? credit.balances.map((b) => `${b.currency} ${formatMoney(b.amount)}`).join(" · ") : formatMoney(0)}
+              </p>
+              <p className="mt-1 text-[13px] text-ink-soft">{t("Overpayments, used on this client's next invoices in the same currency.")}</p>
+              <ul className="mt-3 max-h-64 divide-y divide-line/60 overflow-y-auto">
+                {credit.history.map((h) => (
+                  <li key={h.id} className="flex items-start gap-3 py-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[13px] text-ink" title={h.note}>
+                        {h.invoice ? (
+                          <Link href={`/invoices/${h.invoice.id}`} className="font-mono text-brand-700 hover:underline dark:text-brand-200">
+                            {h.invoice.number}
+                          </Link>
+                        ) : (
+                          h.note || t("Credit")
+                        )}
+                      </p>
+                      <p className="text-[12px] text-ink-soft">{formatDate(h.date)}</p>
+                    </div>
+                    <span className={cn("tnum text-[13px]", h.amount >= 0 ? "text-emerald-600 dark:text-emerald-300" : "text-ink")}>
+                      {h.amount >= 0 ? "+" : "−"}
+                      {formatMoney(Math.abs(h.amount))}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <div className="glass-panel neon-edge rounded-card p-5">
             <h2 className="font-mono text-[11px] uppercase tracking-[0.16em] text-ink-soft">{t("Invoices")}</h2>
             <ul className="mt-3 max-h-[60vh] divide-y divide-line/60 overflow-y-auto">
@@ -243,6 +290,7 @@ export function ClientForm({
           </div>
         </aside>
       )}
+      {id && canPay && <RecordPaymentPanel open={recording} onClose={() => setRecording(false)} clients={[]} clientId={id} />}
     </div>
   );
 }

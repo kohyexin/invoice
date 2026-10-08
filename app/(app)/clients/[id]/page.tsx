@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/ui/page-header";
+import { creditBalances } from "@/lib/credit";
 import { prisma } from "@/lib/db";
 import { can } from "@/lib/roles";
 import { requirePage } from "@/lib/session";
@@ -36,6 +37,18 @@ export default async function ClientPage({ params }: { params: { id: string } })
     prisma.owner.findMany({ where: { active: true }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }] }),
   ]);
   if (!isNew && !client) notFound();
+  const [balances, history] =
+    client && showInvoices
+      ? await Promise.all([
+          creditBalances(prisma, client.id),
+          prisma.clientCredit.findMany({
+            where: { clientId: client.id },
+            orderBy: [{ date: "desc" }, { createdAt: "desc" }],
+            take: 20,
+            select: { id: true, date: true, currency: true, amount: true, note: true, invoice: { select: { id: true, number: true } } },
+          }),
+        ])
+      : [[], []];
 
   const unpaid = !showInvoices ? 0 : client?.invoices.filter((i) => i.status === "SENT").reduce((s, i) => s + Number(i.usdAmount), 0) ?? 0;
 
@@ -51,6 +64,17 @@ export default async function ClientPage({ params }: { params: { id: string } })
         id={client?.id ?? null}
         owners={owners.map((o) => ({ value: o.id, label: o.name }))}
         unpaid={unpaid}
+        credit={{
+          balances,
+          history: history.map((h) => ({
+            id: h.id,
+            date: h.date.toISOString().slice(0, 10),
+            currency: h.currency,
+            amount: Number(h.amount),
+            note: h.note,
+            invoice: h.invoice,
+          })),
+        }}
         initial={{
           name: client?.name ?? "",
           alias: client?.alias ?? "",

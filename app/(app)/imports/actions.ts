@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { logActivity } from "@/lib/activity";
+import { applyCreditToNewInvoice } from "@/lib/credit";
 import { prisma } from "@/lib/db";
 import { authorize, requireAccess } from "@/lib/session";
 import {
@@ -85,6 +86,7 @@ export async function approveImport(id: string, clientId: string, refreshAfter =
   if (res.ok) {
     await logActivity(auth.user, { action: "approve", entity: "import", entityId: id, label: res.number, changes: { invoiceId: res.invoiceId } });
     await logActivity(auth.user, { action: "import", entity: "invoice", entityId: res.invoiceId, label: res.number, changes: { source: "System import" } });
+    await applyCreditToNewInvoice(res.invoiceId, auth.user);
   }
   if (refreshAfter) refresh();
   return res.ok ? { ok: true as const, number: res.number } : res;

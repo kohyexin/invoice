@@ -8,6 +8,7 @@ import { CURRENCIES, STATUSES, parseDateInput, round2 } from "@/lib/utils";
 import { fxRates, suggestInvoiceNumber, toUsd } from "@/lib/rules";
 import { authorize, requireAccess } from "@/lib/session";
 import { discardDocument, refreshDocument } from "@/lib/documents";
+import { applyCreditToNewInvoice } from "@/lib/credit";
 
 type Result<T = object> = ({ ok: true } & T) | { ok: false; error: string };
 
@@ -155,6 +156,7 @@ export async function saveEntry(id: string | null, input: EntryInput, confirmReu
       ? await prisma.invoice.update({ where: { id }, data })
       : await prisma.invoice.create({ data: { ...data, createdById: auth.user.id } });
     await logActivity(auth.user, { action: id ? "update" : "create", entity: "invoice", entityId: row.id, label: row.number, before, after: data });
+    if (!id) await applyCreditToNewInvoice(row.id, auth.user);
     if (id) await refreshDocument(row.id).catch(() => undefined);
     refresh(row.id);
     return { ok: true, id: row.id };

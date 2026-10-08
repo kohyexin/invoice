@@ -315,6 +315,27 @@ model Client {
 
   invoices      Invoice[]
   importReviews ImportReview[]
+  credits       ClientCredit[]
+}
+
+/// A client's credit history per currency: money received beyond what the invoices
+/// took (positive) and credit used on later invoices (negative). The balance is the sum.
+model ClientCredit {
+  id          String   @id @default(cuid())
+  clientId    String
+  client      Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  currency    Currency
+  amount      Decimal  @db.Decimal(14, 2)
+  /// The day the money arrived; credit used on an invoice keeps that payment's date.
+  date        DateTime @db.Date
+  invoiceId   String?
+  invoice     Invoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  note        String   @default("")
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  @@index([clientId, currency])
+  @@index([invoiceId])
 }
 
 /**
@@ -391,6 +412,7 @@ model Invoice {
   lines    InvoiceLine[]
   document InvoiceDocument?
   cashTxns CashTxn[]
+  credits  ClientCredit[]
 
   @@index([number])
   @@index([status])

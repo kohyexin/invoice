@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, Hourglass, Plus, Receipt, Search, Wallet } from "lucide-react";
+import { AlertTriangle, HandCoins, Hourglass, Plus, Receipt, Search, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { GenerateBadge, StatusBadge } from "@/components/ui/badge";
 import { DataTable, type Column, type FilterDef } from "@/components/ui/data-table";
@@ -15,6 +15,7 @@ import { fieldClass } from "@/components/ui/form-controls";
 import { addDays, cn, formatDate, formatMoney, toDateInput } from "@/lib/utils";
 import { markPaid, type PaymentInput } from "./actions";
 import { EntryForm, PaymentFields, blankEntry, type Lookups } from "./entry-form";
+import { RecordPaymentPanel } from "./record-payment";
 
 export type LedgerRow = {
   id: string;
@@ -48,6 +49,7 @@ export function LedgerView({ rows, lookups, initialQuery = "" }: { rows: LedgerR
   const [query, setQuery] = useState(initialQuery);
   const [adding, setAdding] = useState(false);
   const [paying, setPaying] = useState<LedgerRow | null>(null);
+  const [recording, setRecording] = useState(false);
 
   const q = query.trim().toLowerCase();
   const digits = q.replace(/,/g, "");
@@ -165,6 +167,10 @@ export function LedgerView({ rows, lookups, initialQuery = "" }: { rows: LedgerR
         </div>
         {canEdit && (
           <div className="ml-auto flex gap-2">
+            <Button variant="secondary" onClick={() => setRecording(true)}>
+              <HandCoins className="h-4 w-4" />
+              {t("Record payment")}
+            </Button>
             <Button variant="secondary" onClick={() => setAdding(true)}>
               <Plus className="h-4 w-4" />
               {t("Record invoice")}
@@ -209,6 +215,7 @@ export function LedgerView({ rows, lookups, initialQuery = "" }: { rows: LedgerR
       </SidePanel>
 
       <MarkPaidPanel row={paying} onClose={() => setPaying(null)} />
+      <RecordPaymentPanel open={recording} onClose={() => setRecording(false)} clients={lookups.clients} />
     </>
   );
 }

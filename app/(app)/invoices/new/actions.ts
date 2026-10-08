@@ -7,6 +7,7 @@ import { draftFromInput, draftTotal, type ComposerInput } from "@/lib/composer";
 import { fxRates, suggestInvoiceNumber, toUsd } from "@/lib/rules";
 import { authorize, requireAccess } from "@/lib/session";
 import { freezeGeneratedPdf } from "@/lib/documents";
+import { applyCreditToNewInvoice } from "@/lib/credit";
 import { round2 } from "@/lib/utils";
 
 type Result<T = object> = ({ ok: true } & T) | { ok: false; error: string };
@@ -115,6 +116,7 @@ export async function createManualInvoice(input: ComposerInput, confirmReuse = f
     });
     await logActivity(auth.user, { action: "create", entity: "invoice", entityId: inv.id, label: inv.number, after: { ...p.data, lines: lineSummary(p.lines) } });
     await learnClientDefaults(p.data.clientId, p.data.alias, p.data.ownerId).catch(() => undefined);
+    await applyCreditToNewInvoice(inv.id, auth.user);
     await freezeGeneratedPdf(inv.id).catch(() => undefined);
     refresh(p.data.clientId);
     return { ok: true, id: inv.id };
