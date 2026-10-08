@@ -38,11 +38,27 @@ export type CashAccountSeed = {
   accountName: string;
   currency: Currency;
   /** Known bank details. The importer fills these only where Settings is still blank. */
-  details?: { accountNumber?: string; accountType?: string; bankAddress?: string; swiftCode?: string; accountLocation?: string };
+  details?: {
+    accountNumber?: string;
+    accountType?: string;
+    bankName?: string;
+    bankAddress?: string;
+    branchCode?: string;
+    swiftCode?: string;
+    accountLocation?: string;
+  };
 };
 
 const STAR = "STAR SAAS LIMITED";
 const XIAMEN = "厦门星知付科技有限公司";
+/** Industrial Bank details, from the invoice workbook's Type sheet. */
+const CIB = {
+  bankName: "兴业银行",
+  bankAddress: "NO.78, NORTH HUBIN ROAD, XIAMEN, FUJIAN PROVINCE, 361012 P.R.CHINA",
+  branchCode: "厦门观音山支行",
+  swiftCode: "FJIBCNBA260",
+  accountLocation: "厦门",
+};
 
 /** The live sheets. S-, Others and Jason are closed and left out. */
 export const CASH_ACCOUNTS: CashAccountSeed[] = [
@@ -74,6 +90,6 @@ export const CASH_ACCOUNTS: CashAccountSeed[] = [
   { sheet: "A - H$", label: "HKD (Airwallex)", company: "STAR", bankName: "Airwallex", accountName: STAR, currency: "HKD" },
   { sheet: "A - S$", label: "SGD (Airwallex)", company: "STAR", bankName: "Airwallex", accountName: STAR, currency: "SGD" },
   { sheet: "A - ¥", label: "CNY (Airwallex)", company: "STAR", bankName: "Airwallex", accountName: STAR, currency: "CNY" },
-  { sheet: "XMXY - $", label: "USD (XMXY)", company: "XIAMEN", bankName: "", accountName: XIAMEN, currency: "USD" },
-  { sheet: "XMXY - ¥", label: "CNY (XMXY)", company: "XIAMEN", bankName: "", accountName: XIAMEN, currency: "CNY" },
+  { sheet: "XMXY - $", label: "USD (XMXY)", company: "XIAMEN", bankName: "", accountName: XIAMEN, currency: "USD", details: { accountNumber: "129961400100075317", ...CIB } },
+  { sheet: "XMXY - ¥", label: "CNY (XMXY)", company: "XIAMEN", bankName: "", accountName: XIAMEN, currency: "CNY", details: { accountNumber: "129960100100474016", ...CIB } },
 ];

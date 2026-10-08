@@ -580,8 +580,10 @@ export const ZH: Record<string, string> = {
   "Upload monthly bank statement PDFs. Each month is checked against the cash book; interest and anything missing wait here for approval before they reach the cash book.":
     "上传银行月结单 PDF。每个月都会与流水账核对；利息和缺失的流水会先在此等待审批，批准后才计入流水账。",
   "Reading statements…": "正在读取对账单…",
-  "Drop bank statement PDFs": "拖入银行对账单 PDF",
-  "ANEXT for now. Several months at once is fine; they are checked oldest first.": "目前支持 ANEXT。可一次上传多个月份，按时间先后核对。",
+  "Drop bank statements": "拖入银行对账单",
+  "ANEXT PDFs or Industrial Bank (XMXY) Excel downloads. Date ranges can overlap; lines already imported are skipped.":
+    "支持 ANEXT PDF 或兴业银行（XMXY）导出的 Excel。日期范围可以重叠，已导入的流水会自动跳过。",
+  "days {0}–{1}": "{0}–{1} 日",
   "{0} new lines are waiting for approval below.": "{0} 条新记录正在下方等待审批。",
   "1 new line is waiting for approval below.": "1 条新记录正在下方等待审批。",
   "Nothing new to queue; everything on these statements is already in the cash book, waiting or rejected.": "没有新记录需要排队；这些对账单上的内容都已在流水账中、正在等待审批或已被拒绝。",
@@ -641,11 +643,16 @@ export const ZH: Record<string, string> = {
   "This line isn't rejected any more.": "该记录已不是拒绝状态。",
   "{0} bank statement lines waiting": "{0} 条银行对账单记录待审批",
   "Approve or reject them on Import statement.": "请在“导入银行对账单”页面批准或拒绝。",
-  "Choose at least one statement PDF.": "请至少选择一份对账单 PDF。",
+  "Choose at least one statement file.": "请至少选择一份对账单文件。",
   "File is larger than 10 MB.": "文件超过 10 MB。",
   "Couldn't read this file.": "无法读取此文件。",
   "Same statement as another file in this upload; skipped.": "与本次上传的另一份对账单相同；已跳过。",
-  "This bank's statements aren't supported yet. Only ANEXT can be imported for now.": "暂不支持该银行的对账单。目前只能导入 ANEXT。",
+  "This bank's statements aren't supported yet. ANEXT PDFs and Industrial Bank (XMXY) Excel downloads can be imported.":
+    "暂不支持该银行的对账单。目前可导入 ANEXT PDF 和兴业银行（XMXY）Excel。",
+  "This spreadsheet isn't a supported bank download. Only Industrial Bank (XMXY) Excel files can be imported.":
+    "该表格不是支持的银行导出文件。目前只支持兴业银行（XMXY）的 Excel。",
+  "The download mixes several accounts or currencies; download one account at a time.": "该文件包含多个账户或币种，请每次只导出一个账户。",
+  "The download has no transactions.": "该文件没有交易记录。",
   "This doesn't look like an ANEXT account statement (no account number or period).": "这似乎不是 ANEXT 对账单（找不到账号或期间）。",
   "What is in every bank account now, in its own currency and in USD at the latest Yahoo Finance rate.":
     "各银行账户当前余额，以账户币种及按雅虎财经最新汇率折算的美元显示。",

@@ -1,6 +1,7 @@
 # business data — never commit
 docs/
 /storage/
+scripts/.snapshots/
 
 # dependencies
 node_modules/

@@ -122,11 +122,11 @@ function Uploader() {
   }
 
   function choose(list: FileList | null) {
-    const pdfs = Array.from(list ?? []).filter((f) => f.type === "application/pdf" || f.name.toLowerCase().endsWith(".pdf"));
-    if (!pdfs.length) return;
-    setFiles(pdfs);
+    const picked = Array.from(list ?? []).filter((f) => /\.(pdf|xlsx?)$/i.test(f.name) || f.type === "application/pdf");
+    if (!picked.length) return;
+    setFiles(picked);
     setAccounts({});
-    upload(pdfs, {});
+    upload(picked, {});
   }
 
   function pickAccount(month: MonthPreview, accountId: string) {
@@ -171,10 +171,12 @@ function Uploader() {
           )}
         >
           <FileUp className="h-6 w-6 text-brand-600 dark:text-brand-300" />
-          <span className="text-sm font-medium text-ink">{busy ? t("Reading statements…") : t("Drop bank statement PDFs")}</span>
-          <span className="text-[12px] text-ink-soft">{t("ANEXT for now. Several months at once is fine; they are checked oldest first.")}</span>
+          <span className="text-sm font-medium text-ink">{busy ? t("Reading statements…") : t("Drop bank statements")}</span>
+          <span className="text-[12px] text-ink-soft">
+            {t("ANEXT PDFs or Industrial Bank (XMXY) Excel downloads. Date ranges can overlap; lines already imported are skipped.")}
+          </span>
         </button>
-        <input ref={fileRef} type="file" accept="application/pdf,.pdf" multiple className="hidden" onChange={(e) => choose(e.target.files)} />
+        <input ref={fileRef} type="file" accept="application/pdf,.pdf,.xls,.xlsx" multiple className="hidden" onChange={(e) => choose(e.target.files)} />
       </section>
 
       {error && <p className="rounded-control border border-danger/30 bg-danger/10 px-3 py-2 text-[13px] text-rose-700 dark:text-rose-200">{t(error)}</p>}
@@ -261,7 +263,10 @@ function MonthResult({ month: m, candidates, onAccount }: { month: MonthPreview;
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-line px-5 py-4">
         <div>
           <h2 className="text-base font-semibold text-ink">
-            {formatMonth(m.periodStart)} · {m.accountLabel || `${m.bank} ${m.accountNumber} · ${m.currency}`}
+            {formatMonth(m.periodStart)}
+            {m.partial && <span className="font-normal text-ink-muted"> ({t("days {0}–{1}", Number(m.periodStart.slice(8)), Number(m.periodEnd.slice(8)))})</span>}
+            {" · "}
+            {m.accountLabel || `${m.bank} ${m.accountNumber} · ${m.currency}`}
           </h2>
           <p className="mt-0.5 text-[13px] text-ink-muted">{m.file}</p>
         </div>

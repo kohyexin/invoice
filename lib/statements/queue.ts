@@ -9,7 +9,9 @@ export type LineEdits = { date: string; categoryId: string; purpose: string; par
 
 const utc = (s: string) => new Date(`${s}T00:00:00.000Z`);
 const monthStart = (d: Date) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
-const kindOf = (key: string) => (key.endsWith(":interest") ? "interest" : key.endsWith(":opening") ? "opening" : "entry");
+/** Ref-keyed lines (Industrial Bank) don't say their kind in the key; interest is booked as 存款利息. */
+const kindOf = (key: string, purpose: string) =>
+  key.endsWith(":interest") || (key.includes(":ref:") && purpose === "存款利息") ? "interest" : key.endsWith(":opening") ? "opening" : "entry";
 
 /** Saves each statement month, queues its new lines and closes waiting lines the cash book now has. */
 export async function stageStatements(preview: Omit<StatementPreview, "errors">, actorId: string | null) {
@@ -28,6 +30,18 @@ export async function stageStatements(preview: Omit<StatementPreview, "errors">,
         uploadedAt: new Date(),
         uploadedById: actorId,
       };
+      // Date-range downloads can cover part of a month: keep the widest period seen, each end with its balance.
+      const saved = await tx.statementImport.findUnique({ where: { id: m.id } });
+      if (saved) {
+        if (saved.periodStart < statement.periodStart) {
+          statement.periodStart = saved.periodStart;
+          statement.opening = Number(saved.opening);
+        }
+        if (saved.periodEnd > statement.periodEnd) {
+          statement.periodEnd = saved.periodEnd;
+          statement.closing = Number(saved.closing);
+        }
+      }
       await tx.statementImport.upsert({ where: { id: m.id }, update: statement, create: { id: m.id, ...statement } });
 
       if (m.proposed.length) {
@@ -70,7 +84,7 @@ export async function stageStatements(preview: Omit<StatementPreview, "errors">,
             key: t.importKey!,
             statementId: m.id,
             accountId: t.accountId,
-            kind: kindOf(t.importKey!),
+            kind: kindOf(t.importKey!, t.purpose),
             date: t.date,
             amountIn: t.amountIn,
             amountOut: t.amountOut,

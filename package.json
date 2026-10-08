@@ -41,7 +41,8 @@
     "recharts": "^2.15.4",
     "server-only": "^0.0.1",
     "tailwind-merge": "^2.6.1",
-    "unpdf": "^1.8.1"
+    "unpdf": "^1.8.1",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",

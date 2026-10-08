@@ -4,13 +4,9 @@ import { revalidatePath } from "next/cache";
 import { logActivity } from "@/lib/activity";
 import { prisma } from "@/lib/db";
 import { authorize } from "@/lib/session";
-import { parseStatement } from "@/lib/statements/parse";
 import { approveLine, rejectLine, restoreLine, saveLine, stageStatements, type LineEdits } from "@/lib/statements/queue";
+import { MAX_FILES, readStatementFiles } from "@/lib/statements/read";
 import { reconcileStatements, type StatementPreview } from "@/lib/statements/reconcile";
-import type { ParsedStatement } from "@/lib/statements/types";
-
-const MAX_FILES = 24;
-const MAX_BYTES = 10 * 1024 * 1024;
 
 type Result = { ok: true } | { ok: false; error: string };
 
@@ -34,33 +30,9 @@ async function lineForLog(id: string) {
 
 async function readFiles(form: FormData) {
   const files = form.getAll("files").filter((f): f is File => f instanceof File && f.size > 0);
-  if (!files.length) throw new Error("Choose at least one statement PDF.");
+  if (!files.length) throw new Error("Choose at least one statement file.");
   if (files.length > MAX_FILES) throw new Error(`Upload at most ${MAX_FILES} statements at a time.`);
-  const parsed: { name: string; statement: ParsedStatement }[] = [];
-  const errors: StatementPreview["errors"] = [];
-  for (const f of files) {
-    if (f.size > MAX_BYTES) {
-      errors.push({ file: f.name, message: "File is larger than 10 MB." });
-      continue;
-    }
-    try {
-      parsed.push({ name: f.name, statement: await parseStatement(new Uint8Array(await f.arrayBuffer())) });
-    } catch (e) {
-      errors.push({ file: f.name, message: errorText(e, "Couldn't read this file.") });
-    }
-  }
-  // The same statement uploaded twice would double its lines.
-  const seen = new Set<string>();
-  const unique = parsed.filter((p) => {
-    const k = `${p.statement.bank}:${p.statement.accountNumber}:${p.statement.periodStart}`;
-    if (seen.has(k)) {
-      errors.push({ file: p.name, message: "Same statement as another file in this upload; skipped." });
-      return false;
-    }
-    seen.add(k);
-    return true;
-  });
-  return { parsed: unique, errors };
+  return readStatementFiles(await Promise.all(files.map(async (f) => ({ name: f.name, data: new Uint8Array(await f.arrayBuffer()) }))));
 }
 
 export type UploadChoices = {
@@ -88,7 +60,8 @@ export async function uploadStatements(form: FormData): Promise<UploadResult> {
     const { parsed, errors } = await readFiles(form);
     const preview = await reconcileStatements(parsed, choicesFrom(form).accounts);
     const { queued } = await stageStatements(preview, auth.user.id);
-    await logActivity(auth.user, { action: "upload", entity: "statement", label: parsed.map((p) => p.name).join(", "), changes: { files: parsed.length, queued } });
+    const names = [...new Set(parsed.flatMap((p) => p.name.split(", ")))];
+    await logActivity(auth.user, { action: "upload", entity: "statement", label: names.join(", "), changes: { files: names.length, months: parsed.length, queued } });
     refresh();
     return { ok: true, queued, ...preview, errors };
   } catch (e) {

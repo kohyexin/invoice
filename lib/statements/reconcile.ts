@@ -53,6 +53,8 @@ export type MonthPreview = {
   accountLabel: string;
   periodStart: string;
   periodEnd: string;
+  /** The period covers only part of its month (date-range downloads). */
+  partial: boolean;
   opening: number;
   closing: number;
   /** Book balance before the period / at its end, from what is saved now. */
@@ -172,7 +174,9 @@ export async function reconcileStatements(
         accounts.find((a) => a.accountNumber.replace(/[\s-]/g, "") === s.accountNumber && a.currency === section.currency);
       const ym = s.periodStart.slice(0, 7);
       const prefix = `${s.bank}:${s.accountNumber}:${section.currency}:${ym}`;
-      const interestTotal = round2(section.entries.filter((e) => e.isInterest).reduce((t, e) => t + e.credit - e.debit, 0));
+      // Banks that give each transaction an id: every line, interest included, is keyed and matched on its own.
+      const hasRefs = section.entries.some((e) => e.ref);
+      const interestTotal = hasRefs ? 0 : round2(section.entries.filter((e) => e.isInterest).reduce((t, e) => t + e.credit - e.debit, 0));
 
       const month: MonthPreview = {
         id: prefix,
@@ -184,6 +188,7 @@ export async function reconcileStatements(
         accountLabel: account ? accountNameWithCurrency(account) : "",
         periodStart: s.periodStart,
         periodEnd: s.periodEnd,
+        partial: !!s.partial,
         opening: section.opening,
         closing: section.closing,
         baseOpening: 0,
@@ -278,11 +283,11 @@ export async function reconcileStatements(
       // Ordinary entries: match to book lines on amount and direction within a few days.
       const seen = new Map<string, number>();
       const periodMatched = new Set<string>();
-      for (const e of section.entries.filter((x) => !x.isInterest)) {
+      for (const e of section.entries.filter((x) => hasRefs || !x.isInterest)) {
         const amount = round2(e.credit - e.debit);
         const n = (seen.get(`${e.date}:${amount}`) ?? 0) + 1;
         seen.set(`${e.date}:${amount}`, n);
-        const key = entryKey(prefix, e.date, amount, n);
+        const key = e.ref ? `${prefix}:ref:${e.ref}` : entryKey(prefix, e.date, amount, n);
         const inQueue = queued.get(key);
         const at = utc(e.date);
         const best = book
@@ -302,7 +307,7 @@ export async function reconcileStatements(
           continue;
         }
         if (keys.has(key)) continue;
-        add(entryLine(key, e, amount, hints.get(`${account.id}|${e.counterparty}|${dir}`)));
+        add(e.isInterest ? interestLine(key, e, amount, zijin) : entryLine(key, e, amount, hints.get(`${account.id}|${e.counterparty}|${dir}`)));
       }
 
       // Lines in the book for this period that the bank doesn't have.
@@ -357,6 +362,23 @@ function entryLine(key: string, e: StatementEntry, amount: number, hint: Hint | 
     description: e.description,
     counterparty: e.counterparty,
     suggested: hint ? "history" : "none",
+  };
+}
+
+function interestLine(key: string, e: StatementEntry, amount: number, categoryId: string): Omit<ProposedLine, "accountId"> {
+  return {
+    key,
+    kind: "interest",
+    date: e.date,
+    amountIn: Math.max(amount, 0),
+    amountOut: Math.max(-amount, 0),
+    categoryId,
+    purpose: "存款利息",
+    party: "",
+    memo: e.description,
+    description: e.description,
+    counterparty: e.counterparty,
+    suggested: "rule",
   };
 }
 
