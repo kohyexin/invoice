@@ -1,15 +1,15 @@
 import "server-only";
 import { prisma } from "@/lib/db";
 import { settleInvoices, type SettledInvoice } from "./invoices";
-import type { StatementPreview } from "./reconcile";
+import { periodLag, type StatementPreview } from "./reconcile";
 
 /* The approval queue for statement lines: nothing reaches the cash book
    until approveLine() runs. */
 
-export type LineEdits = { date: string; categoryId: string; purpose: string; party: string; memo: string };
+/** `period` is the 使用月 as yyyy-mm. */
+export type LineEdits = { date: string; period: string; categoryId: string; purpose: string; party: string; memo: string };
 
 const utc = (s: string) => new Date(`${s}T00:00:00.000Z`);
-const monthStart = (d: Date) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
 /** Ref-keyed lines (Industrial Bank) don't say their kind in the key; interest is booked as 存款利息. */
 const kindOf = (key: string, purpose: string) =>
   key.endsWith(":interest") || (key.includes(":ref:") && purpose === "存款利息") ? "interest" : key.endsWith(":opening") ? "opening" : "entry";
@@ -53,6 +53,7 @@ export async function stageStatements(preview: Omit<StatementPreview, "errors">,
             accountId: l.accountId,
             kind: l.kind,
             date: utc(l.date),
+            period: utc(`${l.period}-01`),
             amountIn: l.amountIn,
             amountOut: l.amountOut,
             categoryId: l.categoryId || null,
@@ -87,6 +88,7 @@ export async function stageStatements(preview: Omit<StatementPreview, "errors">,
             accountId: t.accountId,
             kind: kindOf(t.importKey!, t.purpose),
             date: t.date,
+            period: t.period,
             amountIn: t.amountIn,
             amountOut: t.amountOut,
             categoryId: t.categoryId,
@@ -105,7 +107,7 @@ export async function stageStatements(preview: Omit<StatementPreview, "errors">,
       for (const x of m.matched) {
         if (!x.counterparty) continue;
         const direction = x.net >= 0 ? "in" : "out";
-        const data = { categoryId: x.bookCategoryId, purpose: x.bookPurpose, party: x.bookParty };
+        const data = { categoryId: x.bookCategoryId, purpose: x.bookPurpose, party: x.bookParty, periodLag: x.bookPeriodLag };
         await tx.cashHint.upsert({
           where: { accountId_counterparty_direction: { accountId: m.accountId!, counterparty: x.counterparty, direction } },
           update: data,
@@ -119,6 +121,7 @@ export async function stageStatements(preview: Omit<StatementPreview, "errors">,
 
 async function cleanEdits(edits: LineEdits) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(edits.date) || Number.isNaN(utc(edits.date).getTime())) throw new Error("Enter a valid date.");
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(edits.period)) throw new Error("Month used must be a month, e.g. 2026-08.");
   let categoryId: string | null = null;
   if (edits.categoryId) {
     const found = await prisma.cashCategory.findUnique({ where: { id: edits.categoryId }, select: { id: true } });
@@ -127,6 +130,7 @@ async function cleanEdits(edits: LineEdits) {
   }
   return {
     date: utc(edits.date),
+    period: utc(`${edits.period}-01`),
     categoryId,
     purpose: edits.purpose.trim().slice(0, 500),
     party: edits.party.trim().slice(0, 200),
@@ -154,7 +158,7 @@ export async function approveLine(id: string, edits: LineEdits, actorId: string 
       data: {
         accountId: line.accountId,
         date: data.date,
-        period: monthStart(data.date),
+        period: data.period,
         seq: (max._max.seq ?? 0) + 1,
         categoryId: data.categoryId,
         purpose: data.purpose,
@@ -167,7 +171,7 @@ export async function approveLine(id: string, edits: LineEdits, actorId: string 
     });
     if (line.kind === "entry" && line.counterparty) {
       const direction = Number(line.amountIn) > 0 ? "in" : "out";
-      const hint = { categoryId: data.categoryId, purpose: data.purpose, party: data.party };
+      const hint = { categoryId: data.categoryId, purpose: data.purpose, party: data.party, periodLag: periodLag(data.date, data.period) };
       await tx.cashHint.upsert({
         where: { accountId_counterparty_direction: { accountId: line.accountId, counterparty: line.counterparty, direction } },
         update: hint,

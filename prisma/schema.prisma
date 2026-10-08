@@ -571,6 +571,8 @@ model CashHint {
   categoryId   String?
   purpose      String      @default("")
   party        String      @default("")
+  /// Months the 使用月 lies before the date, e.g. 1 for salary paid on 10 Sept for August.
+  periodLag    Int         @default(0)
   updatedAt    DateTime    @updatedAt
 
   @@unique([accountId, counterparty, direction])
@@ -620,6 +622,8 @@ model StatementLine {
   /// "opening", "interest" or "entry".
   kind         String
   date         DateTime            @db.Date
+  /// 使用月 (first of the month); null means the month of `date`.
+  period       DateTime?           @db.Date
   amountIn     Decimal             @default(0) @db.Decimal(16, 2)
   amountOut    Decimal             @default(0) @db.Decimal(16, 2)
   categoryId   String?

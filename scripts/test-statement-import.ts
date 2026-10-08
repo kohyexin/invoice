@@ -62,7 +62,14 @@ async function runImport(path: string) {
   if (line) {
     await approveLine(
       line.id,
-      { date: line.date.toISOString().slice(0, 10), categoryId: line.categoryId ?? "", purpose: line.purpose, party: line.party, memo: line.memo },
+      {
+        date: line.date.toISOString().slice(0, 10),
+        period: (line.period ?? line.date).toISOString().slice(0, 7),
+        categoryId: line.categoryId ?? "",
+        purpose: line.purpose,
+        party: line.party,
+        memo: line.memo,
+      },
       null,
     );
     const txn = await prisma.cashTxn.findUnique({ where: { importKey: line.key } });

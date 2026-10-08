@@ -29,6 +29,8 @@ export type QueueLine = {
   id: string;
   kind: "opening" | "interest" | "entry";
   date: string;
+  /** yyyy-mm */
+  period: string;
   amountIn: number;
   amountOut: number;
   categoryId: string;
@@ -59,7 +61,15 @@ export type StatementCheck = {
 type Progress = { label: string; done: number; total: number };
 
 const same = (a: number, b: number) => Math.abs(a - b) < 0.005;
-const editsOf = (l: QueueLine): LineEdits => ({ date: l.date, categoryId: l.categoryId, purpose: l.purpose, party: l.party, memo: l.memo });
+/** The month used for a new date, keeping its distance from the old date (salary stays a month back). */
+function shiftMonth(date: string, oldDate: string, oldPeriod: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{4}-\d{2}$/.test(oldPeriod)) return oldPeriod;
+  const months = (s: string) => Number(s.slice(0, 4)) * 12 + Number(s.slice(5, 7)) - 1;
+  const m = months(date) - (months(oldDate) - months(oldPeriod));
+  return `${Math.floor(m / 12)}-${String((m % 12) + 1).padStart(2, "0")}`;
+}
+
+const editsOf = (l: QueueLine): LineEdits => ({ date: l.date, period: l.period, categoryId: l.categoryId, purpose: l.purpose, party: l.party, memo: l.memo });
 
 export function StatementImportView({
   categories,
@@ -505,10 +515,21 @@ function PendingRow({
           {t("Bank: {0}", l.description)}
         </p>
       )}
-      <div className="mt-3 grid gap-2 text-[13px] sm:grid-cols-2 lg:grid-cols-[140px_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]">
+      <div className="mt-3 grid gap-2 text-[13px] sm:grid-cols-2 lg:grid-cols-[140px_130px_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]">
         <label className="space-y-1">
           <span className="text-[11px] uppercase tracking-wider text-ink-soft">{t("Date")}</span>
-          <input type="date" value={v.date} onChange={(e) => set({ date: e.target.value })} disabled={disabled} className={cn(fieldClass, "h-9")} />
+          <input
+            type="date"
+            value={v.date}
+            onChange={(e) => set({ date: e.target.value, period: shiftMonth(e.target.value, v.date, v.period) })}
+            disabled={disabled}
+            className={cn(fieldClass, "h-9")}
+          />
+        </label>
+        <label className="space-y-1">
+          <span className="text-[11px] uppercase tracking-wider text-ink-soft">{t("Month used")}</span>
+          <input type="month" value={v.period} onChange={(e) => set({ period: e.target.value })} disabled={disabled} className={cn(fieldClass, "h-9")} />
+          {v.period !== v.date.slice(0, 7) && <span className="block text-[11px] text-ink-soft">{t("Not the month of the date")}</span>}
         </label>
         <label className="space-y-1">
           <span className="text-[11px] uppercase tracking-wider text-ink-soft">{t("Category")}</span>
@@ -531,7 +552,7 @@ function PendingRow({
           <input value={v.party} onChange={(e) => set({ party: e.target.value })} disabled={disabled} className={cn(fieldClass, "h-9")} />
           {l.suggested === "invoice" && <span className="block text-[11px] text-ink-soft">{t("Unpaid invoice for the same amount")}</span>}
         </label>
-        <label className="space-y-1 sm:col-span-2 lg:col-span-4">
+        <label className="space-y-1 sm:col-span-2 lg:col-span-5">
           <span className="text-[11px] uppercase tracking-wider text-ink-soft">{t("Memo")}</span>
           <input value={v.memo} onChange={(e) => set({ memo: e.target.value })} disabled={disabled} className={cn(fieldClass, "h-9")} />
         </label>

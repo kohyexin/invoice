@@ -18,6 +18,8 @@ export type ProposedLine = {
   accountId: string;
   /** yyyy-mm-dd */
   date: string;
+  /** 使用月, yyyy-mm; earlier than the date when the counterparty is booked that way (salary). */
+  period: string;
   amountIn: number;
   amountOut: number;
   categoryId: string;
@@ -39,6 +41,7 @@ export type MatchedEntry = {
   bookPurpose: string;
   bookParty: string;
   bookCategoryId: string | null;
+  bookPeriodLag: number;
   counterparty: string;
 };
 
@@ -93,6 +96,7 @@ export type StatementPreview = {
 type BookLine = {
   id: string;
   date: Date;
+  period: Date;
   amountIn: unknown;
   amountOut: unknown;
   purpose: string;
@@ -102,9 +106,18 @@ type BookLine = {
   importKey: string | null;
 };
 
-type Hint = { categoryId: string | null; purpose: string; party: string };
+type Hint = { categoryId: string | null; purpose: string; party: string; periodLag: number };
+/** A line to propose; without a period it belongs to the month of its date. */
+type NewLine = Omit<ProposedLine, "accountId" | "period"> & { period?: string };
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
+/** Months from `period` to `date`: 1 when August's salary is paid in September. */
+export const periodLag = (date: Date, period: Date) => (date.getUTCFullYear() - period.getUTCFullYear()) * 12 + date.getUTCMonth() - period.getUTCMonth();
+/** yyyy-mm of the month `lag` months before `date` (yyyy-mm-dd). */
+const monthBefore = (date: string, lag: number) => {
+  const d = utc(date);
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - lag, 1)).toISOString().slice(0, 7);
+};
 const utc = (s: string) => new Date(`${s}T00:00:00.000Z`);
 const net = (l: BookLine) => round2(Number(l.amountIn) - Number(l.amountOut));
 const isFixedKey = (key: string | null) => !!key && (key.endsWith(":interest") || key.endsWith(":opening"));
@@ -165,7 +178,7 @@ export async function reconcileStatements(
         await prisma.cashTxn.findMany({
           where: { accountId },
           orderBy: [{ date: "asc" }, { seq: "asc" }],
-          select: { id: true, date: true, amountIn: true, amountOut: true, purpose: true, party: true, memo: true, categoryId: true, importKey: true },
+          select: { id: true, date: true, period: true, amountIn: true, amountOut: true, purpose: true, party: true, memo: true, categoryId: true, importKey: true },
         }),
       );
     }
@@ -276,8 +289,8 @@ export async function reconcileStatements(
         if (q.status === "REJECTED") month.rejected++;
       }
 
-      const add = (line: Omit<ProposedLine, "accountId">) => {
-        month.proposed.push({ ...line, accountId: account.id });
+      const add = (line: NewLine) => {
+        month.proposed.push({ ...line, period: line.period ?? line.date.slice(0, 7), accountId: account.id });
         earlier.push({ date: line.date, amountIn: line.amountIn, amountOut: line.amountOut });
       };
 
@@ -324,8 +337,19 @@ export async function reconcileStatements(
         if (best) {
           used.add(best.id);
           periodMatched.add(best.id);
-          hints.set(`${account.id}|${e.counterparty}|${dir}`, { categoryId: best.categoryId, purpose: best.purpose, party: best.party });
-          month.matched.push({ date: e.date, description: e.description, net: amount, bookDate: iso(best.date), bookPurpose: best.purpose, bookParty: best.party, bookCategoryId: best.categoryId, counterparty: e.counterparty });
+          const lag = periodLag(best.date, best.period);
+          hints.set(`${account.id}|${e.counterparty}|${dir}`, { categoryId: best.categoryId, purpose: best.purpose, party: best.party, periodLag: lag });
+          month.matched.push({
+            date: e.date,
+            description: e.description,
+            net: amount,
+            bookDate: iso(best.date),
+            bookPurpose: best.purpose,
+            bookParty: best.party,
+            bookCategoryId: best.categoryId,
+            bookPeriodLag: lag,
+            counterparty: e.counterparty,
+          });
           if (inQueue?.status === "PENDING" && best.importKey !== key) {
             month.caughtUp.push(inQueue.id);
             const i = earlier.findIndex((l) => l.date === iso(inQueue.date) && round2(l.amountIn - l.amountOut) === amount);
@@ -388,11 +412,12 @@ function entryLine(
   amount: number,
   hint: Hint | undefined,
   invoice?: { number: string; alias: string; categoryId: string },
-): Omit<ProposedLine, "accountId"> {
+): NewLine {
   return {
     key,
     kind: "entry",
     date: e.date,
+    period: monthBefore(e.date, hint?.periodLag ?? 0),
     amountIn: Math.max(amount, 0),
     amountOut: Math.max(-amount, 0),
     categoryId: hint?.categoryId || invoice?.categoryId || "",
@@ -405,7 +430,7 @@ function entryLine(
   };
 }
 
-function interestLine(key: string, e: StatementEntry, amount: number, categoryId: string): Omit<ProposedLine, "accountId"> {
+function interestLine(key: string, e: StatementEntry, amount: number, categoryId: string): NewLine {
   return {
     key,
     kind: "interest",

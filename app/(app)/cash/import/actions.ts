@@ -25,7 +25,14 @@ async function lineForLog(id: string) {
   const amount = Number(l.amountIn) ? `+${l.amountIn}` : `-${l.amountOut}`;
   return {
     label: [l.account.label, l.date.toISOString().slice(0, 10), amount, l.description].filter(Boolean).join(" · "),
-    fields: { date: l.date.toISOString().slice(0, 10), categoryId: l.categoryId ?? "", purpose: l.purpose, party: l.party, memo: l.memo },
+    fields: {
+      date: l.date.toISOString().slice(0, 10),
+      period: (l.period ?? l.date).toISOString().slice(0, 7),
+      categoryId: l.categoryId ?? "",
+      purpose: l.purpose,
+      party: l.party,
+      memo: l.memo,
+    },
   };
 }
 

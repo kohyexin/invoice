@@ -612,6 +612,7 @@ export const ZH: Record<string, string> = {
   "Opening adjustment": "期初调整",
   "Suggested from earlier lines": "根据以往记录建议",
   "Unpaid invoice for the same amount": "金额相同的未付发票",
+  "Not the month of the date": "与记账日期不同月",
   "Nothing reaches the cash book until you approve it. Lines marked Missing in Excel are on the bank statement but not in your workbook; add them to Excel too while you run both.":
     "批准前不会计入流水账。标记为“Excel 中缺失”的流水在银行对账单上，但不在您的工作簿中；双轨运行期间请同时补录到 Excel。",
   "Bank: {0}": "银行：{0}",
