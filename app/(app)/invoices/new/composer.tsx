@@ -52,6 +52,21 @@ function resolveAccount(rules: Rule[], companyId: string, currency: string) {
   );
 }
 
+async function downloadPdf(invoiceId: string) {
+  const res = await fetch(`/api/invoices/${invoiceId}/pdf`);
+  if (!res.ok) throw new Error("PDF download failed.");
+  const header = res.headers.get("Content-Disposition") ?? "";
+  const match = header.match(/filename\*=UTF-8''([^;]+)/i);
+  const url = URL.createObjectURL(await res.blob());
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = match ? decodeURIComponent(match[1]) : "invoice.pdf";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
 function feeNumber(v: unknown) {
   const m = String(v ?? "").replace(/,/g, "").match(/-?\d+(\.\d+)?/);
   return m ? m[0] : "";
@@ -332,11 +347,8 @@ export function Composer({
       const res = editing ? await updateManualInvoice(editing.id, input, Boolean(reuse)) : await createManualInvoice(input, Boolean(reuse));
       if (!res.ok) return setError(res.error);
       if (res.reuse) return setReuse(res.reuse);
-      if (download) {
-        const a = document.createElement("a");
-        a.href = `/api/invoices/${res.id}/pdf`;
-        a.click();
-      }
+      // Fetch before navigating: a plain link click is cancelled by router.push.
+      if (download) await downloadPdf(res.id).catch(() => undefined);
       router.push(`/invoices/${res.id}`);
       if (editing) router.refresh();
     });
