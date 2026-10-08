@@ -85,9 +85,8 @@ const accounts: Account[] = [
   { label: "EUR (Airwallex)", currency: "EUR", accountName: "Star SaaS Limited", accountNumber: "57210157094", ...SCB, branchCode: "572" },
   { label: "USD (DBS Bank)", currency: "USD", accountName: "STAR SAAS LIMITED", accountNumber: "7983668446", ...DBS },
   { label: "HKD (DBS Bank)", currency: "HKD", accountName: "STAR SAAS LIMITED", accountNumber: "7983668446", ...DBS },
-  { label: "USD (IBC Bank)", currency: "USD", accountNumber: "129961400100075317", ...IBC },
-  { label: "EUR (IBC Bank)", currency: "EUR", accountNumber: "129961100100010805", ...IBC },
-  { label: "CNY (IBC Bank)", currency: "CNY", accountNumber: "129960100100474016", ...IBC },
+  { label: "USD (兴业银行)", currency: "USD", accountNumber: "129961400100075317", ...IBC },
+  { label: "CNY (兴业银行)", currency: "CNY", accountNumber: "129960100100474016", ...IBC },
   { label: "USD (GEP)", currency: "USD", accountName: "STAR SAAS LIMITED", accountNumber: "799002738", ...DBS },
   { label: "HKD (GEP)", currency: "HKD", accountName: "STAR SAAS LIMITED", accountNumber: "799002738", ...DBS },
   { label: "EUR (GEP)", currency: "EUR", accountName: "STAR SAAS LIMITED", accountNumber: "799002738", ...DBS },
@@ -101,8 +100,9 @@ const rules: [string | null, Currency | null, string][] = [
   ["STAR", null, "USD (Airwallex)"],
   ["STAR", "HKD", "HKD (Airwallex)"],
   ["STAR", "EUR", "EUR (Airwallex)"],
-  ["XIAMEN", null, "CNY (IBC Bank)"],
-  [null, "CNY", "CNY (IBC Bank)"],
+  ["XIAMEN", null, "CNY (兴业银行)"],
+  ["XIAMEN", "USD", "USD (兴业银行)"],
+  [null, "CNY", "CNY (兴业银行)"],
 ];
 
 const owners = ["Robert Ang", "Jason Lin", "Robin Koh", "江总"];

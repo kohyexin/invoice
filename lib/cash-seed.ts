@@ -158,6 +158,6 @@ export const CASH_ACCOUNTS: CashAccountSeed[] = [
     currency: "CNY",
     details: { accountNumber: "57210132962", branchCode: "572", ...AIRWALLEX_SCB_HK },
   },
-  { sheet: "XMXY - $", label: "USD (XMXY)", company: "XIAMEN", bankName: "", accountName: XIAMEN, currency: "USD", details: { accountNumber: "129961400100075317", ...CIB } },
-  { sheet: "XMXY - ¥", label: "CNY (XMXY)", company: "XIAMEN", bankName: "", accountName: XIAMEN, currency: "CNY", details: { accountNumber: "129960100100474016", ...CIB } },
+  { sheet: "XMXY - $", label: "USD (兴业银行)", existing: true, company: "XIAMEN", bankName: CIB.bankName, accountName: XIAMEN, currency: "USD", details: { accountNumber: "129961400100075317", ...CIB } },
+  { sheet: "XMXY - ¥", label: "CNY (兴业银行)", existing: true, company: "XIAMEN", bankName: CIB.bankName, accountName: XIAMEN, currency: "CNY", details: { accountNumber: "129960100100474016", ...CIB } },
 ];

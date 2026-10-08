@@ -21,8 +21,8 @@ async function log(entityId: string, label: string, before: Record<string, unkno
 }
 
 async function main() {
-  const cny = await prisma.bankAccount.findUniqueOrThrow({ where: { label: "CNY (XMXY)" } });
-  const usd = await prisma.bankAccount.findUniqueOrThrow({ where: { label: "USD (XMXY)" } });
+  const cny = await prisma.bankAccount.findUniqueOrThrow({ where: { label: "CNY (兴业银行)" } });
+  const usd = await prisma.bankAccount.findUniqueOrThrow({ where: { label: "USD (兴业银行)" } });
 
   const august = utc("2026-08-01");
   const sept = await prisma.cashTxn.findMany({

@@ -13,7 +13,7 @@ export function accountName(a: Named) {
   const bank = (a.bankName ?? "").trim().replace(LEGAL_SUFFIX, "").trim();
   const base = (a.accountType ?? "").trim() || bank;
   if (base) return base + tail;
-  // No bank details yet: "USD (XMXY)" -> "XMXY", so the currency isn't repeated.
+  // No bank details yet: "USD (兴业银行)" -> "兴业银行", so the currency isn't repeated.
   const nick = a.label.match(new RegExp(`^${a.currency}\\s*\\((.+)\\)$`, "i"))?.[1] ?? a.label;
   return nick + tail;
 }
