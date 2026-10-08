@@ -7,19 +7,48 @@ import { round2 } from "@/lib/utils";
 
 export const invoiceNumbers = (party: string) => [...new Set(party.split(/[\s,，;；、]+/).filter(Boolean))];
 
-export type OpenInvoice = { number: string; currency: string; due: number; alias: string; clientId: string; invoiceDate: Date };
+export type OpenInvoice = { ids: string[]; number: string; currency: string; due: number; alias: string; clientId: string; invoiceDate: Date };
+
+/** Party text that is only invoice numbers, e.g. "SI2600002018, 01052025-013": it belongs to one receipt, not to the payer. */
+export const isInvoiceParty = (party: string) => {
+  const numbers = invoiceNumbers(party);
+  return numbers.length > 0 && numbers.every((n) => /^[A-Z]{0,3}\d{6,}(-\d+)?$/i.test(n));
+};
 
 /** Unpaid invoices by number; rows split by type are added together. */
-export function openInvoices(rows: { number: string; currency: string; amount: unknown; amountPaid: unknown; alias: string; clientId: string; invoiceDate: Date }[]) {
+export function openInvoices(rows: { id: string; number: string; currency: string; amount: unknown; amountPaid: unknown; alias: string; clientId: string; invoiceDate: Date }[]) {
   const byNumber = new Map<string, OpenInvoice>();
   for (const r of rows) {
     const key = `${r.number}|${r.currency}`;
     const due = Number(r.amount) - Number(r.amountPaid);
     const seen = byNumber.get(key);
-    if (seen) seen.due = round2(seen.due + due);
-    else byNumber.set(key, { number: r.number, currency: r.currency, due: round2(due), alias: r.alias, clientId: r.clientId, invoiceDate: r.invoiceDate });
+    if (seen) {
+      seen.due = round2(seen.due + due);
+      seen.ids.push(r.id);
+    } else byNumber.set(key, { ids: [r.id], number: r.number, currency: r.currency, due: round2(due), alias: r.alias, clientId: r.clientId, invoiceDate: r.invoiceDate });
   }
   return [...byNumber.values()];
+}
+
+/** The fewest invoices (2 to `max`) whose dues add up exactly to `amount`. */
+export function exactInvoices(list: OpenInvoice[], amount: number, max = 6): OpenInvoice[] | undefined {
+  const cents = list.map((i) => Math.round(i.due * 100));
+  const target = Math.round(amount * 100);
+  for (let size = 2; size <= Math.min(max, list.length); size++) {
+    const pick: number[] = [];
+    const walk = (from: number, sum: number): boolean => {
+      if (pick.length === size) return sum === target;
+      for (let i = from; i <= list.length - (size - pick.length); i++) {
+        if (sum + cents[i] > target) continue;
+        pick.push(i);
+        if (walk(i + 1, sum + cents[i])) return true;
+        pick.pop();
+      }
+      return false;
+    };
+    if (walk(0, 0)) return pick.map((i) => list[i]);
+  }
+  return undefined;
 }
 
 export type SettledInvoice = { id: string; number: string; before: Record<string, unknown>; after: Record<string, unknown> };

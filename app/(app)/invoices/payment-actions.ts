@@ -1,8 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { logActivity } from "@/lib/activity";
-import { creditBalance, creditBalances, paidFields } from "@/lib/credit";
+import { applyPayment, creditBalances, logPayment } from "@/lib/credit";
 import { prisma } from "@/lib/db";
 import type { Currency } from "@/lib/generated/prisma/client";
 import { authorize, requireAccess } from "@/lib/session";
@@ -61,62 +60,12 @@ export async function recordPayment(input: PaymentRecord): Promise<Result<{ paid
   if (Number.isNaN(amount) || amount < 0 || Number.isNaN(fee) || fee < 0) return { ok: false, error: "Enter amounts as numbers." };
   if (!amount && !input.invoiceIds.length) return { ok: false, error: "Enter the amount received or tick invoices to pay from credit." };
   const currency = input.currency as Currency;
-  const note = input.note.trim();
 
   try {
-    const out = await prisma.$transaction(async (tx) => {
-      const invoices = await tx.invoice.findMany({
-        where: { id: { in: input.invoiceIds }, clientId: input.clientId, currency, status: "SENT" },
-        orderBy: [{ invoiceDate: "asc" }, { number: "asc" }],
-      });
-      if (invoices.length !== input.invoiceIds.length) throw new Error("Some ticked invoices are no longer unpaid. Reopen the payment and try again.");
-      const credit = await creditBalance(tx, input.clientId, currency);
-      const due = round2(invoices.reduce((t, i) => t + Number(i.amount) - Number(i.amountPaid), 0));
-      if (due > round2(amount + Math.max(credit, 0)) + 0.005) {
-        throw new Error(`The ticked invoices come to ${currency} ${formatMoney(due)}, more than the payment plus credit (${currency} ${formatMoney(amount + Math.max(credit, 0))}). Untick some.`);
-      }
-      const fromCredit = round2(Math.max(due - amount, 0));
-      const leftOver = round2(Math.max(amount - due, 0));
-      const received = `${currency} ${formatMoney(amount)} received ${input.date}`;
-      const paymentNote = note || (invoices.length > 1 || leftOver || fromCredit ? `Part of ${received}` : "");
-
-      const paid = [];
-      for (const [i, inv] of invoices.entries()) {
-        const fields = paidFields(inv, date);
-        const after = {
-          ...fields,
-          receivedAmount: i === 0 ? round2(fields.receivedAmount - fee) : fields.receivedAmount,
-          fee: i === 0 && fee ? fee : null,
-          paymentNote,
-          updatedById: auth.user.id,
-        };
-        await tx.invoice.update({ where: { id: inv.id }, data: after });
-        paid.push({ id: inv.id, number: inv.number, before: inv, after });
-      }
-      const last = invoices.at(-1);
-      if (fromCredit) {
-        await tx.clientCredit.create({
-          data: { clientId: input.clientId, currency, amount: -fromCredit, date, invoiceId: last?.id ?? null, note: `Used with ${received}`, createdById: auth.user.id },
-        });
-      }
-      if (leftOver) {
-        await tx.clientCredit.create({
-          data: { clientId: input.clientId, currency, amount: leftOver, date, note: note || `Left over from ${received}`, createdById: auth.user.id },
-        });
-      }
-      return { paid, fromCredit, leftOver };
-    });
-
-    for (const p of out.paid) await logActivity(auth.user, { action: "mark_paid", entity: "invoice", entityId: p.id, label: p.number, before: p.before, after: p.after });
-    if (out.fromCredit || out.leftOver) {
-      await logActivity(auth.user, {
-        action: "update",
-        entity: "client",
-        entityId: input.clientId,
-        label: "Credit",
-        changes: { currency, payment: amount, creditUsed: out.fromCredit, creditAdded: out.leftOver },
-      });
-    }
+    const out = await prisma.$transaction((tx) =>
+      applyPayment(tx, { clientId: input.clientId, currency, date, amount, fee, invoiceIds: input.invoiceIds, note: input.note, actorId: auth.user.id }),
+    );
+    await logPayment(auth.user, out);
     revalidatePath("/invoices");
     revalidatePath("/dashboard");
     revalidatePath("/clients", "layout");

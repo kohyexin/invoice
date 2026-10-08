@@ -84,6 +84,12 @@ export const SETTINGS_ENTITIES = {
       { key: "swiftCode", label: "SWIFT code", kind: "text", mono: true },
       { key: "accountLocation", label: "Account location", kind: "text" },
       { key: "compact", label: "Compact (print name and number only)", kind: "checkbox" },
+      {
+        key: "offStatement",
+        label: "Held outside the statement",
+        kind: "number",
+        hint: "e.g. Airwallex Yield: money the cash book counts here that bank statements don't show. Left out when checking balances on import",
+      },
       { key: "sortOrder", label: "Sort order", kind: "number" },
       { key: "active", label: "Active", kind: "checkbox" },
     ],

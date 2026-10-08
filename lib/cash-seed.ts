@@ -43,6 +43,7 @@ export type CashAccountSeed = {
     accountType?: string;
     bankName?: string;
     bankAddress?: string;
+    bankCode?: string;
     branchCode?: string;
     swiftCode?: string;
     accountLocation?: string;
@@ -58,6 +59,14 @@ const CIB = {
   branchCode: "厦门观音山支行",
   swiftCode: "FJIBCNBA260",
   accountLocation: "厦门",
+};
+/** Airwallex Global Accounts (receiving details held at Standard Chartered Hong Kong). */
+const AIRWALLEX_GA = {
+  accountType: "Airwallex Global Account",
+  bankAddress: "32nd Floor, 4-4A Des Voeux Road Central",
+  bankCode: "003",
+  swiftCode: "SCBLHKHH",
+  accountLocation: "Hong Kong SAR",
 };
 
 /** The live sheets. S-, Others and Jason are closed and left out. */
@@ -86,8 +95,24 @@ export const CASH_ACCOUNTS: CashAccountSeed[] = [
   { sheet: "O - H$", label: "HKD (OTT)", company: "STAR", bankName: "OTT", accountName: STAR, currency: "HKD" },
   { sheet: "O - ￥", label: "CNY (OTT)", company: "STAR", bankName: "OTT", accountName: STAR, currency: "CNY" },
   { sheet: "A - $", label: "Airwallex Pay", existing: true, company: "STAR", bankName: "Airwallex", accountName: STAR, currency: "USD" },
-  { sheet: "A - €", label: "EUR (Airwallex)", company: "STAR", bankName: "Airwallex", accountName: STAR, currency: "EUR" },
-  { sheet: "A - H$", label: "HKD (Airwallex)", company: "STAR", bankName: "Airwallex", accountName: STAR, currency: "HKD" },
+  {
+    sheet: "A - €",
+    label: "EUR (Airwallex)",
+    company: "STAR",
+    bankName: "Airwallex",
+    accountName: STAR,
+    currency: "EUR",
+    details: { accountNumber: "57210157094", branchCode: "572", ...AIRWALLEX_GA },
+  },
+  {
+    sheet: "A - H$",
+    label: "HKD (Airwallex)",
+    company: "STAR",
+    bankName: "Airwallex",
+    accountName: STAR,
+    currency: "HKD",
+    details: { accountNumber: "47416857504", branchCode: "474", ...AIRWALLEX_GA },
+  },
   { sheet: "A - S$", label: "SGD (Airwallex)", company: "STAR", bankName: "Airwallex", accountName: STAR, currency: "SGD" },
   { sheet: "A - ¥", label: "CNY (Airwallex)", company: "STAR", bankName: "Airwallex", accountName: STAR, currency: "CNY" },
   { sheet: "XMXY - $", label: "USD (XMXY)", company: "XIAMEN", bankName: "", accountName: XIAMEN, currency: "USD", details: { accountNumber: "129961400100075317", ...CIB } },

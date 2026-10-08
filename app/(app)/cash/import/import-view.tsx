@@ -3,15 +3,16 @@
 import Link from "next/link";
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, Ban, CheckCheck, CheckCircle2, ChevronDown, FileUp, Inbox, RotateCcw } from "lucide-react";
+import { AlertTriangle, Ban, CheckCheck, CheckCircle2, ChevronDown, FileUp, Inbox, Plus, RotateCcw, Split, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, fieldClass } from "@/components/ui/form-controls";
 import { useCan } from "@/components/shell/user-context";
 import { useI18n } from "@/components/i18n/locale-provider";
-import { cn, formatDate, formatMoney, formatMonth } from "@/lib/utils";
+import { cn, formatDate, formatMoney, formatMonth, round2 } from "@/lib/utils";
 import type { MonthPreview, StatementPreview } from "@/lib/statements/reconcile";
 import type { LineEdits } from "@/lib/statements/queue";
+import type { SplitRow } from "@/lib/statements/types";
 import {
   approveStatementLine,
   copyAccountDetails,
@@ -38,13 +39,24 @@ export type QueueLine = {
   party: string;
   memo: string;
   description: string;
+  counterparty: string;
   suggested: string;
+  clientId: string;
+  invoiceIds: string[];
+  splits: SplitRow[] | null;
   status: string;
   accountId: string;
   account: string;
   currency: string;
   decidedAt: string;
   decidedBy: string | null;
+};
+export type PaymentOptions = {
+  clients: { id: string; name: string }[];
+  /** Unpaid invoices, one per number; `ids` are the rows of that number. */
+  invoices: { number: string; ids: string[]; clientId: string; currency: string; invoiceDate: string; due: number }[];
+  /** Credit balance keyed by `clientId|currency`. */
+  credits: Record<string, number>;
 };
 export type StatementCheck = {
   id: string;
@@ -56,6 +68,7 @@ export type StatementCheck = {
   bankClosing: number;
   bookClosing: number;
   afterApproval: number;
+  offStatement: number;
   uploadedAt: string;
 };
 type Progress = { label: string; done: number; total: number };
@@ -69,15 +82,64 @@ function shiftMonth(date: string, oldDate: string, oldPeriod: string) {
   return `${Math.floor(m / 12)}-${String((m % 12) + 1).padStart(2, "0")}`;
 }
 
-const editsOf = (l: QueueLine): LineEdits => ({ date: l.date, period: l.period, categoryId: l.categoryId, purpose: l.purpose, party: l.party, memo: l.memo });
+const editsOf = (l: QueueLine): LineEdits => ({
+  date: l.date,
+  period: l.period,
+  categoryId: l.categoryId,
+  purpose: l.purpose,
+  party: l.party,
+  memo: l.memo,
+  clientId: l.clientId,
+  invoiceIds: l.invoiceIds,
+  splits: l.splits,
+});
+const sameEdits = (a: LineEdits, b: LineEdits) => JSON.stringify(a) === JSON.stringify(b);
+const netOf = (r: { amountIn: number; amountOut: number }) => round2(r.amountIn - r.amountOut);
+const leftToSplit = (l: QueueLine, rows: SplitRow[]) => round2(netOf(l) - rows.reduce((t, r) => t + netOf(r), 0));
+
+/** What paying the ticked invoices from this receipt does, as Record payment would. */
+function paymentPlan(l: QueueLine, v: LineEdits, payment: PaymentOptions) {
+  const ids = v.invoiceIds ?? [];
+  const picked = payment.invoices.filter((i) => i.currency === l.currency && i.ids.some((id) => ids.includes(id)));
+  const due = round2(picked.reduce((t, i) => t + i.due, 0));
+  const credit = Math.max(payment.credits[`${v.clientId}|${l.currency}`] ?? 0, 0);
+  const fromCredit = round2(Math.max(due - l.amountIn, 0));
+  return {
+    picked,
+    due,
+    credit,
+    fromCredit,
+    leftOver: round2(Math.max(l.amountIn - due, 0)),
+    short: round2(Math.max(fromCredit - credit, 0)),
+    gone: ids.length > picked.reduce((t, i) => t + i.ids.length, 0),
+  };
+}
+
+/** Why the line can't be approved yet, or null. */
+function blocker(l: QueueLine, v: LineEdits, payment: PaymentOptions): string | null {
+  if (v.splits?.length) {
+    if (v.splits.some((r) => !r.categoryId)) return "Pick a category on every split row.";
+    if (!same(leftToSplit(l, v.splits), 0)) return "Split rows must add up to the bank amount.";
+    return null;
+  }
+  if (!v.categoryId) return "Pick a category to approve.";
+  if (v.clientId && v.invoiceIds?.length) {
+    const plan = paymentPlan(l, v, payment);
+    if (plan.gone) return "A ticked invoice is no longer unpaid.";
+    if (plan.short > 0) return "The receipt and the client's credit don't cover the ticked invoices.";
+  }
+  return null;
+}
 
 export function StatementImportView({
+  payment,
   categories,
   pending,
   rejected,
   recent,
   statements,
 }: {
+  payment: PaymentOptions;
   categories: Category[];
   pending: QueueLine[];
   rejected: QueueLine[];
@@ -87,7 +149,7 @@ export function StatementImportView({
   return (
     <div className="space-y-6">
       <Uploader />
-      <ApprovalQueue lines={pending} categories={categories} />
+      <ApprovalQueue lines={pending} categories={categories} payment={payment} />
       <Statements rows={statements} />
       <RejectedList rows={rejected} />
       <RecentList rows={recent} />
@@ -132,7 +194,7 @@ function Uploader() {
   }
 
   function choose(list: FileList | null) {
-    const picked = Array.from(list ?? []).filter((f) => /\.(pdf|xlsx?)$/i.test(f.name) || f.type === "application/pdf");
+    const picked = Array.from(list ?? []).filter((f) => /\.(pdf|xlsx?|csv)$/i.test(f.name) || f.type === "application/pdf");
     if (!picked.length) return;
     setFiles(picked);
     setAccounts({});
@@ -183,10 +245,10 @@ function Uploader() {
           <FileUp className="h-6 w-6 text-brand-600 dark:text-brand-300" />
           <span className="text-sm font-medium text-ink">{busy ? t("Reading statements…") : t("Drop bank statements")}</span>
           <span className="text-[12px] text-ink-soft">
-            {t("ANEXT PDFs or Industrial Bank (XMXY) Excel downloads. Date ranges can overlap; lines already imported are skipped.")}
+            {t("ANEXT PDFs, Industrial Bank (XMXY) Excel downloads or Airwallex CSV reports. Date ranges can overlap; lines already imported are skipped.")}
           </span>
         </button>
-        <input ref={fileRef} type="file" accept="application/pdf,.pdf,.xls,.xlsx" multiple className="hidden" onChange={(e) => choose(e.target.files)} />
+        <input ref={fileRef} type="file" accept="application/pdf,.pdf,.xls,.xlsx,.csv,text/csv" multiple className="hidden" onChange={(e) => choose(e.target.files)} />
       </section>
 
       {error && <p className="rounded-control border border-danger/30 bg-danger/10 px-3 py-2 text-[13px] text-rose-700 dark:text-rose-200">{t(error)}</p>}
@@ -316,6 +378,7 @@ function MonthResult({ month: m, candidates, onAccount }: { month: MonthPreview;
                 {t("Book once approved")} <span className="font-medium text-ink">{formatMoney(m.closingAfterApproval)}</span>
               </span>
             )}
+            {m.offStatement !== 0 && <span className="text-ink-soft">{t("Excludes {0} held outside the statement", formatMoney(m.offStatement))}</span>}
           </p>
         )}
 
@@ -367,6 +430,7 @@ function MonthResult({ month: m, candidates, onAccount }: { month: MonthPreview;
                       {x.description}
                     </span>
                     {x.bookDate !== x.date && <span className="text-[12px] text-ink-soft">{t("booked {0}", formatDate(x.bookDate))}</span>}
+                    {x.bookSplits && <span className="text-[12px] text-ink-soft">{t("split into {0} lines in the cash book", x.bookSplits.length)}</span>}
                     <span>{formatMoney(x.net)}</span>
                   </li>
                 ))}
@@ -396,7 +460,7 @@ function Amount({ line: l }: { line: Pick<QueueLine, "amountIn" | "amountOut" | 
   );
 }
 
-function ApprovalQueue({ lines, categories }: { lines: QueueLine[]; categories: Category[] }) {
+function ApprovalQueue({ lines, categories, payment }: { lines: QueueLine[]; categories: Category[]; payment: PaymentOptions }) {
   const { t } = useI18n();
   const router = useRouter();
   const canEdit = useCan("statementImport", "EDIT");
@@ -407,7 +471,7 @@ function ApprovalQueue({ lines, categories }: { lines: QueueLine[]; categories: 
   const stopRef = useRef(false);
   const visible = lines.filter((l) => !done.has(l.id));
   const editOf = (l: QueueLine) => edits[l.id] ?? editsOf(l);
-  const ready = visible.filter((l) => !!editOf(l).categoryId);
+  const ready = visible.filter((l) => !blocker(l, editOf(l), payment));
 
   async function approveAll() {
     stopRef.current = false;
@@ -459,6 +523,7 @@ function ApprovalQueue({ lines, categories }: { lines: QueueLine[]; categories: 
             value={editOf(l)}
             onChange={(v) => setEdits((e) => ({ ...e, [l.id]: v }))}
             categories={categories}
+            payment={payment}
             disabled={bulk !== null || !canEdit}
           />
         ))}
@@ -473,12 +538,14 @@ function PendingRow({
   value: v,
   onChange,
   categories,
+  payment,
   disabled,
 }: {
   line: QueueLine;
   value: LineEdits;
   onChange: (v: LineEdits) => void;
   categories: Category[];
+  payment: PaymentOptions;
   disabled: boolean;
 }) {
   const { t } = useI18n();
@@ -487,10 +554,26 @@ function PendingRow({
   const [saved, setSaved] = useState(false);
   const [busy, start] = useTransition();
   const original = editsOf(l);
-  const dirty = (Object.keys(original) as (keyof LineEdits)[]).some((k) => original[k] !== v[k]);
+  const dirty = !sameEdits(original, v);
+  const splits = v.splits?.length ? v.splits : null;
+  const problem = blocker(l, v, payment);
   const set = (patch: Partial<LineEdits>) => {
     setSaved(false);
     onChange({ ...v, ...patch });
+  };
+  const startSplit = () =>
+    set({
+      clientId: "",
+      invoiceIds: [],
+      splits: [
+        { categoryId: v.categoryId, purpose: v.purpose, party: v.party, memo: v.memo, amountIn: l.amountIn, amountOut: l.amountOut },
+        { categoryId: "", purpose: "", party: "", memo: v.memo, amountIn: 0, amountOut: 0 },
+      ],
+    });
+  const setSplits = (rows: SplitRow[]) => {
+    const lead = rows[0];
+    const main = lead ? { categoryId: lead.categoryId, purpose: lead.purpose, party: lead.party, memo: lead.memo } : {};
+    set({ ...main, splits: rows.length > 1 ? rows : null });
   };
   const run = (fn: () => Promise<{ ok: true } | { ok: false; error: string }>, after?: () => void) =>
     start(async () => {
@@ -531,6 +614,8 @@ function PendingRow({
           <input type="month" value={v.period} onChange={(e) => set({ period: e.target.value })} disabled={disabled} className={cn(fieldClass, "h-9")} />
           {v.period !== v.date.slice(0, 7) && <span className="block text-[11px] text-ink-soft">{t("Not the month of the date")}</span>}
         </label>
+        {!splits && (
+          <>
         <label className="space-y-1">
           <span className="text-[11px] uppercase tracking-wider text-ink-soft">{t("Category")}</span>
           <Select value={v.categoryId} onChange={(e) => set({ categoryId: e.target.value })} disabled={disabled} className="h-9">
@@ -556,11 +641,21 @@ function PendingRow({
           <span className="text-[11px] uppercase tracking-wider text-ink-soft">{t("Memo")}</span>
           <input value={v.memo} onChange={(e) => set({ memo: e.target.value })} disabled={disabled} className={cn(fieldClass, "h-9")} />
         </label>
+          </>
+        )}
       </div>
+      {splits && <SplitEditor line={l} rows={splits} onChange={setSplits} categories={categories} remembered={!!l.splits} disabled={disabled} />}
+      {!splits && l.kind === "entry" && l.amountIn > 0 && <InvoicePicker line={l} value={v} payment={payment} onChange={set} disabled={disabled} />}
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        <Button size="sm" disabled={disabled || !v.categoryId} loading={busy} onClick={() => run(() => approveStatementLine(l.id, v))}>
+        <Button size="sm" disabled={disabled || !!problem} loading={busy} onClick={() => run(() => approveStatementLine(l.id, v))}>
           {t("Approve")}
         </Button>
+        {!splits && l.kind === "entry" && (
+          <Button size="sm" variant="secondary" disabled={disabled || busy} onClick={startSplit}>
+            <Split className="h-3.5 w-3.5" />
+            {t("Split")}
+          </Button>
+        )}
         {dirty && (
           <Button size="sm" variant="secondary" disabled={disabled || busy} onClick={() => run(() => saveStatementLine(l.id, v), () => setSaved(true))}>
             {t("Save changes")}
@@ -569,11 +664,235 @@ function PendingRow({
         <Button size="sm" variant="ghost" disabled={disabled || busy} onClick={() => run(() => rejectStatementLine(l.id))}>
           {t("Reject")}
         </Button>
-        {!v.categoryId && <span className="text-[12px] text-amber-700 dark:text-amber-300">{t("Pick a category to approve.")}</span>}
+        {problem && <span className="text-[12px] text-amber-700 dark:text-amber-300">{t(problem)}</span>}
         {saved && !dirty && <span className="text-[12px] text-emerald-700 dark:text-emerald-300">{t("Saved.")}</span>}
         {error && <span className="text-[12px] text-rose-600 dark:text-rose-300">{t(error)}</span>}
       </div>
     </div>
+  );
+}
+
+const label = "text-[11px] uppercase tracking-wider text-ink-soft";
+
+function InvoicePicker({
+  line: l,
+  value: v,
+  payment,
+  onChange,
+  disabled,
+}: {
+  line: QueueLine;
+  value: LineEdits;
+  payment: PaymentOptions;
+  onChange: (patch: Partial<LineEdits>) => void;
+  disabled: boolean;
+}) {
+  const { t } = useI18n();
+  const ids = v.invoiceIds ?? [];
+  const clientId = v.clientId ?? "";
+  const options = payment.invoices.filter((i) => i.clientId === clientId && i.currency === l.currency);
+  const plan = paymentPlan(l, v, payment);
+  const numbers = (list: { number: string }[]) => list.map((i) => i.number).join(", ");
+  const partyFor = (picked: typeof options) => (picked.length ? numbers(picked) : v.party === numbers(plan.picked) ? "" : v.party);
+  const money = (n: number) => `${l.currency} ${formatMoney(n)}`;
+
+  function pickClient(id: string) {
+    onChange({ clientId: id, invoiceIds: [], party: partyFor([]) });
+  }
+  function toggle(inv: (typeof options)[number]) {
+    const on = inv.ids.some((id) => ids.includes(id));
+    const next = on ? ids.filter((id) => !inv.ids.includes(id)) : [...ids, ...inv.ids];
+    onChange({ invoiceIds: next, party: partyFor(options.filter((o) => o.ids.some((id) => next.includes(id)))) });
+  }
+
+  return (
+    <div className="mt-3 space-y-2 rounded-control border border-line/60 p-3 text-[13px]">
+      <div className="flex flex-wrap items-center gap-3">
+        <span className={label}>{t("Client")}</span>
+        <Select value={clientId} onChange={(e) => pickClient(e.target.value)} disabled={disabled} className="h-9 max-w-xs">
+          <option value="">{t("No client")}</option>
+          {payment.clients.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </Select>
+        {clientId && plan.credit > 0 && <span className="tnum text-ink-muted">{t("Credit {0}", money(plan.credit))}</span>}
+      </div>
+
+      {!clientId && ids.length > 0 && <p className="text-ink-muted">{t("Settles invoices of several clients by exact amount: {0}", v.party)}</p>}
+
+      {clientId && options.length > 0 && (
+        <ul className="max-h-44 space-y-0.5 overflow-auto">
+          {options.map((i) => {
+            const on = i.ids.some((id) => ids.includes(id));
+            return (
+              <li key={i.number}>
+                <label className="tnum flex cursor-pointer items-center gap-3 rounded px-1 py-1 hover:bg-overlay/[0.04]">
+                  <input type="checkbox" checked={on} onChange={() => toggle(i)} disabled={disabled} className="h-4 w-4 accent-brand-600" />
+                  <span className="text-ink">{i.number}</span>
+                  <span className="text-ink-soft">{formatDate(i.invoiceDate)}</span>
+                  <span className="ml-auto text-ink">{formatMoney(i.due)}</span>
+                </label>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {clientId && options.length === 0 && <p className="text-ink-soft">{t("No unpaid {0} invoices for this client.", l.currency)}</p>}
+
+      {clientId && ids.length === 0 && <p className="text-ink-muted">{t("No invoices ticked: the whole {0} becomes client credit.", money(l.amountIn))}</p>}
+      {clientId && ids.length > 0 && (
+        <p className="tnum text-ink-muted">
+          {[
+            t("Pays {0}", money(plan.due)),
+            plan.fromCredit > 0 && t("uses credit {0}", money(plan.fromCredit)),
+            plan.leftOver > 0 && t("adds credit {0}", money(plan.leftOver)),
+          ]
+            .filter(Boolean)
+            .join(" · ")}
+        </p>
+      )}
+      {plan.short > 0 && (
+        <p className="text-amber-700 dark:text-amber-300">{t("Short by {0}: the client has {1} credit.", money(plan.short), money(plan.credit))}</p>
+      )}
+    </div>
+  );
+}
+
+function SplitEditor({
+  line: l,
+  rows,
+  onChange,
+  categories,
+  remembered,
+  disabled,
+}: {
+  line: QueueLine;
+  rows: SplitRow[];
+  onChange: (rows: SplitRow[]) => void;
+  categories: Category[];
+  remembered: boolean;
+  disabled: boolean;
+}) {
+  const { t } = useI18n();
+  const bankDir = netOf(l) >= 0 ? "in" : "out";
+  const [dirs, setDirs] = useState<("in" | "out")[]>(() => rows.map((r) => (r.amountIn > 0 ? "in" : r.amountOut > 0 ? "out" : bankDir)));
+  const dirAt = (i: number) => (rows[i].amountIn > 0 ? "in" : rows[i].amountOut > 0 ? "out" : (dirs[i] ?? bankDir));
+  const left = leftToSplit(l, rows);
+  const withAmount = (r: SplitRow, dir: "in" | "out", amount: number): SplitRow => ({ ...r, amountIn: dir === "in" ? amount : 0, amountOut: dir === "out" ? amount : 0 });
+
+  /** The first row takes whatever the other rows leave of the bank amount. */
+  function balanced(next: SplitRow[]) {
+    const rest = round2(netOf(l) - next.slice(1).reduce((t, r) => t + netOf(r), 0));
+    return [withAmount(next[0], rest >= 0 ? "in" : "out", Math.abs(rest)), ...next.slice(1)];
+  }
+  function update(i: number, patch: Partial<SplitRow>, rebalance = false) {
+    const next = rows.map((r, j) => (j === i ? { ...r, ...patch } : r));
+    onChange(rebalance && i > 0 ? balanced(next) : next);
+  }
+  function setDir(i: number, dir: "in" | "out") {
+    setDirs((d) => Object.assign([...d], { [i]: dir }));
+    update(i, withAmount(rows[i], dir, rows[i].amountIn || rows[i].amountOut), true);
+  }
+  function add() {
+    setDirs((d) => [...d, bankDir]);
+    onChange([...rows, { categoryId: "", purpose: "", party: "", memo: rows[0]?.memo ?? "", amountIn: 0, amountOut: 0 }]);
+  }
+  function remove(i: number) {
+    setDirs((d) => d.filter((_, j) => j !== i));
+    const next = rows.filter((_, j) => j !== i);
+    onChange(next.length > 1 ? balanced(next) : next.map((r) => withAmount(r, bankDir, Math.abs(netOf(l)))));
+  }
+
+  return (
+    <div className="mt-3 space-y-2 rounded-control border border-line/60 p-3 text-[13px]">
+      <p className="text-ink-muted">
+        {t("Split into cash book lines. The first row takes what the others leave.")}
+        {remembered && <span className="text-ink-soft"> {t("Split the same way as last time for this payee.")}</span>}
+      </p>
+      {rows.map((r, i) => (
+        <div key={i} className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[96px_120px_minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_32px] lg:items-end">
+          <label className="space-y-1">
+            <span className={label}>{t("Direction")}</span>
+            <Select value={dirAt(i)} onChange={(e) => setDir(i, e.target.value as "in" | "out")} disabled={disabled} className="h-9">
+              <option value="in">{t("In")}</option>
+              <option value="out">{t("Out")}</option>
+            </Select>
+          </label>
+          <label className="space-y-1">
+            <span className={label}>{t("Amount")}</span>
+            <AmountInput value={r.amountIn || r.amountOut} onChange={(n) => update(i, withAmount(r, dirAt(i), n), true)} disabled={disabled} />
+          </label>
+          <label className="space-y-1">
+            <span className={label}>{t("Category")}</span>
+            <Select value={r.categoryId} onChange={(e) => update(i, { categoryId: e.target.value })} disabled={disabled} className="h-9">
+              <option value="">{t("Uncategorized")}</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.nameEn ? `${c.nameZh} · ${c.nameEn}` : c.nameZh}
+                </option>
+              ))}
+            </Select>
+          </label>
+          <label className="space-y-1">
+            <span className={label}>{t("Purpose")}</span>
+            <input value={r.purpose} onChange={(e) => update(i, { purpose: e.target.value })} disabled={disabled} className={cn(fieldClass, "h-9")} />
+          </label>
+          <label className="space-y-1">
+            <span className={label}>{t("Party")}</span>
+            <input value={r.party} onChange={(e) => update(i, { party: e.target.value })} disabled={disabled} className={cn(fieldClass, "h-9")} />
+          </label>
+          <label className="space-y-1">
+            <span className={label}>{t("Memo")}</span>
+            <input value={r.memo} onChange={(e) => update(i, { memo: e.target.value })} disabled={disabled} className={cn(fieldClass, "h-9")} />
+          </label>
+          <button
+            type="button"
+            onClick={() => remove(i)}
+            disabled={disabled}
+            title={t("Remove row")}
+            className="flex h-9 w-8 items-center justify-center rounded text-ink-soft hover:bg-overlay/[0.06] hover:text-ink disabled:opacity-50"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      ))}
+      <div className="flex flex-wrap items-center gap-3">
+        <Button size="sm" variant="ghost" onClick={add} disabled={disabled}>
+          <Plus className="h-3.5 w-3.5" />
+          {t("Add row")}
+        </Button>
+        <span className={cn("tnum ml-auto", same(left, 0) ? "text-ink-muted" : "text-amber-700 dark:text-amber-300")}>
+          {t("Left to allocate")} {l.currency} {formatMoney(left)}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/** A money field that keeps what is typed ("5181.") while passing the number up. */
+function AmountInput({ value, onChange, disabled }: { value: number; onChange: (n: number) => void; disabled: boolean }) {
+  const show = (n: number) => (n ? String(n) : "");
+  const parse = (s: string) => Number(s.replace(/,/g, "") || 0);
+  const [text, setText] = useState(show(value));
+  const [seen, setSeen] = useState(value);
+  if (value !== seen) {
+    setSeen(value);
+    if (parse(text) !== value) setText(show(value));
+  }
+  return (
+    <input
+      inputMode="decimal"
+      value={text}
+      onChange={(e) => {
+        setText(e.target.value);
+        const n = parse(e.target.value);
+        if (Number.isFinite(n) && n >= 0) onChange(round2(n));
+      }}
+      disabled={disabled}
+      className={cn(fieldClass, "tnum h-9")}
+    />
   );
 }
 

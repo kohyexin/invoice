@@ -82,7 +82,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: { d
           users: r._count.users,
         }))}
         companies={companies}
-        bankAccounts={bankAccounts.map((b) => ({ ...b, companyId: b.companyId ?? "", companyName: b.companyId ? companyName.get(b.companyId) ?? "" : "" }))}
+        bankAccounts={bankAccounts.map((b) => ({ ...b, offStatement: Number(b.offStatement), companyId: b.companyId ?? "", companyName: b.companyId ? companyName.get(b.companyId) ?? "" : "" }))}
         cashCategories={cashCategories}
         rules={rules.map((r) => ({
           id: r.id,

@@ -14,6 +14,11 @@ export type StatementEntry = {
   time?: string;
 };
 
+/** One cash book line of a bank line booked as several (e.g. an Ethoca bill net of a Shinecourse receipt). */
+export type SplitRow = { categoryId: string; purpose: string; party: string; memo: string; amountIn: number; amountOut: number };
+/** How a counterparty's lines were split, remembered without amounts. An empty memo means the bank's wording. */
+export type SplitPattern = { categoryId: string; purpose: string; party: string; memo: string; direction: "in" | "out" };
+
 export type StatementSection = {
   currency: string;
   opening: number;
@@ -22,7 +27,7 @@ export type StatementSection = {
 };
 
 export type ParsedStatement = {
-  bank: "ANEXT" | "CIB";
+  bank: "ANEXT" | "CIB" | "AIRWALLEX";
   accountNumber: string;
   accountName: string;
   accountType: string;

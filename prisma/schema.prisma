@@ -201,6 +201,9 @@ model BankAccount {
   accountLocation String     @default("")
   /// Compact accounts (e.g. Airwallex) print only name + number.
   compact         Boolean    @default(false)
+  /// Money the cash book counts in this account that its bank statements don't show
+  /// (e.g. Airwallex Yield); left out when comparing balances with a statement.
+  offStatement    Decimal    @default(0) @db.Decimal(16, 2)
   sortOrder       Int        @default(0)
   active          Boolean    @default(true)
   use             AccountUse @default(INVOICE)
@@ -331,11 +334,14 @@ model ClientCredit {
   invoiceId   String?
   invoice     Invoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
   note        String   @default("")
+  /// The cash book receipt that brought the credit in, when it came from a bank statement.
+  cashTxnId   String?
   createdById String?
   createdAt   DateTime @default(now())
 
   @@index([clientId, currency])
   @@index([invoiceId])
+  @@index([cashTxnId])
 }
 
 /**
@@ -595,6 +601,9 @@ model CashHint {
   party        String      @default("")
   /// Months the 使用月 lies before the date, e.g. 1 for salary paid on 10 Sept for August.
   periodLag    Int         @default(0)
+  /// How the last line from this counterparty was split, without amounts:
+  /// [{ categoryId, purpose, party, memo, direction }].
+  splits       Json?
   updatedAt    DateTime    @updatedAt
 
   @@unique([accountId, counterparty, direction])
@@ -658,6 +667,12 @@ model StatementLine {
   counterparty String              @default("")
   /// "rule", "history" or "none": where the category came from.
   suggested    String              @default("none")
+  /// Several cash book lines for this one bank line:
+  /// [{ categoryId, purpose, party, memo, amountIn, amountOut }]; null means one line.
+  splits       Json?
+  /// Receipts: the client paying, and the invoice ids it pays (anything left over becomes credit).
+  clientId     String?
+  invoiceIds   Json?
   status       StatementLineStatus @default(PENDING)
   cashTxnId    String?
   decidedAt    DateTime?
