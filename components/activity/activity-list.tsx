@@ -3,6 +3,7 @@
 import { useState } from "react";
 import {
   Building2,
+  FileSignature,
   FileText,
   HardDrive,
   History,
@@ -58,6 +59,8 @@ export const ENTITY_LABEL: Record<string, string> = {
   statement: "Bank statement",
   statement_line: "Statement line",
   cash_entry: "Cash book line",
+  agreement: "Agreement",
+  agreement_template: "Agreement template",
   "setting:company": "Company",
   "setting:bankAccount": "Bank account",
   "setting:paymentRule": "Payment default",
@@ -85,6 +88,7 @@ export function entityKind(entity: string): { icon: LucideIcon; node: string } {
   if (entity === "import") return { icon: Inbox, node: TINT.violet };
   if (entity === "statement" || entity === "statement_line") return { icon: Landmark, node: TINT.amber };
   if (entity === "cash_entry") return { icon: Wallet, node: TINT.amber };
+  if (entity === "agreement" || entity === "agreement_template") return { icon: FileSignature, node: TINT.sky };
   if (entity === "user") return { icon: UserRound, node: TINT.brand };
   if (entity === "role") return { icon: ShieldCheck, node: TINT.violet };
   if (entity === "setting:googleDrive") return { icon: HardDrive, node: TINT.slate };

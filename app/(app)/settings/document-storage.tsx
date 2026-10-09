@@ -10,13 +10,14 @@ import { disconnectGoogleDrive, syncDocumentsNow } from "./drive-actions";
 
 type Props = {
   configured: boolean;
-  connection: { email: string; connectedAt: string; folderUrl: string } | null;
+  connection: { email: string; connectedAt: string; folderUrl: string; agreementsFolderUrl: string | null; signedAgreementsFolderUrl: string | null } | null;
   stats: { total: number; onDrive: number; waiting: number; failing: number; withoutPdf: number; lastError: string | null };
+  agreementStats: { total: number; onDrive: number; waiting: number; failing: number; lastError: string | null };
   notice: { kind: "connected" | "error" | "not-configured"; reason?: string } | null;
   canEdit: boolean;
 };
 
-export function DocumentStorage({ configured, connection, stats, notice, canEdit }: Props) {
+export function DocumentStorage({ configured, connection, stats, agreementStats, notice, canEdit }: Props) {
   const router = useRouter();
   const { t } = useI18n();
   const [pending, start] = useTransition();
@@ -39,6 +40,26 @@ export function DocumentStorage({ configured, connection, stats, notice, canEdit
       router.refresh();
     });
 
+  const folderLinks =
+    connection &&
+    (
+      [
+        ["Open invoice folder", connection.folderUrl],
+        ["Open agreements folder", connection.agreementsFolderUrl],
+        ["Open signed agreements folder", connection.signedAgreementsFolderUrl],
+      ] as const
+    ).map(
+      ([label, url]) =>
+        url && (
+          <a key={label} href={url} target="_blank" rel="noreferrer">
+            <Button size="sm" variant="secondary">
+              <ExternalLink className="h-4 w-4" />
+              {t(label)}
+            </Button>
+          </a>
+        )
+    );
+
   return (
     <section className="glass-panel neon-edge mb-6 rounded-card p-5">
       <div className="flex flex-wrap items-start gap-3">
@@ -50,17 +71,13 @@ export function DocumentStorage({ configured, connection, stats, notice, canEdit
           <p className="mt-0.5 max-w-3xl text-[13px] text-ink-muted">
             {t("The PDF of every invoice, kept for audit. Invoices made here are saved when issued and replaced if you edit them (Drive keeps the old version); imported invoices keep the billing system's PDF. Deleting an invoice moves its PDF to Drive's trash. Files are filed as year / month / number.")}
           </p>
+          <p className="mt-1 max-w-3xl text-[13px] text-ink-muted">
+            {t("Agreements go to their own folders: unsigned agreements when saved, and signed copies once everyone has signed.")}
+          </p>
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2">
           {!canEdit ? (
-            connection && (
-              <a href={connection.folderUrl} target="_blank" rel="noreferrer">
-                <Button size="sm" variant="secondary">
-                  <ExternalLink className="h-4 w-4" />
-                  {t("Open folder")}
-                </Button>
-              </a>
-            )
+            connection && folderLinks
           ) : connection ? (
             <>
               {expired && (
@@ -68,12 +85,7 @@ export function DocumentStorage({ configured, connection, stats, notice, canEdit
                   <Button size="sm">{t("Reconnect Google Drive")}</Button>
                 </a>
               )}
-              <a href={connection.folderUrl} target="_blank" rel="noreferrer">
-                <Button size="sm" variant="secondary">
-                  <ExternalLink className="h-4 w-4" />
-                  {t("Open folder")}
-                </Button>
-              </a>
+              {folderLinks}
               <Button size="sm" variant="secondary" onClick={sync} loading={pending}>
                 <CloudUpload className="h-4 w-4" />
                 {t("Sync now")}
@@ -129,6 +141,15 @@ export function DocumentStorage({ configured, connection, stats, notice, canEdit
           </div>
         ))}
       </dl>
+      <p className="tnum mt-3 text-[12px] text-ink-muted">
+        {t("Agreement PDFs: {0} on record, {1} on Google Drive, {2} waiting to upload.", agreementStats.total, agreementStats.onDrive, agreementStats.waiting)}
+      </p>
+      {agreementStats.failing > 0 && agreementStats.lastError && (
+        <p className="mt-1 flex items-start gap-1.5 text-[12px] text-amber-700 dark:text-amber-200">
+          <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          {t("{0} agreement PDFs couldn't be uploaded. Last error: {1}", agreementStats.failing, t(agreementStats.lastError))}
+        </p>
+      )}
       {stats.failing > 0 && stats.lastError && (
         <p className="mt-3 flex items-start gap-1.5 text-[12px] text-amber-700 dark:text-amber-200">
           <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />

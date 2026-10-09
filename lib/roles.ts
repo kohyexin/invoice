@@ -56,6 +56,12 @@ export const FEATURES = [
     levels: ["NONE", "VIEW", "EDIT"],
   },
   {
+    key: "agreements",
+    label: "Agreements",
+    help: "View: agreements and their PDFs. Edit: agreement templates, and new agreements, which add or update the client and archive the PDF on Google Drive.",
+    levels: ["NONE", "VIEW", "EDIT"],
+  },
+  {
     key: "settings",
     label: "Settings",
     help: "Companies, bank accounts, payment defaults, FX rates, owners, invoice types and items, cash categories, Google Drive.",

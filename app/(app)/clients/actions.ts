@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { logActivity } from "@/lib/activity";
 import { prisma } from "@/lib/db";
-import { normalizeAgreements } from "@/lib/client-import";
+import { joinUrls, normalizeAgreements, splitUrls } from "@/lib/client-import";
 import { importClientRows } from "@/lib/client-import-db";
 import { authorize } from "@/lib/session";
 import { parseDateInput } from "@/lib/utils";
@@ -75,7 +75,7 @@ export async function saveClient(id: string | null, input: ClientInput): Promise
     directorName: input.directorName.trim(),
     contactTitle: input.contactTitle.trim(),
     contactEmail: input.contactEmail.trim(),
-    websiteUrls: input.websiteUrls.trim(),
+    websiteUrls: joinUrls(splitUrls(input.websiteUrls)),
     transferName: input.transferName.trim(),
     defaultOwnerId: input.defaultOwnerId || null,
     notes: input.notes,
@@ -101,6 +101,8 @@ export async function deleteClient(id: string): Promise<Result> {
   if (!auth.ok) return auth;
   const count = await prisma.invoice.count({ where: { clientId: id } });
   if (count > 0) return { ok: false, error: `This client has ${count} invoice(s). Delete or move them first.` };
+  const agreements = await prisma.agreement.count({ where: { clientId: id } });
+  if (agreements > 0) return { ok: false, error: `This client has ${agreements} agreement(s). Delete them first.` };
   const before = await prisma.client.delete({ where: { id } });
   await logActivity(auth.user, { action: "delete", entity: "client", entityId: id, label: before.name, before });
   revalidatePath("/clients");

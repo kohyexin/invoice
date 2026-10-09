@@ -5,8 +5,18 @@ import { can, effectivePermissions, isManager, isOwner } from "@/lib/roles";
 import { requirePage } from "@/lib/session";
 import { SettingsView } from "./settings-view";
 import { DocumentStorage } from "./document-storage";
+import { agreementDocumentStats } from "@/lib/agreement-documents";
 import { documentStats } from "@/lib/documents";
-import { driveConfigured, getDriveConnection } from "@/lib/gdrive";
+import { agreementFolders, driveConfigured, getDriveConnection } from "@/lib/gdrive";
+
+/** Connections made before agreements get their two agreement folders on first view. */
+async function driveConnectionWithAgreementFolders() {
+  const c = await getDriveConnection();
+  if (!c || c.agreementsFolderUrl) return c;
+  return agreementFolders()
+    .then(getDriveConnection)
+    .catch(() => c);
+}
 
 export default async function SettingsPage({ searchParams }: { searchParams: { drive?: string; reason?: string } }) {
   const me = await requirePage();
@@ -18,7 +28,9 @@ export default async function SettingsPage({ searchParams }: { searchParams: { d
   const drive = searchParams.drive;
   const notice =
     drive === "connected" || drive === "error" || drive === "not-configured" ? { kind: drive as "connected" | "error" | "not-configured", reason: searchParams.reason } : null;
-  const [connection, docStats] = showSettings ? await Promise.all([getDriveConnection(), documentStats()]) : [null, null];
+  const [connection, docStats, agreementStats] = showSettings
+    ? await Promise.all([driveConnectionWithAgreementFolders(), documentStats(), agreementDocumentStats()])
+    : [null, null, null];
   const [companies, bankAccounts, rules, fx, owners, types, items, users, cashCategories, roles] = await Promise.all([
     prisma.company.findMany({ orderBy: [{ sortOrder: "asc" }, { code: "asc" }] }),
     prisma.bankAccount.findMany({ orderBy: [{ sortOrder: "asc" }, { label: "asc" }] }),
@@ -59,11 +71,20 @@ export default async function SettingsPage({ searchParams }: { searchParams: { d
             : "Users and roles."
         }
       />
-      {showSettings && docStats && (
+      {showSettings && docStats && agreementStats && (
         <DocumentStorage
           configured={driveConfigured()}
-          connection={connection && { email: connection.email, connectedAt: connection.connectedAt, folderUrl: connection.folderUrl }}
+          connection={
+            connection && {
+              email: connection.email,
+              connectedAt: connection.connectedAt,
+              folderUrl: connection.folderUrl,
+              agreementsFolderUrl: connection.agreementsFolderUrl,
+              signedAgreementsFolderUrl: connection.signedAgreementsFolderUrl,
+            }
+          }
           stats={docStats}
+          agreementStats={agreementStats}
           notice={notice}
           canEdit={canEdit}
         />

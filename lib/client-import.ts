@@ -21,7 +21,7 @@ export type ClientDraft = {
   fees: Record<string, string>;
 };
 
-const FIELD_BY_HEADER: Record<string, keyof ClientDraft> = {
+export const FIELD_BY_HEADER: Record<string, keyof ClientDraft> = {
   "CLIENT NAME": "name",
   "AGREEMENT NO.": "agreementNo",
   "AGREEMENT NO": "agreementNo",
@@ -49,6 +49,16 @@ const IGNORED = new Set([
   "LAST UPDATE DATE",
   "CLIENT ADD 2 & 3",
 ]);
+
+/** A client's website URLs from however they were typed: separated by lines, commas, semicolons or spaces. */
+export function splitUrls(text: string) {
+  return text.split(/[\s,;]+/).map((u) => u.trim()).filter(Boolean);
+}
+
+/** Website URLs as the client stores them: one per line. */
+export function joinUrls(urls: string[]) {
+  return urls.map((u) => u.trim()).filter(Boolean).join("\n");
+}
 
 export function normalizeHeader(h: string) {
   return h.replace(/\s+/g, " ").trim().toUpperCase();

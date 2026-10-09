@@ -1,7 +1,10 @@
 import {
   BookOpen,
   CalendarRange,
+  FileCog,
+  FilePen,
   FilePlus2,
+  FileSignature,
   FileText,
   FileUp,
   Inbox,
@@ -50,6 +53,14 @@ export const navGroups: NavGroup[] = [
       { label: "Cash book", href: "/cash/ledger", icon: BookOpen, need: ["cashBook", "VIEW"] },
       { label: "Monthly statement", href: "/cash/monthly", icon: CalendarRange, need: ["cashReports", "VIEW"] },
       { label: "Import statement", href: "/cash/import", icon: FileUp, need: ["statementImport", "VIEW"] },
+    ],
+  },
+  {
+    label: "Agreements",
+    items: [
+      { label: "Agreements", href: "/agreements", icon: FileSignature, need: ["agreements", "VIEW"] },
+      { label: "New agreement", href: "/agreements/new", icon: FilePen, need: ["agreements", "EDIT"] },
+      { label: "Agreement templates", href: "/agreements/templates", icon: FileCog, need: ["agreements", "EDIT"] },
     ],
   },
   {

@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/ui/page-header";
+import { joinUrls, splitUrls } from "@/lib/client-import";
 import { creditBalances } from "@/lib/credit";
 import { prisma } from "@/lib/db";
 import { can } from "@/lib/roles";
@@ -90,7 +91,7 @@ export default async function ClientPage({ params }: { params: { id: string } })
           directorName: client?.directorName ?? "",
           contactTitle: client?.contactTitle ?? "",
           contactEmail: client?.contactEmail ?? "",
-          websiteUrls: client?.websiteUrls ?? "",
+          websiteUrls: joinUrls(splitUrls(client?.websiteUrls ?? "")),
           transferName: client?.transferName ?? "",
           defaultOwnerId: client?.defaultOwnerId ?? "",
           notes: client?.notes ?? "",

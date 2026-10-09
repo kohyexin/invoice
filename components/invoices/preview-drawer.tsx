@@ -70,7 +70,7 @@ export function PreviewDrawer({
         aria-label={t("Invoice preview")}
         aria-hidden={!open}
         className={cn(
-          "glass-panel fixed right-0 top-0 z-[56] flex h-full w-[min(780px,94vw)] flex-col border-l border-line shadow-float transition-transform duration-300 ease-out",
+          "glass-panel fixed right-0 top-0 z-[56] flex h-full w-full flex-col border-l border-line shadow-float transition-transform duration-300 ease-out sm:w-[min(780px,94vw)]",
           open ? "translate-x-0" : "pointer-events-none translate-x-full"
         )}
       >

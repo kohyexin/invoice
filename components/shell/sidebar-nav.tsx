@@ -7,10 +7,17 @@ import { canSee, navGroups } from "@/lib/nav";
 import { useI18n } from "@/components/i18n/locale-provider";
 import { useCurrentUser } from "./user-context";
 
-function isActive(pathname: string, href: string) {
+function matches(pathname: string, href: string) {
   if (href === "/invoices") return pathname === "/invoices" || /^\/invoices\/(?!new)/.test(pathname);
   if (href === "/cash") return pathname === "/cash";
   return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+const allHrefs = navGroups.flatMap((g) => g.items.map((i) => i.href));
+
+/** Matches the page, and no more specific link does (e.g. Agreement templates over Agreements). */
+function isActive(pathname: string, href: string) {
+  return matches(pathname, href) && !allHrefs.some((o) => o.length > href.length && o.startsWith(`${href}/`) && matches(pathname, o));
 }
 
 export function SidebarNav({

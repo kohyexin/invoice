@@ -7,11 +7,27 @@ import { prisma } from "@/lib/db";
 
 const SETTING_KEY = "gdrive";
 const ROOT_FOLDER_NAME = "STAR SAAS Invoices";
+const AGREEMENTS_FOLDER_NAME = "STAR SAAS Agreements";
+const SIGNED_AGREEMENTS_FOLDER_NAME = "STAR SAAS Signed agreements";
 const FOLDER_MIME = "application/vnd.google-apps.folder";
 export const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
 
-type StoredConnection = { refreshToken: string; email: string; rootFolderId: string; connectedAt: string };
-export type DriveConnection = Omit<StoredConnection, "refreshToken"> & { folderUrl: string };
+type StoredConnection = {
+  refreshToken: string;
+  email: string;
+  rootFolderId: string;
+  /** Missing on connections made before agreements; created on first use. */
+  agreementsFolderId?: string;
+  signedAgreementsFolderId?: string;
+  connectedAt: string;
+};
+export type DriveConnection = Omit<StoredConnection, "refreshToken"> & {
+  folderUrl: string;
+  agreementsFolderUrl: string | null;
+  signedAgreementsFolderUrl: string | null;
+};
+
+const folderUrl = (id: string) => `https://drive.google.com/drive/folders/${id}`;
 
 export function googleRedirectUri(req: Request) {
   return `${process.env.APP_URL?.replace(/\/$/, "") || new URL(req.url).origin}/api/google/callback`;
@@ -59,7 +75,12 @@ export async function getDriveConnection(): Promise<DriveConnection | null> {
   if (!c) return null;
   const { refreshToken: _omit, ...rest } = c;
   void _omit;
-  return { ...rest, folderUrl: `https://drive.google.com/drive/folders/${c.rootFolderId}` };
+  return {
+    ...rest,
+    folderUrl: folderUrl(c.rootFolderId),
+    agreementsFolderUrl: c.agreementsFolderId ? folderUrl(c.agreementsFolderId) : null,
+    signedAgreementsFolderUrl: c.signedAgreementsFolderId ? folderUrl(c.signedAgreementsFolderId) : null,
+  };
 }
 
 /* ------------------------------ OAuth flow ----------------------------- */
@@ -100,8 +121,17 @@ export async function connectDrive(code: string, redirectUri: string) {
   cachedToken = { token: tok.access_token, expires: Date.now() + 50 * 60_000 };
   folderCache.clear();
   const rootFolderId = await findOrCreateFolder(ROOT_FOLDER_NAME, "root");
+  const agreementsFolderId = await findOrCreateFolder(AGREEMENTS_FOLDER_NAME, "root");
+  const signedAgreementsFolderId = await findOrCreateFolder(SIGNED_AGREEMENTS_FOLDER_NAME, "root");
 
-  const value = { refreshToken: seal(tok.refresh_token), email, rootFolderId, connectedAt: new Date().toISOString() };
+  const value = {
+    refreshToken: seal(tok.refresh_token),
+    email,
+    rootFolderId,
+    agreementsFolderId,
+    signedAgreementsFolderId,
+    connectedAt: new Date().toISOString(),
+  };
   await prisma.appSetting.upsert({ where: { key: SETTING_KEY }, update: { value }, create: { key: SETTING_KEY, value } });
 }
 
@@ -176,13 +206,38 @@ async function findOrCreateFolder(name: string, parentId: string) {
   return id;
 }
 
-/** Year / year-month folder under the archive root, e.g. 2026 / 2026-09. */
+async function datedFolder(rootId: string, date: Date) {
+  const y = String(date.getUTCFullYear());
+  const m = `${y}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+  return findOrCreateFolder(m, await findOrCreateFolder(y, rootId));
+}
+
+/** Year / year-month folder under the invoice archive root, e.g. 2026 / 2026-09. */
 export async function monthFolder(date: Date) {
   const c = await readConnection();
   if (!c) throw new Error("Google Drive is not connected.");
-  const y = String(date.getUTCFullYear());
-  const m = `${y}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
-  return findOrCreateFolder(m, await findOrCreateFolder(y, c.rootFolderId));
+  return datedFolder(c.rootFolderId, date);
+}
+
+/** The agreement roots, created and saved on first use for older connections. */
+export async function agreementFolders() {
+  const c = await readConnection();
+  if (!c) throw new Error("Google Drive is not connected.");
+  if (c.agreementsFolderId && c.signedAgreementsFolderId) return { unsigned: c.agreementsFolderId, signed: c.signedAgreementsFolderId };
+  const agreementsFolderId = c.agreementsFolderId ?? (await findOrCreateFolder(AGREEMENTS_FOLDER_NAME, "root"));
+  const signedAgreementsFolderId = c.signedAgreementsFolderId ?? (await findOrCreateFolder(SIGNED_AGREEMENTS_FOLDER_NAME, "root"));
+  const row = await prisma.appSetting.findUniqueOrThrow({ where: { key: SETTING_KEY } });
+  await prisma.appSetting.update({
+    where: { key: SETTING_KEY },
+    data: { value: { ...(row.value as object), agreementsFolderId, signedAgreementsFolderId } },
+  });
+  return { unsigned: agreementsFolderId, signed: signedAgreementsFolderId };
+}
+
+/** Year folder for an agreement PDF, under the unsigned or signed root, e.g. 2026. */
+export async function agreementYearFolder(date: Date, signed: boolean) {
+  const roots = await agreementFolders();
+  return findOrCreateFolder(String(date.getUTCFullYear()), signed ? roots.signed : roots.unsigned);
 }
 
 function multipart(meta: object, data: Uint8Array, contentType: string) {

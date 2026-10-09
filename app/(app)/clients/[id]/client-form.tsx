@@ -26,7 +26,7 @@ type InvoiceRow = {
   subtype: string;
 };
 
-const TEXT_FIELDS: { key: keyof ClientInput; label: string; mono?: boolean; wide?: boolean; hint?: string }[] = [
+const TEXT_FIELDS: { key: keyof ClientInput; label: string; mono?: boolean; wide?: boolean; multiline?: boolean; hint?: string }[] = [
   { key: "name", label: "Client name *", wide: true },
   { key: "alias", label: "Alias", mono: true, hint: "Short name used on the ledger and system invoices, e.g. CIRCLEPAYMENT" },
   { key: "agreementNo", label: "Agreement no.", mono: true, hint: "Invoice numbers follow it: SPP-22062024 gives 22062024-001" },
@@ -40,7 +40,7 @@ const TEXT_FIELDS: { key: keyof ClientInput; label: string; mono?: boolean; wide
   { key: "country", label: "Country" },
   { key: "incorporationNo", label: "Incorporation no.", mono: true },
   { key: "contactTitle", label: "Contact title" },
-  { key: "websiteUrls", label: "Website URLs", wide: true },
+  { key: "websiteUrls", label: "Website URLs", wide: true, multiline: true, hint: "One per line" },
   { key: "transferName", label: "Transfer name", hint: "Payer name when funds arrive under a different name" },
 ];
 
@@ -122,11 +122,20 @@ export function ClientForm({
             {TEXT_FIELDS.map((f) => (
               <div key={f.key} className={cn(f.wide && "sm:col-span-2")}>
                 <Field label={f.label} hint={f.hint}>
-                  <input
-                    value={String(values[f.key] ?? "")}
-                    onChange={(e) => set(f.key, e.target.value)}
-                    className={cn(fieldClass, f.mono && "font-mono")}
-                  />
+                  {f.multiline ? (
+                    <textarea
+                      value={String(values[f.key] ?? "")}
+                      onChange={(e) => set(f.key, e.target.value)}
+                      rows={Math.max(2, String(values[f.key] ?? "").split("\n").length)}
+                      className={cn(fieldClass, "h-auto py-2", f.mono && "font-mono")}
+                    />
+                  ) : (
+                    <input
+                      value={String(values[f.key] ?? "")}
+                      onChange={(e) => set(f.key, e.target.value)}
+                      className={cn(fieldClass, f.mono && "font-mono")}
+                    />
+                  )}
                 </Field>
               </div>
             ))}

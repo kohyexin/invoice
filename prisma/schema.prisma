@@ -114,6 +114,7 @@ model User {
   importDecisions    ImportReview[]
   statementUploads   StatementImport[]    @relation("StatementUploads")
   statementDecisions StatementLine[]      @relation("StatementDecisions")
+  agreementsCreated  Agreement[]          @relation("AgreementsCreated")
 }
 
 /// Who changed what. Append-only: rows are never edited or deleted. No foreign
@@ -319,6 +320,7 @@ model Client {
   invoices      Invoice[]
   importReviews ImportReview[]
   credits       ClientCredit[]
+  agreements    Agreement[]
 }
 
 /// A client's credit history per currency: money received beyond what the invoices
@@ -682,4 +684,85 @@ model StatementLine {
 
   @@index([status])
   @@index([accountId])
+}
+
+/**
+ * ---------------------------- Agreements -----------------------------
+ */
+
+/// A blank agreement PDF with fillable (AcroForm) fields, e.g. PCI or PAAS.
+model AgreementTemplate {
+  id          String      @id @default(cuid())
+  name        String      @unique
+  /// Short id, e.g. PCI or PAAS.
+  code        String      @unique
+  active      Boolean     @default(true)
+  sortOrder   Int         @default(0)
+  pdf         Bytes
+  pdfFilename String      @default("")
+  /// [{ pdfFieldName, label, type, required, clientKey }] — see lib/agreements/fields.ts.
+  fieldConfig Json        @default("[]")
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  agreements  Agreement[]
+}
+
+enum AgreementStatus {
+  DRAFT
+  FINALIZED
+  /// Phase 2 (e-sign): sent to the signers, then signed by all of them.
+  SENT
+  COMPLETED
+}
+
+model Agreement {
+  id           String              @id @default(cuid())
+  templateId   String
+  template     AgreementTemplate   @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  clientId     String
+  client       Client              @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  status       AgreementStatus     @default(FINALIZED)
+  /// PDF field name → value as entered.
+  values       Json                @default("{}")
+  /// The agreement number, for lists and search.
+  agreementRef String              @default("")
+  finalizedAt  DateTime?
+  createdById  String?
+  createdBy    User?               @relation("AgreementsCreated", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  documents    AgreementDocument[]
+
+  @@index([clientId])
+  @@index([templateId])
+}
+
+enum AgreementDocumentVariant {
+  /// Filled in by the app, not yet signed.
+  FILLED
+  /// Signed by everyone (phase 2).
+  SIGNED
+}
+
+/// An agreement PDF. Like InvoiceDocument: kept on Google Drive once connected
+/// (unsigned and signed copies in separate folders); `data` holds the bytes
+/// only until the upload is confirmed.
+model AgreementDocument {
+  id            String                   @id @default(cuid())
+  agreementId   String
+  agreement     Agreement                @relation(fields: [agreementId], references: [id], onDelete: Cascade)
+  variant       AgreementDocumentVariant @default(FILLED)
+  filename      String
+  contentType   String                   @default("application/pdf")
+  data          Bytes?
+  size          Int?
+  driveFileId   String?
+  driveFolderId String?
+  driveName     String?
+  syncedAt      DateTime?
+  syncError     String                   @default("")
+  createdAt     DateTime                 @default(now())
+  updatedAt     DateTime                 @default(now()) @updatedAt
+
+  @@unique([agreementId, variant])
 }
