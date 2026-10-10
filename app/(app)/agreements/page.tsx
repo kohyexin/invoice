@@ -17,6 +17,7 @@ export default async function AgreementsPage() {
       client: { select: { id: true, name: true } },
       createdBy: { select: { name: true } },
       documents: { where: { variant: "FILLED" }, select: { driveFileId: true, data: true } },
+      signers: { orderBy: { createdAt: "asc" }, select: { name: true, roleLabel: true, status: true, signedAt: true } },
     },
   });
 
@@ -31,6 +32,7 @@ export default async function AgreementsPage() {
     client: a.client.name,
     createdBy: a.createdBy?.name ?? "",
     onDrive: a.documents.some((d) => d.driveFileId && !d.data),
+    signers: a.signers.map((s) => ({ name: s.name, roleLabel: s.roleLabel, signed: s.status === "SIGNED", signedAt: s.signedAt?.toISOString() ?? null })),
   }));
 
   return (

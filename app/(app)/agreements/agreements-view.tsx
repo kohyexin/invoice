@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Download, Plus, Search } from "lucide-react";
+import { CheckCircle2, Clock, Download, Plus, Search } from "lucide-react";
 import { useI18n } from "@/components/i18n/locale-provider";
 import { useCan } from "@/components/shell/user-context";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,7 @@ type Row = {
   client: string;
   createdBy: string;
   onDrive: boolean;
+  signers: { name: string; roleLabel: string; signed: boolean; signedAt: string | null }[];
 };
 
 export function AgreementsView({ rows }: { rows: Row[] }) {
@@ -32,7 +33,7 @@ export function AgreementsView({ rows }: { rows: Row[] }) {
   const [query, setQuery] = useState("");
 
   const q = query.trim().toLowerCase();
-  const visible = q ? rows.filter((r) => [r.client, r.agreementRef, r.template].some((v) => v.toLowerCase().includes(q))) : rows;
+  const visible = q ? rows.filter((r) => [r.client, r.agreementRef, r.template, ...r.signers.map((s) => s.name)].some((v) => v.toLowerCase().includes(q))) : rows;
   const templates = Array.from(new Set(rows.map((r) => r.template))).sort();
 
   const columns: Column<Row>[] = [
@@ -61,6 +62,28 @@ export function AgreementsView({ rows }: { rows: Row[] }) {
     { key: "template", header: "Template", accessor: (r) => r.template, render: (r) => r.template },
     { key: "date", header: "Date", accessor: (r) => r.date, render: (r) => formatDate(r.date) },
     { key: "status", header: "Status", accessor: (r) => r.status, render: (r) => <AgreementStatusBadge status={r.status} /> },
+    {
+      key: "signers",
+      header: "Signers",
+      accessor: (r) => r.signers.map((s) => `${s.name} (${s.signed ? "signed" : "waiting"})`).join("; "),
+      render: (r) =>
+        r.signers.length === 0 ? (
+          <span className="text-ink-soft">—</span>
+        ) : (
+          <div className="flex flex-wrap gap-x-3 gap-y-1">
+            {r.signers.map((s, i) => (
+              <span
+                key={i}
+                title={`${t(s.roleLabel)} · ${s.signed && s.signedAt ? t("Signed {0}", formatDate(s.signedAt)) : t("Waiting")}`}
+                className={cn("inline-flex items-center gap-1 text-[13px]", s.signed ? "text-ink" : "text-ink-muted")}
+              >
+                {s.signed ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-500" /> : <Clock className="h-3.5 w-3.5 shrink-0 text-amber-500" />}
+                <span className="max-w-[160px] truncate">{s.name}</span>
+              </span>
+            ))}
+          </div>
+        ),
+    },
     { key: "createdBy", header: "Created by", defaultHidden: true, accessor: (r) => r.createdBy, render: (r) => r.createdBy || "—" },
     {
       key: "onDrive",
@@ -78,7 +101,7 @@ export function AgreementsView({ rows }: { rows: Row[] }) {
       <div className="mb-4 flex flex-wrap items-center gap-2.5">
         <div className="relative w-full max-w-sm">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-soft" />
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("Search client, agreement no.")} className={cn(fieldClass, "pl-9")} />
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("Search client, agreement no., signer")} className={cn(fieldClass, "pl-9")} />
         </div>
         {canEdit && (
           <Button className="ml-auto" onClick={() => router.push("/agreements/new")}>
