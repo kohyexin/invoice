@@ -3,14 +3,15 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AlertCircle, CheckCircle2, Eye, EyeOff, ShieldCheck } from "lucide-react";
+import { AlertCircle, CheckCircle2, Clock, Eye, EyeOff, ShieldCheck } from "lucide-react";
+import { IDLE_MINUTES } from "@/lib/idle";
 import { AuthError, AuthShell, EMAIL_RE, authFieldClass } from "@/components/auth/auth-shell";
 import { useI18n } from "@/components/i18n/locale-provider";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
 
-/** `invited` is set when arriving from an accepted invitation. */
-export function LoginForm({ invited }: { invited?: string }) {
+/** `invited` is set when arriving from an accepted invitation; `idle` after an idle sign-out. */
+export function LoginForm({ invited, idle }: { invited?: string; idle?: boolean }) {
   const { t } = useI18n();
   const router = useRouter();
   const [email, setEmail] = useState(invited ?? "");
@@ -68,6 +69,16 @@ export function LoginForm({ invited }: { invited?: string }) {
           >
             <CheckCircle2 className="h-4 w-4 shrink-0" />
             {t("Your account is ready. Sign in to set up two-factor authentication.")}
+          </div>
+        )}
+
+        {idle && !invited && !error && (
+          <div
+            role="status"
+            className="mb-5 flex items-center gap-2.5 rounded-control border border-amber-400/30 bg-amber-400/10 px-3.5 py-2.5 text-sm text-amber-700 animate-scale-in dark:text-amber-200"
+          >
+            <Clock className="h-4 w-4 shrink-0" />
+            {t("You were signed out after {0} minutes without activity.", IDLE_MINUTES)}
           </div>
         )}
 

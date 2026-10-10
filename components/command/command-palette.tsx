@@ -8,7 +8,9 @@ import {
   Building2,
   CornerDownLeft,
   FilePlus2,
+  FileSignature,
   FileText,
+  Landmark,
   Languages,
   LogOut,
   Moon,
@@ -18,14 +20,14 @@ import {
   UserRound,
   type LucideIcon,
 } from "lucide-react";
-import { cn, formatCurrency } from "@/lib/utils";
+import { cn, formatCurrency, formatDate } from "@/lib/utils";
 import { canSee, navGroups } from "@/lib/nav";
 import { can } from "@/lib/roles";
 import { useI18n } from "@/components/i18n/locale-provider";
 import { signOut, useCurrentUser } from "@/components/shell/user-context";
 
-/* ⌘K command palette: navigate, run actions, and search clients and
-   invoices from one centered overlay. */
+/* ⌘K command palette: navigate, run actions, and search clients, invoices,
+   cash book lines and agreements from one centered overlay. */
 
 type Item = {
   id: string;
@@ -43,9 +45,12 @@ type SearchResult = {
   clients: { id: string; name: string; detail: string }[];
   invoices: { id: string; number: string; client: string; amount: number; currency: string; status: string }[];
   invoiceTotal: number;
+  cash: { id: string; date: string; account: string; currency: string; title: string; invoiceNumber: string; amount: number }[];
+  cashTotal: number;
+  agreements: { id: string; ref: string; client: string; template: string; status: string }[];
 };
 
-const EMPTY: SearchResult = { clients: [], invoices: [], invoiceTotal: 0 };
+const EMPTY: SearchResult = { clients: [], invoices: [], invoiceTotal: 0, cash: [], cashTotal: 0, agreements: [] };
 
 export function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { locale, setLocale, t } = useI18n();
@@ -77,7 +82,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
     const timer = setTimeout(() => {
       fetch(`/api/search?q=${encodeURIComponent(q)}`, { signal: ctrl.signal })
         .then((r) => (r.ok ? r.json() : EMPTY))
-        .then(setResults)
+        .then((r: Partial<SearchResult>) => setResults({ ...EMPTY, ...r }))
         .catch(() => {});
     }, 180);
     return () => {
@@ -148,11 +153,39 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
       perform: go(`/clients/${c.id}`),
     }));
 
+    const cashHref = `/cash/ledger?q=${encodeURIComponent(query.trim())}`;
+    const cash: Item[] = results.cash.map((c) => ({
+      id: `cash-${c.id}`,
+      icon: Landmark,
+      label: [c.title || t("Cash line"), c.invoiceNumber].filter(Boolean).join(" · "),
+      detail: [formatDate(c.date), c.account, formatCurrency(c.amount, c.currency)].join(" · "),
+      perform: go(cashHref),
+    }));
+    if (results.cashTotal > results.cash.length) {
+      cash.push({
+        id: "cash-all",
+        icon: Search,
+        label: t("See all {0} matching cash lines", results.cashTotal),
+        detail: t("Opens the Cash book filtered by “{0}”", query.trim()),
+        perform: go(cashHref),
+      });
+    }
+
+    const agreements: Item[] = results.agreements.map((a) => ({
+      id: `agreement-${a.id}`,
+      icon: FileSignature,
+      label: [a.ref, a.client].filter(Boolean).join(" · "),
+      detail: [a.template, t(a.status)].filter(Boolean).join(" · "),
+      perform: go(`/agreements/${a.id}`),
+    }));
+
     return [
       { label: t("Navigation"), items: navigation },
       { label: t("Actions"), items: actions },
       { label: results.invoiceTotal ? `${t("Invoices")} (${results.invoiceTotal})` : t("Invoices"), items: invoices },
+      { label: results.cashTotal ? `${t("Cash book")} (${results.cashTotal})` : t("Cash book"), items: cash },
       { label: t("Clients"), items: clients },
+      { label: t("Agreements"), items: agreements },
     ].filter((g) => g.items.length > 0);
   }, [query, results, locale, resolvedTheme, canCreateInvoice, canAddClient, user.role, router, setTheme, setLocale, t]);
 

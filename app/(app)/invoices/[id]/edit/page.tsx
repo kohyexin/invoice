@@ -8,7 +8,7 @@ import { toDateInput } from "@/lib/utils";
 import { Composer } from "../../new/composer";
 import { loadComposerProps } from "../../new/load";
 
-export default async function EditInvoicePage({ params }: { params: { id: string } }) {
+export default async function EditInvoicePage({ params, searchParams }: { params: { id: string }; searchParams: { from?: string } }) {
   await requirePage("invoiceCreate", "EDIT");
   const [inv, props] = await Promise.all([
     prisma.invoice.findUnique({
@@ -45,15 +45,18 @@ export default async function EditInvoicePage({ params }: { params: { id: string
     usdAmount: dec(inv.usdAmount),
   };
 
+  const from = searchParams.from === "client" || searchParams.from === "cash" ? searchParams.from : null;
+  const invoiceHref = `/invoices/${inv.id}${from ? `?from=${from}` : ""}`;
+
   return (
     <>
       <PageHeader
         breadcrumb={inv.number}
-        breadcrumbHref={`/invoices/${inv.id}`}
+        breadcrumbHref={invoiceHref}
         title="Edit invoice"
         subtitle="Change the lines or details, check the PDF, then save. The PDF is replaced and Drive keeps the old version."
       />
-      <Composer initialClientId="" editing={{ id: inv.id, input, clientName: inv.client.name }} {...props} />
+      <Composer initialClientId="" editing={{ id: inv.id, input, clientName: inv.client.name, returnTo: invoiceHref }} {...props} />
     </>
   );
 }

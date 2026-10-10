@@ -253,7 +253,7 @@ export function ClientForm({
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-[13px] text-ink" title={h.note}>
                         {h.invoice ? (
-                          <Link href={`/invoices/${h.invoice.id}`} className="font-mono text-brand-700 hover:underline dark:text-brand-200">
+                          <Link href={`/invoices/${h.invoice.id}?from=client`} className="font-mono text-brand-700 hover:underline dark:text-brand-200">
                             {h.invoice.number}
                           </Link>
                         ) : (
@@ -276,7 +276,7 @@ export function ClientForm({
             <ul className="mt-3 max-h-[60vh] divide-y divide-line/60 overflow-y-auto">
               {invoices.map((inv) => (
                 <li key={inv.id}>
-                  <Link href={`/invoices/${inv.id}`} className="flex items-center gap-3 py-2.5 hover:bg-overlay/[0.03]">
+                  <Link href={`/invoices/${inv.id}?from=client`} className="flex items-center gap-3 py-2.5 hover:bg-overlay/[0.03]">
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-mono text-[13px] text-brand-700 dark:text-brand-200">{inv.number}</p>
                       <p className="truncate text-[12px] text-ink-soft">

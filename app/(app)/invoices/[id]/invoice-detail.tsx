@@ -22,12 +22,15 @@ export function InvoiceDetail({
   composed,
   initial,
   lookups,
+  afterDelete = "/invoices",
 }: {
   id: string;
   status: string;
   composed: boolean;
   initial: EntryInput;
   lookups: Lookups;
+  /** Where to go once the entry is deleted: the page the user came from. */
+  afterDelete?: string;
 }) {
   const router = useRouter();
   const canEdit = useCan("invoices", "EDIT");
@@ -64,7 +67,7 @@ export function InvoiceDetail({
         lookups={lookups}
         readOnly={!canEdit}
         printedLocked={composed}
-        onDone={(saved) => (saved ? router.refresh() : router.push("/invoices"))}
+        onDone={(saved) => (saved ? router.refresh() : router.push(afterDelete))}
       />
     </section>
   );

@@ -1,20 +1,27 @@
 import { SignJWT, jwtVerify } from "jose";
+import { IDLE_MINUTES } from "@/lib/idle";
 
-/* Edge-safe token helpers (middleware imports this file). Three cookies:
+/* Edge-safe token helpers (middleware imports this file). Four cookies:
  *  - session: full access, checked against the user record in lib/session.ts
  *  - mfa:     password accepted, second factor pending (10 minutes)
  *  - trust:   "remember this browser" — skips the second factor for 48 hours
- * Each carries the user's sessionVersion, so a password change, disable or
- * 2FA reset invalidates all of them at once. */
+ *  - active:  last activity; the middleware renews it on every request and
+ *             signs the user out once it has expired (idle timeout)
+ * Session, mfa and trust carry the user's sessionVersion, so a password change,
+ * disable or 2FA reset invalidates all of them at once. */
 
 export const SESSION_COOKIE = "invoice_session";
 export const MFA_COOKIE = "invoice_mfa";
 export const TRUST_COOKIE = "invoice_trust";
+export const ACTIVE_COOKIE = "invoice_active";
 
 const REMEMBER_DAYS = 14;
 const SHORT_SESSION_HOURS = 12;
 const MFA_MINUTES = 10;
 const TRUST_HOURS = 48;
+/** The browser signs out at IDLE_MINUTES; the server's backstop allows a little longer,
+ *  as the browser only reports activity once a minute. */
+const ACTIVE_MINUTES = IDLE_MINUTES + 5;
 
 function secret() {
   const value = process.env.SESSION_SECRET;
@@ -22,7 +29,7 @@ function secret() {
   return new TextEncoder().encode(value);
 }
 
-type Stage = "full" | "mfa" | "trust";
+type Stage = "full" | "mfa" | "trust" | "active";
 
 async function sign(stage: Stage, userId: string, version: number, ttl: string, extra: Record<string, unknown> = {}) {
   return new SignJWT({ sv: version, stg: stage, ...extra })
@@ -77,6 +84,16 @@ export async function verifyTrustToken(token: string): Promise<SessionClaims | n
   return p ? { userId: p.sub!, version: p.sv as number } : null;
 }
 
+export async function createActiveToken(userId: string) {
+  return sign("active", userId, 0, `${ACTIVE_MINUTES}m`);
+}
+
+/** Whether the user was active within the idle limit. */
+export async function verifyActiveToken(token: string, userId: string) {
+  const p = await verify(token, "active");
+  return p?.sub === userId;
+}
+
 const base = {
   httpOnly: true,
   sameSite: "lax" as const,
@@ -91,3 +108,5 @@ export function sessionCookieOptions(remember = true) {
 
 export const mfaCookieOptions = { ...base, maxAge: MFA_MINUTES * 60 };
 export const trustCookieOptions = { ...base, maxAge: TRUST_HOURS * 60 * 60 };
+/** Outlives its token on purpose: an expired token still in the browser means "idle", not "never set". */
+export const activeCookieOptions = { ...base, maxAge: REMEMBER_DAYS * 24 * 60 * 60 };

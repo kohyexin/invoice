@@ -27,15 +27,17 @@ export function CashLedgerView({
   accounts,
   categories,
   initialAccount,
+  initialQuery = "",
 }: {
   rows: CashLedgerRow[];
   accounts: Account[];
   categories: Category[];
   initialAccount: string;
+  initialQuery?: string;
 }) {
   const { t } = useI18n();
   const canEdit = useCan("cashBook", "EDIT");
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(initialQuery);
   const [editing, setEditing] = useState<CashLedgerRow | "new" | null>(null);
   const [unpaid, setUnpaid] = useState<UnpaidLink | null>(null);
 
@@ -105,7 +107,7 @@ export function CashLedgerView({
       accessor: (r) => r.invoiceNumber,
       render: (r) =>
         r.invoiceId ? (
-          <Link href={`/invoices/${r.invoiceId}`} className="font-mono text-[13px] text-brand-700 hover:text-brand-900 dark:text-brand-200 dark:hover:text-brand-100">
+          <Link href={`/invoices/${r.invoiceId}?from=cash`} className="font-mono text-[13px] text-brand-700 hover:text-brand-900 dark:text-brand-200 dark:hover:text-brand-100">
             {r.invoiceNumber}
           </Link>
         ) : (

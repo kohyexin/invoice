@@ -100,7 +100,8 @@ export function Composer({
   aliases: Record<string, string[]>;
   rates: Record<string, number>;
   ratesUpdatedAt: string | null;
-  editing?: { id: string; input: ComposerInput; clientName: string };
+  /** `returnTo`: the invoice page to go back to, keeping where the user came from. */
+  editing?: { id: string; input: ComposerInput; clientName: string; returnTo?: string };
 }) {
   const router = useRouter();
   const { t } = useI18n();
@@ -349,7 +350,7 @@ export function Composer({
       if (res.reuse) return setReuse(res.reuse);
       // Fetch before navigating: a plain link click is cancelled by router.push.
       if (download) await downloadPdf(res.id).catch(() => undefined);
-      router.push(`/invoices/${res.id}`);
+      router.push(editing?.returnTo ?? `/invoices/${res.id}`);
       if (editing) router.refresh();
     });
   }
@@ -769,7 +770,7 @@ export function Composer({
             {t("Preview")}
           </Button>
           {editing && (
-            <Button size="lg" variant="ghost" onClick={() => router.push(`/invoices/${editing.id}`)} disabled={pending}>
+            <Button size="lg" variant="ghost" onClick={() => router.push(editing.returnTo ?? `/invoices/${editing.id}`)} disabled={pending}>
               {t("Cancel")}
             </Button>
           )}

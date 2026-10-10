@@ -13,7 +13,7 @@ import { formatDate, formatMoney, toDateInput } from "@/lib/utils";
 import { loadLookups } from "../lookups";
 import { InvoiceDetail } from "./invoice-detail";
 
-export default async function InvoicePage({ params }: { params: { id: string } }) {
+export default async function InvoicePage({ params, searchParams }: { params: { id: string }; searchParams: { from?: string } }) {
   const me = await requirePage("invoices");
   const [inv, lookups] = await Promise.all([
     prisma.invoice.findUnique({
@@ -44,10 +44,17 @@ export default async function InvoicePage({ params }: { params: { id: string } }
 
   const dec = (v: unknown) => (v === null || v === undefined ? "" : String(Number(v)));
   const composed = Boolean(inv.companyId && inv.lines.length > 0);
+  const back =
+    searchParams.from === "client"
+      ? { label: inv.client.name, href: `/clients/${inv.clientId}` }
+      : searchParams.from === "cash"
+        ? { label: "Cash book", href: "/cash/ledger" }
+        : undefined;
 
   return (
     <>
       <PageHeader
+        back={back}
         breadcrumb="Invoices"
         breadcrumbHref="/invoices"
         title={inv.number}
@@ -58,7 +65,7 @@ export default async function InvoicePage({ params }: { params: { id: string } }
             <StatusBadge status={inv.status} />
             {composed && can(me.role, "invoiceCreate", "EDIT") && (
               <Link
-                href={`/invoices/${inv.id}/edit`}
+                href={`/invoices/${inv.id}/edit${back ? `?from=${searchParams.from}` : ""}`}
                 className="inline-flex h-9 items-center gap-2 rounded-control bg-brand px-3.5 text-sm font-medium text-white hover:bg-brand/90"
               >
                 <PencilLine className="h-4 w-4" />
@@ -83,6 +90,7 @@ export default async function InvoicePage({ params }: { params: { id: string } }
           status={inv.status}
           composed={composed}
           lookups={lookups}
+          afterDelete={back?.href}
           initial={{
             clientId: inv.clientId,
             number: inv.number,

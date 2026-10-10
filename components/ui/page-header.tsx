@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 import { useI18n } from "@/components/i18n/locale-provider";
 
 export function PageHeader({
   breadcrumb,
   breadcrumbHref,
+  back,
   title,
   subtitle,
   actions,
@@ -13,6 +15,8 @@ export function PageHeader({
   breadcrumb?: string;
   /** When set, the breadcrumb renders as a link (e.g. back to the Settings hub). */
   breadcrumbHref?: string;
+  /** The page the user came from, shown as "← label" above the title. */
+  back?: { label: string; href: string };
   title: string;
   subtitle?: string;
   actions?: React.ReactNode;
@@ -21,6 +25,16 @@ export function PageHeader({
   return (
     <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
       <div>
+        {back && (
+          <Link
+            href={back.href}
+            className="mb-2 inline-flex max-w-full items-center gap-1.5 rounded-control border border-overlay/10 bg-overlay/[0.04] px-2.5 py-1 text-[13px] font-medium text-ink-muted transition-colors hover:bg-overlay/[0.08] hover:text-ink"
+          >
+            <ArrowLeft className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate">{t("Back to {0}", t(back.label))}</span>
+          </Link>
+        )}
+        {back && breadcrumb && <br />}
         {breadcrumb &&
           (breadcrumbHref ? (
             <Link

@@ -5,9 +5,12 @@ import { generateSecret, generateURI, verify as verifyOtp } from "otplib";
 import QRCode from "qrcode";
 import { prisma } from "@/lib/db";
 import {
+  ACTIVE_COOKIE,
   MFA_COOKIE,
   SESSION_COOKIE,
   TRUST_COOKIE,
+  activeCookieOptions,
+  createActiveToken,
   createMfaToken,
   createSessionToken,
   createTrustToken,
@@ -71,6 +74,7 @@ export async function completeSignIn(userId: string, version: number, remember: 
   });
   const jar = cookies();
   jar.set(SESSION_COOKIE, await createSessionToken(userId, version, remember), sessionCookieOptions(remember));
+  jar.set(ACTIVE_COOKIE, await createActiveToken(userId), activeCookieOptions);
   jar.delete(MFA_COOKIE);
   if (trustBrowser) jar.set(TRUST_COOKIE, await createTrustToken(userId, version), trustCookieOptions);
 }

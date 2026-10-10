@@ -1,4 +1,5 @@
 import { AppShell } from "@/components/shell/app-shell";
+import { IdleTimeout } from "@/components/shell/idle-timeout";
 import { UserProvider } from "@/components/shell/user-context";
 import { requirePage } from "@/lib/session";
 import { loadShellAlerts } from "@/lib/shell-alerts";
@@ -11,6 +12,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <UserProvider user={user}>
       <AppShell alerts={alerts}>{children}</AppShell>
+      <IdleTimeout />
     </UserProvider>
   );
 }
