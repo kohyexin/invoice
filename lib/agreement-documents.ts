@@ -7,7 +7,8 @@ import { archiveName } from "@/lib/documents";
 
 /* Agreement PDFs, archived on Google Drive apart from invoices: unsigned copies
  * under "STAR SAAS Agreements", signed ones (phase 2) under "STAR SAAS Signed
- * agreements", each filed as <year>/<agreement no.> <client>.pdf.
+ * agreements", each filed as <year>/<agreement no.> <client>.pdf (signed ones
+ * end in "(Signed)").
  * As with invoices, the local copy is dropped only after Drive confirms it. */
 
 const errText = (e: unknown) => (e instanceof Error ? e.message : "Upload failed.");
@@ -17,8 +18,8 @@ async function driveReady() {
   return driveConfigured() && Boolean(await getDriveConnection());
 }
 
-export function agreementFilename(a: { agreementRef: string; template: { code: string }; client: { name: string } }) {
-  return archiveName(a.agreementRef || a.template.code, a.client.name);
+export function agreementFilename(a: { agreementRef: string; template: { code: string }; client: { name: string } }, signed = false) {
+  return archiveName(a.agreementRef || a.template.code, `${a.client.name}${signed ? " (Signed)" : ""}`);
 }
 
 /** Pushes one agreement PDF to Drive. Failures are recorded, never thrown. */
@@ -38,7 +39,7 @@ export async function syncAgreementDocument(agreementId: string, variant: Agreem
       },
     });
     if (!doc) return false;
-    const name = agreementFilename(doc.agreement);
+    const name = agreementFilename(doc.agreement, variant === "SIGNED");
     const folderId = await agreementYearFolder(doc.agreement.finalizedAt ?? doc.agreement.createdAt, variant === "SIGNED");
     const data = doc.data ? new Uint8Array(doc.data) : undefined;
     const moved = doc.driveFolderId !== folderId || doc.driveName !== name;
@@ -74,7 +75,7 @@ export async function archiveSignedAgreement(agreementId: string, pdf: Uint8Arra
     select: { agreementRef: true, template: { select: { code: true } }, client: { select: { name: true } } },
   });
   const data = Buffer.from(pdf);
-  const doc = { filename: agreementFilename(a), data, size: data.length, syncError: "" };
+  const doc = { filename: agreementFilename(a, true), data, size: data.length, syncError: "" };
   await prisma.agreementDocument.upsert({
     where: { agreementId_variant: { agreementId, variant: "SIGNED" } },
     update: doc,

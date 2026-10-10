@@ -12,7 +12,7 @@ import type { FieldBox, FieldConfig } from "@/lib/agreements/fields";
 import { cn } from "@/lib/utils";
 import { deleteTemplate, replaceTemplatePdf, saveTemplate, type TemplateInput } from "../../actions";
 import { FieldEditor } from "./field-editor";
-import { ClientKeySelect, DefaultInput, TypeSelect } from "./field-settings";
+import { DefaultInput, MappingSelect, TypeSelect } from "./field-settings";
 
 export function TemplateSetup({
   id,
@@ -451,7 +451,7 @@ export function TemplateSetup({
                       <TypeSelect field={f} onChange={(patch) => setField(i, patch)} className="h-9" />
                     </td>
                     <td className="w-56 px-3 py-2">
-                      <ClientKeySelect field={f} onChange={(patch) => setField(i, patch)} className="h-9" />
+                      <MappingSelect field={f} onChange={(patch) => setField(i, patch)} className="h-9" />
                     </td>
                     <td className="w-48 px-3 py-2">
                       <DefaultInput field={f} onChange={(patch) => setField(i, patch)} className="h-9" />
@@ -474,7 +474,7 @@ export function TemplateSetup({
                 <div className="grid grid-cols-2 gap-2">
                   <TypeSelect field={f} onChange={(patch) => setField(i, patch)} className="h-9" />
                   <div>
-                    <ClientKeySelect field={f} onChange={(patch) => setField(i, patch)} className="h-9" />
+                    <MappingSelect field={f} onChange={(patch) => setField(i, patch)} className="h-9" />
                   </div>
                 </div>
                 {f.type !== "signature" && (

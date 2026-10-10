@@ -118,6 +118,8 @@ export async function saveTemplate(id: string, input: TemplateInput, boxes?: Fie
   if (keys.includes("address") && keys.some((k) => (ADDRESS_LINES as readonly string[]).includes(k))) {
     return { ok: false, error: "Use either the combined address or the separate address lines, not both." };
   }
+  const unassigned = configured.filter((f) => f.type === "signature" && !f.signerRole);
+  if (unassigned.length) return { ok: false, error: `Pick who signs: ${unassigned.map((f) => f.label).join(", ")}.` };
   try {
     const pdf = boxes ? await applyLayout(new Uint8Array(before.pdf), configured, parseBoxes(boxes)) : null;
     const known = new Set((pdf ? await discoverFields(pdf) : parseFieldConfig(before.fieldConfig)).map((f) => f.pdfFieldName));

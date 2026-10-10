@@ -171,10 +171,13 @@ async function accessToken() {
 }
 
 async function drive(path: string, init: RequestInit = {}, base = "https://www.googleapis.com/drive/v3") {
-  const res = await fetch(`${base}${path}`, {
-    ...init,
-    headers: { Authorization: `Bearer ${await accessToken()}`, ...(init.headers ?? {}) },
-  });
+  const send = async () => fetch(`${base}${path}`, { ...init, headers: { Authorization: `Bearer ${await accessToken()}`, ...(init.headers ?? {}) } });
+  let res = await send();
+  // Google can revoke an access token before its stated expiry; get a fresh one and try once more.
+  if (res.status === 401) {
+    cachedToken = null;
+    res = await send();
+  }
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
     const err = new Error(body.error?.message || `Google Drive error ${res.status}`) as Error & { status?: number };

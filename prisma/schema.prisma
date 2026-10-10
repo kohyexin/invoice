@@ -727,14 +727,72 @@ model Agreement {
   /// The agreement number, for lists and search.
   agreementRef String              @default("")
   finalizedAt  DateTime?
+  /// Sent to the signers (status SENT); cleared when signing is voided.
+  sentAt       DateTime?
+  /// Signed by everyone (status COMPLETED).
+  completedAt  DateTime?
   createdById  String?
   createdBy    User?               @relation("AgreementsCreated", fields: [createdById], references: [id], onDelete: SetNull)
   createdAt    DateTime            @default(now())
   updatedAt    DateTime            @updatedAt
   documents    AgreementDocument[]
+  signers      AgreementSigner[]
+  events       AgreementSigningEvent[]
 
   @@index([clientId])
   @@index([templateId])
+}
+
+enum AgreementSignerStatus {
+  PENDING
+  VIEWED
+  SIGNED
+}
+
+/// One person asked to sign an agreement, for one signer role on the template
+/// (e.g. client, company). They sign through an emailed link; only the link
+/// token's sha256 is stored. Their drawn signature is kept here and stamped on
+/// the filled PDF whenever it is shown, and into the signed copy at the end.
+model AgreementSigner {
+  id             String                @id @default(cuid())
+  agreementId    String
+  agreement      Agreement             @relation(fields: [agreementId], references: [id], onDelete: Cascade)
+  /// Matches FieldConfig.signerRole.
+  roleKey        String
+  roleLabel      String
+  name           String
+  email          String
+  status         AgreementSignerStatus @default(PENDING)
+  tokenHash      String                @unique
+  tokenExpiresAt DateTime
+  openedAt       DateTime?
+  signedAt       DateTime?
+  /// The drawn signature, PNG.
+  signature      Bytes?
+  signedIp       String                @default("")
+  signedUserAgent String               @default("")
+  lastReminderAt DateTime?
+  reminderCount  Int                   @default(0)
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+  events         AgreementSigningEvent[]
+
+  @@unique([agreementId, roleKey])
+  @@index([agreementId])
+}
+
+/// The signing audit trail: sent, viewed, signed, reminder, resent, completed, voided.
+model AgreementSigningEvent {
+  id          String           @id @default(cuid())
+  agreementId String
+  agreement   Agreement        @relation(fields: [agreementId], references: [id], onDelete: Cascade)
+  signerId    String?
+  signer      AgreementSigner? @relation(fields: [signerId], references: [id], onDelete: SetNull)
+  type        String
+  detail      Json             @default("{}")
+  createdAt   DateTime         @default(now())
+
+  @@index([agreementId])
 }
 
 enum AgreementDocumentVariant {

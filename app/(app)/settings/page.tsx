@@ -5,6 +5,7 @@ import { can, effectivePermissions, isManager, isOwner } from "@/lib/roles";
 import { requirePage } from "@/lib/session";
 import { SettingsView } from "./settings-view";
 import { DocumentStorage } from "./document-storage";
+import { getSigningSettings } from "@/lib/agreements/signing-settings";
 import { agreementDocumentStats } from "@/lib/agreement-documents";
 import { documentStats } from "@/lib/documents";
 import { agreementFolders, driveConfigured, getDriveConnection } from "@/lib/gdrive";
@@ -28,9 +29,9 @@ export default async function SettingsPage({ searchParams }: { searchParams: { d
   const drive = searchParams.drive;
   const notice =
     drive === "connected" || drive === "error" || drive === "not-configured" ? { kind: drive as "connected" | "error" | "not-configured", reason: searchParams.reason } : null;
-  const [connection, docStats, agreementStats] = showSettings
-    ? await Promise.all([driveConnectionWithAgreementFolders(), documentStats(), agreementDocumentStats()])
-    : [null, null, null];
+  const [connection, docStats, agreementStats, signingSettings] = showSettings
+    ? await Promise.all([driveConnectionWithAgreementFolders(), documentStats(), agreementDocumentStats(), getSigningSettings()])
+    : [null, null, null, null];
   const [companies, bankAccounts, rules, fx, owners, types, items, users, cashCategories, roles] = await Promise.all([
     prisma.company.findMany({ orderBy: [{ sortOrder: "asc" }, { code: "asc" }] }),
     prisma.bankAccount.findMany({ orderBy: [{ sortOrder: "asc" }, { label: "asc" }] }),
@@ -90,7 +91,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: { d
         />
       )}
       <SettingsView
-        manager={manager}
+        signingSettings={signingSettings}        manager={manager}
         owner={isOwner(me.role)}
         showSettings={showSettings}
         canEdit={canEdit}

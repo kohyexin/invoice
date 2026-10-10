@@ -6,9 +6,19 @@ import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Copy, Loader2, MousePointerC
 import { useI18n } from "@/components/i18n/locale-provider";
 import { Button } from "@/components/ui/button";
 import { Select, fieldClass } from "@/components/ui/form-controls";
-import { CLIENT_KEYS, FEE_PREFIX, TODAY, newFieldName, type FieldBox, type FieldConfig, type FieldType } from "@/lib/agreements/fields";
+import {
+  CLIENT_KEYS,
+  FEE_PREFIX,
+  SIGNER_ROLES,
+  TODAY,
+  newFieldName,
+  type FieldBox,
+  type FieldConfig,
+  type FieldType,
+  type SignerRole,
+} from "@/lib/agreements/fields";
 import { cn } from "@/lib/utils";
-import { ClientKeySelect, TypeSelect } from "./field-settings";
+import { MappingSelect, TypeSelect } from "./field-settings";
 
 /* Jotform-style field placement: the template's pages are drawn in the browser,
  * a palette item is picked and dropped onto a page, and boxes can be dragged and
@@ -25,7 +35,7 @@ type PdfPage = {
 };
 
 /** What the next click places. `existing`: another box for a field already on the PDF. */
-type Tool = { label: string; type: FieldType; clientKey: string; existing?: string };
+type Tool = { label: string; type: FieldType; clientKey: string; existing?: string; signerRole?: SignerRole };
 
 const SIZE: Record<FieldType, [number, number]> = {
   text: [170, 16],
@@ -43,8 +53,13 @@ const GENERIC: Tool[] = [
   { label: "Date", type: "date", clientKey: "" },
   { label: "Number", type: "number", clientKey: "" },
   { label: "Checkbox", type: "checkbox", clientKey: "" },
-  { label: "Signature", type: "signature", clientKey: "" },
 ];
+const SIGNATURE_TOOLS: Tool[] = SIGNER_ROLES.map((r) => ({
+  label: r.key === "client" ? "Client signature" : "Company signature",
+  type: "signature",
+  clientKey: "",
+  signerRole: r.key,
+}));
 const CLIENT_TOOLS: Tool[] = CLIENT_KEYS.map((c) => ({
   label: c.label,
   type: c.key === "agreementDate" ? "date" : c.key === "address" ? "multiline" : "text",
@@ -285,7 +300,15 @@ export function FieldEditor({
     const name = existing ?? newFieldName(tool.label, new Set(fields.map((f) => f.pdfFieldName)));
     const clientKey = tool.clientKey === FEE_PREFIX ? `${FEE_PREFIX}${name.toUpperCase()}` : tool.clientKey;
     const placed = snapped({ pdfFieldName: name, page: pageIndex, x, y, width: w, height: h }, -1, e.altKey).box;
-    const field: FieldConfig = { pdfFieldName: name, label: name, type: tool.type, required: false, clientKey, default: clientKey === "agreementDate" ? TODAY : undefined };
+    const field: FieldConfig = {
+      pdfFieldName: name,
+      label: name,
+      type: tool.type,
+      required: false,
+      clientKey,
+      default: clientKey === "agreementDate" ? TODAY : undefined,
+      signerRole: tool.signerRole,
+    };
     onAdd(existing ? null : field, placed);
     setSelected(boxes.length);
     setTool(null);
@@ -331,6 +354,8 @@ export function FieldEditor({
       {toolButton(FEE_TOOL)}
       <p className="mb-1 mt-3 px-2.5 text-[11px] font-semibold uppercase tracking-wide text-ink-soft">{t("Agreement only")}</p>
       {GENERIC.map(toolButton)}
+      <p className="mb-1 mt-3 px-2.5 text-[11px] font-semibold uppercase tracking-wide text-ink-soft">{t("Signatures")}</p>
+      {SIGNATURE_TOOLS.map(toolButton)}
     </>
   );
 
@@ -486,8 +511,8 @@ export function FieldEditor({
                   <TypeSelect field={field} onChange={(patch) => onFieldChange(field.pdfFieldName, patch)} className="h-9" />
                 </label>
                 <label className="min-w-[160px] flex-1">
-                  <span className="mb-1 block text-[11px] text-ink-soft">{t("Fills client")}</span>
-                  <ClientKeySelect field={field} onChange={(patch) => onFieldChange(field.pdfFieldName, patch)} className="h-9" />
+                  <span className="mb-1 block text-[11px] text-ink-soft">{t(field.type === "signature" ? "Signer" : "Fills client")}</span>
+                  <MappingSelect field={field} onChange={(patch) => onFieldChange(field.pdfFieldName, patch)} className="h-9" />
                 </label>
                 <label className="flex h-9 items-center gap-2 text-[13px] text-ink">
                   <input

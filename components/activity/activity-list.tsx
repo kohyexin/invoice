@@ -48,6 +48,12 @@ export const ACTION_LABEL: Record<string, string> = {
   change_authenticator: "Changed authenticator",
   connect: "Connected",
   disconnect: "Disconnected",
+  send: "Sent for signature",
+  resend: "Resent signing link",
+  reassign: "Reassigned signer",
+  sign: "Signed",
+  complete: "Signed by everyone",
+  void: "Cancelled signing",
 };
 
 export const ENTITY_LABEL: Record<string, string> = {
@@ -70,6 +76,7 @@ export const ENTITY_LABEL: Record<string, string> = {
   "setting:invoiceItem": "Invoice item",
   "setting:cashCategory": "Cash category",
   "setting:googleDrive": "Google Drive",
+  "setting:agreementSigning": "Agreement signing",
 };
 
 const TINT = {
@@ -105,6 +112,10 @@ const DOT: Record<string, string> = {
   delete: "bg-rose-500",
   reject: "bg-rose-500",
   disconnect: "bg-rose-500",
+  void: "bg-rose-500",
+  sign: "bg-emerald-500",
+  complete: "bg-emerald-500",
+  reassign: "bg-amber-500",
   change_password: "bg-amber-500",
   change_authenticator: "bg-amber-500",
 };

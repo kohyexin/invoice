@@ -2,7 +2,7 @@
 
 import { useI18n } from "@/components/i18n/locale-provider";
 import { Select, fieldClass } from "@/components/ui/form-controls";
-import { CLIENT_KEYS, FEE_PREFIX, FIELD_TYPES, TODAY, type FieldConfig, type FieldType } from "@/lib/agreements/fields";
+import { CLIENT_KEYS, FEE_PREFIX, FIELD_TYPES, SIGNER_ROLES, TODAY, type FieldConfig, type FieldType, type SignerRole } from "@/lib/agreements/fields";
 import { cn } from "@/lib/utils";
 
 /* Field controls shared by the fields table and the selected-box bar. */
@@ -12,7 +12,14 @@ const FEE = "__fee__";
 export function TypeSelect({ field, onChange, className }: { field: FieldConfig; onChange: (patch: Partial<FieldConfig>) => void; className?: string }) {
   const { t } = useI18n();
   return (
-    <Select value={field.type} onChange={(e) => onChange({ type: e.target.value as FieldType })} className={className}>
+    <Select
+      value={field.type}
+      onChange={(e) => {
+        const type = e.target.value as FieldType;
+        onChange(type === "signature" ? { type, signerRole: field.signerRole ?? "client" } : { type, signerRole: undefined });
+      }}
+      className={className}
+    >
       {FIELD_TYPES.map((o) => (
         <option key={o.value} value={o.value}>
           {t(o.label)}
@@ -20,6 +27,26 @@ export function TypeSelect({ field, onChange, className }: { field: FieldConfig;
       ))}
     </Select>
   );
+}
+
+/** Who signs a signature field. */
+export function SignerRoleSelect({ field, onChange, className }: { field: FieldConfig; onChange: (patch: Partial<FieldConfig>) => void; className?: string }) {
+  const { t } = useI18n();
+  return (
+    <Select value={field.signerRole ?? ""} onChange={(e) => onChange({ signerRole: (e.target.value || undefined) as SignerRole | undefined })} className={className}>
+      <option value="">{t("Pick who signs")}</option>
+      {SIGNER_ROLES.map((r) => (
+        <option key={r.key} value={r.key}>
+          {t("Signed by {0}", t(r.label))}
+        </option>
+      ))}
+    </Select>
+  );
+}
+
+/** Signature fields pick their signer; others the client detail they fill. */
+export function MappingSelect(props: { field: FieldConfig; onChange: (patch: Partial<FieldConfig>) => void; className?: string }) {
+  return props.field.type === "signature" ? <SignerRoleSelect {...props} /> : <ClientKeySelect {...props} />;
 }
 
 /** The field's starting value on the New agreement form. */

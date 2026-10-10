@@ -11,16 +11,23 @@ import type { FieldType } from "@/lib/agreements/fields";
 import { cn, formatDate } from "@/lib/utils";
 import { agreementDeletePlan, deleteAgreement, type AgreementDeletePlan } from "../actions";
 import { AgreementStatusBadge } from "../status-badge";
+import { SigningPanel, type AppUser, type SigningEvent, type SigningRole, type SigningSigner } from "./signing-panel";
 
 type Detail = {
   id: string;
   status: string;
   date: string;
+  sentAt: string | null;
+  completedAt: string | null;
   template: string;
   client: { id: string; name: string };
   createdBy: string;
   values: { label: string; type: FieldType; value: string }[];
-  document: { filename: string; driveFileId: string | null; syncError: string } | null;
+  document: { filename: string; driveFileId: string | null; syncError: string; signed: boolean } | null;
+  roles: SigningRole[];
+  signers: SigningSigner[];
+  events: SigningEvent[];
+  appUsers: AppUser[];
 };
 
 function shown(type: FieldType, value: string) {
@@ -95,6 +102,18 @@ export function AgreementDetail({ agreement: a }: { agreement: Detail }) {
                 <dd className="text-right text-ink">{a.createdBy}</dd>
               </div>
             )}
+            {a.sentAt && (
+              <div className="flex justify-between gap-3">
+                <dt className="text-ink-soft">{t("Sent for signature")}</dt>
+                <dd className="text-right text-ink">{formatDate(a.sentAt)}</dd>
+              </div>
+            )}
+            {a.completedAt && (
+              <div className="flex justify-between gap-3">
+                <dt className="text-ink-soft">{t("Signed by everyone")}</dt>
+                <dd className="text-right text-ink">{formatDate(a.completedAt)}</dd>
+              </div>
+            )}
           </dl>
           <div className="mt-5 flex flex-wrap gap-2">
             <a href={pdfUrl}>
@@ -119,6 +138,8 @@ export function AgreementDetail({ agreement: a }: { agreement: Detail }) {
             </p>
           )}
         </section>
+
+        <SigningPanel agreementId={a.id} status={a.status} roles={a.roles} signers={a.signers} events={a.events} appUsers={a.appUsers} />
 
         <section className="glass-panel neon-edge rounded-card p-5">
           <h2 className="font-mono text-[11px] uppercase tracking-[0.16em] text-ink-soft">{t("Details entered")}</h2>
@@ -208,7 +229,9 @@ export function AgreementDetail({ agreement: a }: { agreement: Detail }) {
       </aside>
 
       <section className="glass-panel neon-edge min-h-[70vh] rounded-card p-3">
-        <iframe src={`${pdfUrl}?inline#view=FitH`} title={t("Agreement PDF")} className="h-full min-h-[70vh] w-full rounded-control bg-white" />
+        <iframe
+          key={`${a.status}-${a.signers.filter((s) => s.status === "SIGNED").length}`}
+          src={`${pdfUrl}?inline#view=FitH`} title={t("Agreement PDF")} className="h-full min-h-[70vh] w-full rounded-control bg-white" />
       </section>
     </div>
   );

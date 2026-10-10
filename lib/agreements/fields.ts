@@ -20,7 +20,25 @@ export type FieldConfig = {
   /** Starting value on the New agreement form: a fixed value, "today" for dates,
    *  or a formula such as "SPC-{DDMMYYYY}" (see resolveDefault). */
   default?: string;
+  /** Who signs a signature field (see SIGNER_ROLES). */
+  signerRole?: SignerRole;
 };
+
+/** The parties that sign an agreement. Each gets their own emailed link. */
+export const SIGNER_ROLES = [
+  { key: "client", label: "Client" },
+  { key: "company", label: "Company (STAR SAAS)" },
+] as const;
+
+export type SignerRole = (typeof SIGNER_ROLES)[number]["key"];
+
+export const signerRoleLabel = (key: string) => SIGNER_ROLES.find((r) => r.key === key)?.label ?? key;
+
+/** The signer roles a template's signature fields use, in SIGNER_ROLES order. */
+export function templateSignerRoles(fields: FieldConfig[]): SignerRole[] {
+  const used = new Set(fields.filter((f) => f.type === "signature" && f.signerRole).map((f) => f.signerRole));
+  return SIGNER_ROLES.map((r) => r.key).filter((k) => used.has(k));
+}
 
 /** A field's box on the page, in PDF points from the bottom-left corner. Page is 0-based. */
 export type FieldBox = { pdfFieldName: string; page: number; x: number; y: number; width: number; height: number };
@@ -97,6 +115,7 @@ export function parseFieldConfig(raw: unknown): FieldConfig[] {
       options: Array.isArray(f.options) ? f.options.map(String) : undefined,
       hidden: Boolean(f.hidden) || undefined,
       default: typeof f.default === "string" && f.default.trim() ? f.default.trim() : undefined,
+      signerRole: f.type === "signature" && SIGNER_ROLES.some((r) => r.key === f.signerRole) ? (f.signerRole as SignerRole) : undefined,
     }));
 }
 

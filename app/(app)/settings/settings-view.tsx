@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Building2, Check, Coins, Copy, FolderTree, History, KeyRound, Landmark, ListChecks, Mail, Plus, RefreshCw, Route, ShieldCheck, Tags, UserPlus, UserRound, X } from "lucide-react";
+import { Building2, Check, Coins, Copy, FileSignature, FolderTree, History, KeyRound, Landmark, ListChecks, Mail, Plus, RefreshCw, Route, ShieldCheck, Tags, UserPlus, UserRound, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { RecordPanel } from "@/components/ui/record-panel";
@@ -12,7 +12,9 @@ import { ACCOUNT_USE_OPTIONS, CASH_KIND_OPTIONS, SETTINGS_ENTITIES, type FieldDe
 import { cn, formatDate } from "@/lib/utils";
 import { useI18n } from "@/components/i18n/locale-provider";
 import { deleteSetting, saveSetting } from "./actions";
+import type { SigningSettings } from "@/lib/agreements/signing-settings";
 import { ActivityView } from "./activity-view";
+import { SigningSettingsForm } from "./signing-settings";
 import { RolePanel, type RoleRow } from "./role-panel";
 import { deleteRole, saveRole } from "./roles-actions";
 import { inviteUser, resendInvite, saveUser } from "./users-actions";
@@ -24,7 +26,7 @@ type Column = { label: string; render: (r: Row) => React.ReactNode; sort?: (r: R
 
 const field = (key: string) => (r: Row) => r[key] as SortValue;
 
-type TabId = SettingsEntity | "user" | "role" | "activity";
+type TabId = SettingsEntity | "user" | "role" | "activity" | "signing";
 
 type UserMode = "invite" | "pending" | "edit";
 
@@ -95,6 +97,7 @@ export function SettingsView(props: {
   users: Row[];
   cashCategories: Row[];
   roles: RoleRow[];
+  signingSettings: SigningSettings | null;
   meId: string;
   /** Owner or Admin: sees Users and Roles. */
   manager: boolean;
@@ -366,6 +369,14 @@ export function SettingsView(props: {
         { label: "Kind", sort: (r) => t(KIND_LABEL[String(r.kind)] ?? String(r.kind)), render: (r) => <Badge tone={KIND_TONE[String(r.kind)] ?? "neutral"}>{t(KIND_LABEL[String(r.kind)] ?? String(r.kind))}</Badge> },
       ],
     },
+    {
+      id: "signing",
+      label: "Agreement signing",
+      icon: FileSignature,
+      description: "Who signs for STAR SAAS, how long signing links work, and when people who haven't signed get a reminder email.",
+      rows: [],
+      columns: [],
+    },
   ];
 
   const isPeopleTab = (id: TabId) => id === "user" || id === "role" || id === "activity";
@@ -376,7 +387,8 @@ export function SettingsView(props: {
     sort,
     Object.fromEntries(tab.columns.flatMap((c) => (c.sort ? [[c.label, c.sort]] : [])))
   );
-  const canAdd = tab.id !== "activity" && (isPeopleTab(tab.id) ? props.manager : props.canEdit);
+  const isFormTab = (id: TabId) => id === "activity" || id === "signing";
+  const canAdd = !isFormTab(tab.id) && (isPeopleTab(tab.id) ? props.manager : props.canEdit);
   const config = !editing
     ? null
     : editing.entity === "user"
@@ -412,7 +424,7 @@ export function SettingsView(props: {
             >
               <Icon className="h-4 w-4" />
               {t(x.label)}
-              {x.id !== "activity" && <span className="ml-auto font-mono text-[11px] text-ink-soft">{x.rows.length}</span>}
+              {!isFormTab(x.id) && <span className="ml-auto font-mono text-[11px] text-ink-soft">{x.rows.length}</span>}
             </button>
           );
         })}
@@ -463,7 +475,7 @@ export function SettingsView(props: {
           </div>
           <div className="flex shrink-0 items-center gap-2">
             {tab.id === "fxRate" && props.canEdit && <RefreshFxButton />}
-            {!canAdd && !isPeopleTab(tab.id) && <Badge tone="neutral">{t("View only")}</Badge>}
+            {!props.canEdit && !isPeopleTab(tab.id) && <Badge tone="neutral">{t("View only")}</Badge>}
             {canAdd && (
               <Button size="sm" onClick={() => open(tab.id, null)}>
                 {tab.id === "user" ? <UserPlus className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
@@ -474,6 +486,8 @@ export function SettingsView(props: {
         </div>
         {tab.id === "activity" ? (
           <ActivityView users={props.users.map((u) => ({ id: u.id, name: String(u.name || u.email) }))} />
+        ) : tab.id === "signing" ? (
+          props.signingSettings && <SigningSettingsForm settings={props.signingSettings} canEdit={props.canEdit} />
         ) : (
         <div className="relative overflow-x-auto px-5 pb-2">
           <table className="tnum w-full text-sm">

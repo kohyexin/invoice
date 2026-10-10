@@ -1,8 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 
-/** Sign-in, second factor and password reset work without a session. */
-const PUBLIC_PAGES = /^\/(login|verify|reset|invite)(\/|$)/;
+/** Sign-in, second factor, password reset and agreement signing links work without a session. */
+const PUBLIC_PAGES = /^\/(login|verify|reset|invite|sign)(\/|$)/;
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
@@ -26,6 +26,7 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  // Everything except the auth API, the cron endpoint, static assets and fonts.
-  matcher: ["/((?!api/auth|api/cron|_next|logos|brand|fonts|favicon.ico).*)"],
+  // Everything except the auth API, the cron endpoint, the signing-link API
+  // (the token is checked there), static assets and fonts.
+  matcher: ["/((?!api/auth|api/cron|api/sign/|_next|logos|brand|fonts|favicon.ico).*)"],
 };

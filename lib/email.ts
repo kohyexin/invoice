@@ -3,7 +3,7 @@ import "server-only";
 /* Email via the Resend API. Without RESEND_API_KEY the message is logged to
  * the server console instead, so the flows still work in development. */
 
-type RenderedEmail = { subject: string; html: string };
+type RenderedEmail = { subject: string; html: string; attachments?: { filename: string; content: Uint8Array }[] };
 
 const ENDPOINT = "https://api.resend.com/emails";
 const DEFAULT_FROM = "STAR SAAS <no-reply@star-saas.com>";
@@ -22,7 +22,15 @@ async function send(to: string, email: RenderedEmail, consoleFallback: string) {
   const res = await fetch(ENDPOINT, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({ from: process.env.EMAIL_FROM || DEFAULT_FROM, to: [to], subject: email.subject, html: email.html }),
+    body: JSON.stringify({
+      from: process.env.EMAIL_FROM || DEFAULT_FROM,
+      to: [to],
+      subject: email.subject,
+      html: email.html,
+      ...(email.attachments?.length
+        ? { attachments: email.attachments.map((a) => ({ filename: a.filename, content: Buffer.from(a.content).toString("base64") })) }
+        : {}),
+    }),
   });
   if (!res.ok) {
     console.error(`Resend send failed (${res.status}): ${await res.text().catch(() => "")}`);
@@ -181,5 +189,115 @@ export function sendPasswordResetEmail(to: string, resetLink: string) {
       html: layout(body, `This email was sent to ${esc(to)} because a password reset was requested for your account.`),
     },
     `Password reset for ${to}: ${resetLink}`
+  );
+}
+
+function button(link: string, label: string) {
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td align="center" style="padding:8px 0 8px 0;">
+                    <a href="${link}" target="_blank"
+                       style="display:inline-block;background-color:#0f172a;color:#ffffff;font-size:15px;font-weight:bold;text-decoration:none;padding:14px 36px;border-radius:8px;">
+                      ${label}
+                    </a>
+                  </td>
+                </tr>
+              </table>`;
+}
+
+export type SignRequest = {
+  signerName: string;
+  /** e.g. "PCI Agreement SPC-09102026 · Acme Ltd". */
+  title: string;
+  senderName: string;
+  link: string;
+  expiresAt: Date;
+};
+
+function signRequestBody(r: SignRequest, intro: string) {
+  const link = esc(r.link);
+  return `<tr>
+            <td style="padding:36px 40px 16px 40px;">
+              <p style="margin:0 0 8px 0;font-size:18px;font-weight:bold;color:#0f172a;">${esc(r.title)}</p>
+              <p style="margin:0 0 24px 0;font-size:14px;line-height:22px;color:#475569;">
+                Hi ${esc(r.signerName)}, ${intro}
+              </p>
+              ${button(link, "Review and sign")}
+              <p style="margin:24px 0 0 0;font-size:13px;line-height:20px;color:#64748b;">
+                The link is personal to you and works until <strong>${esc(r.expiresAt.toUTCString().slice(5, 16))}</strong>. You'll see the agreement first, then draw or type your signature.
+              </p>
+              <p style="margin:16px 0 0 0;font-size:12px;line-height:18px;color:#94a3b8;">
+                If the button doesn't work, copy and paste this link into your browser:<br />
+                <a href="${link}" target="_blank" style="color:#2563eb;word-break:break-all;">${link}</a>
+              </p>
+            </td>
+          </tr>
+          ${securityNote("Don't forward this email: anyone with the link can sign in your name. If you weren't expecting it, contact the sender.")}`;
+}
+
+export function sendAgreementSignRequestEmail(to: string, r: SignRequest) {
+  return send(
+    to,
+    {
+      subject: `Please sign: ${r.title}`,
+      html: layout(
+        signRequestBody(r, `${esc(r.senderName)} from STAR SAAS has sent you this agreement to sign.`),
+        `This email was sent to ${esc(to)} because you were asked to sign an agreement.`
+      ),
+    },
+    `Sign request for ${to}: ${r.link}`
+  );
+}
+
+export function sendAgreementReminderEmail(to: string, r: SignRequest) {
+  return send(
+    to,
+    {
+      subject: `Reminder: please sign ${r.title}`,
+      html: layout(
+        signRequestBody(r, "a friendly reminder that this agreement is still waiting for your signature."),
+        `This email was sent to ${esc(to)} because an agreement is waiting for your signature.`
+      ),
+    },
+    `Sign reminder for ${to}: ${r.link}`
+  );
+}
+
+export function sendAgreementSignerReplacedEmail(to: string, name: string, title: string, senderName: string) {
+  const body = `<tr>
+            <td style="padding:36px 40px 36px 40px;">
+              <p style="margin:0 0 8px 0;font-size:18px;font-weight:bold;color:#0f172a;">No longer needed</p>
+              <p style="margin:0;font-size:14px;line-height:22px;color:#475569;">
+                Hi ${esc(name)}, ${esc(senderName)} from STAR SAAS has asked someone else to sign <strong>${esc(title)}</strong>. You don't need to do anything, and the link you were sent no longer works.
+              </p>
+            </td>
+          </tr>`;
+  return send(
+    to,
+    {
+      subject: `No longer needed: ${title}`,
+      html: layout(body, `This email was sent to ${esc(to)} because you were asked to sign this agreement earlier.`),
+    },
+    `Signer replaced on ${title}: ${to}`
+  );
+}
+
+export function sendAgreementCompletedEmail(to: string, name: string, title: string, pdf: { filename: string; content: Uint8Array }) {
+  const body = `<tr>
+            <td style="padding:36px 40px 36px 40px;">
+              <p style="margin:0 0 8px 0;font-size:18px;font-weight:bold;color:#0f172a;">Signed by everyone</p>
+              <p style="margin:0;font-size:14px;line-height:22px;color:#475569;">
+                Hi ${esc(name)}, <strong>${esc(title)}</strong> has been signed by all parties. The signed copy is attached for your records.
+              </p>
+            </td>
+          </tr>`;
+  return send(
+    to,
+    {
+      subject: `Signed: ${title}`,
+      html: layout(body, `This email was sent to ${esc(to)} because you signed this agreement.`),
+      attachments: [pdf],
+    },
+    `Signed copy of ${title} for ${to}`
   );
 }
