@@ -44,12 +44,12 @@ export function UpdateBanner() {
 
   if (!latest || latest === dismissed || pathname?.startsWith("/sign")) return null;
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 px-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-canvas/60 px-4 backdrop-blur-sm animate-fade-in">
       <div
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="update-title"
-        className="glass-panel neon-edge w-full max-w-sm rounded-card p-6 text-center shadow-2xl"
+        className="w-full max-w-sm rounded-card border border-overlay/10 bg-elevated p-6 text-center shadow-2xl"
       >
         <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-brand-600/15 text-brand-500">
           <RefreshCw className="h-5 w-5" />
@@ -57,14 +57,14 @@ export function UpdateBanner() {
         <h2 id="update-title" className="text-base font-semibold text-ink">
           {t("A new version of Back Office is available.")}
         </h2>
-        <p className="mt-1.5 text-[13px] text-ink-soft">
+        <p className="mt-1.5 text-[13px] text-ink-muted">
           {t("Reload to get the latest changes. You'll stay signed in.")}
         </p>
         <div className="mt-5 flex justify-center gap-2">
           <button
             type="button"
             onClick={() => setDismissed(latest)}
-            className="rounded-control px-4 py-2 text-[13px] font-medium text-ink-soft hover:bg-overlay/[0.06] hover:text-ink"
+            className="rounded-control border border-overlay/15 px-4 py-2 text-[13px] font-medium text-ink-muted hover:bg-overlay/[0.06] hover:text-ink"
           >
             {t("Later")}
           </button>
