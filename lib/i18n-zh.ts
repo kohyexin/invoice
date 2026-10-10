@@ -812,6 +812,7 @@ export const ZH: Record<string, string> = {
   "Last 3 months": "最近 3 个月",
   "{0} to {1}": "{0} 至 {1}",
   "{0} side by side, with the 3-month average and the change on the month before. A positive change means more cash.": "{0} 并列对比，含 3 个月平均值及较上月变化。正数表示现金增加。",
+  "{0} is left out until it is complete: its salary is paid on the 10th of the next month.": "{0} 尚未完整，暂不计入：当月工资于次月 10 日发放。",
   "Opening cash": "期初现金",
   "Cash received": "现金收入",
   "Operating expenses": "运营支出",

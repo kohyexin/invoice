@@ -44,7 +44,8 @@ export function MonthlyView({
     setView(v);
     window.history.replaceState(null, "", href(s.month, v));
   };
-  const range = t("{0} to {1}", formatMonth(`${recent[0].month}-01`), formatMonth(`${s.month}-01`));
+  const last = recent[recent.length - 1];
+  const range = t("{0} to {1}", formatMonth(`${recent[0].month}-01`), formatMonth(`${last.month}-01`));
 
   return (
     <>
@@ -90,7 +91,7 @@ export function MonthlyView({
         {view === "month" ? (
           <CopyImageButton key="month" target={monthRef} filename={`cash-report-${s.month}`} className="ml-auto" />
         ) : (
-          <CopyImageButton key="3m" target={compareRef} filename={`cash-report-${recent[0].month}-to-${s.month}`} className="ml-auto" />
+          <CopyImageButton key="3m" target={compareRef} filename={`cash-report-${recent[0].month}-to-${last.month}`} className="ml-auto" />
         )}
       </div>
 
@@ -99,6 +100,11 @@ export function MonthlyView({
           <div className="border-b border-line px-5 py-4">
             <h2 className="text-base font-semibold text-ink">{t("Last 3 months")}</h2>
             <p className="mt-0.5 text-[13px] text-ink-muted">{t("{0} side by side, with the 3-month average and the change on the month before. A positive change means more cash.", range)}</p>
+            {last.month !== s.month && (
+              <p className="mt-0.5 text-[13px] text-ink-soft">
+                {t("{0} is left out until it is complete: its salary is paid on the 10th of the next month.", formatMonth(`${s.month}-01`))}
+              </p>
+            )}
           </div>
           <div className="px-5 pb-5">
             <ComparisonReport stmts={recent} />

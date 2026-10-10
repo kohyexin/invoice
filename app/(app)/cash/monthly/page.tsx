@@ -15,11 +15,14 @@ export default async function MonthlyStatementPage({ searchParams }: { searchPar
   const today = new Date().toISOString().slice(0, 7);
   const requested = searchParams.month && /^\d{4}-\d{2}$/.test(searchParams.month) ? searchParams.month : null;
   const month = requested ?? months.find((m) => m <= today) ?? today;
-  const [older2, older1, statement] = await Promise.all([
-    loadMonthlyStatement(monthsBefore(month, 2)),
-    loadMonthlyStatement(monthsBefore(month, 1)),
-    loadMonthlyStatement(month),
-  ]);
+  // A month is complete once the next month starts: its salary is paid on the 10th of the next month.
+  const lastComplete = monthsBefore(today, 1);
+  const end = month < lastComplete ? month : lastComplete;
+  const span = [monthsBefore(end, 2), monthsBefore(end, 1), end];
+  const loaded = await Promise.all([...new Set([...span, month])].map(loadMonthlyStatement));
+  const byMonth = new Map(loaded.map((s) => [s.month, s]));
+  const statement = byMonth.get(month)!;
+  const recent = span.map((m) => byMonth.get(m)!);
   return (
     <>
       <PageHeader
@@ -28,7 +31,7 @@ export default async function MonthlyStatementPage({ searchParams }: { searchPar
       />
       <MonthlyView
         statement={statement}
-        recent={[older2, older1, statement]}
+        recent={recent}
         months={months.includes(month) ? months : [month, ...months]}
         initialView={searchParams.view === "3m" ? "3m" : "month"}
       />

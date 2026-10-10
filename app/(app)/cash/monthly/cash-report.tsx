@@ -157,12 +157,13 @@ export function MonthReport({ stmt, recent }: { stmt: MonthlyStatement; recent: 
   const { t } = useI18n();
   const { cash, receivables } = useReport([stmt]);
   const b = burn(recent);
+  const runway = b.avgSpend > 0 ? stmt.closingUsd / b.avgSpend : null;
   const net = stmt.income - stmt.expense;
   const tiles = [
     { label: t("Closing cash"), value: acct(stmt.closingUsd) },
     { label: t("Operating cash flow"), value: acct(net), tone: net < 0 ? "text-red-600 dark:text-red-300" : "text-emerald-700 dark:text-emerald-300" },
     { label: t("Avg spend ({0} mo)", b.months), value: acct(b.avgSpend) },
-    { label: t("Runway"), value: b.runway === null ? "—" : t("{0} months", b.runway.toFixed(1)) },
+    { label: t("Runway"), value: runway === null ? "—" : t("{0} months", runway.toFixed(1)) },
   ];
 
   return (
