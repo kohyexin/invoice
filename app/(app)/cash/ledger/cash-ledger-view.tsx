@@ -13,7 +13,7 @@ import { useCan } from "@/components/shell/user-context";
 import { useI18n } from "@/components/i18n/locale-provider";
 import { cn, formatDate, formatMoney, toDateInput } from "@/lib/utils";
 import type { CashLedgerRow } from "@/lib/cash";
-import { deleteCashTxn, saveCashTxn, type CashTxnInput } from "../actions";
+import { deleteCashTxn, markLinkedInvoicePaid, saveCashTxn, type CashTxnInput, type UnpaidLink } from "../actions";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const KIND_LABEL: Record<string, string> = { INCOME: "Income", EXPENSE: "Expense", TRANSFER: "Transfer" };
@@ -37,6 +37,7 @@ export function CashLedgerView({
   const canEdit = useCan("cashBook", "EDIT");
   const [query, setQuery] = useState("");
   const [editing, setEditing] = useState<CashLedgerRow | "new" | null>(null);
+  const [unpaid, setUnpaid] = useState<UnpaidLink | null>(null);
 
   const q = query.trim().toLowerCase();
   const digits = q.replace(/,/g, "");
@@ -200,8 +201,73 @@ export function CashLedgerView({
         purposes={purposes}
         defaultAccount={startAccount?.id ?? ""}
         onClose={() => setEditing(null)}
+        onUnpaid={setUnpaid}
       />
+      <MarkPaidPrompt link={unpaid} onClose={() => setUnpaid(null)} />
     </>
+  );
+}
+
+/** After saving a receipt linked to an unpaid invoice: offers to mark it paid. */
+function MarkPaidPrompt({ link, onClose }: { link: UnpaidLink | null; onClose: () => void }) {
+  const router = useRouter();
+  const { t } = useI18n();
+  const [error, setError] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+  if (!link) return null;
+  const money = (currency: string, n: number) => `${currency} ${formatMoney(n)}`;
+
+  function close() {
+    setError(null);
+    onClose();
+  }
+  function confirm() {
+    start(async () => {
+      const res = await markLinkedInvoicePaid(link!.cashTxnId);
+      if (!res.ok) return setError(res.error);
+      close();
+      router.refresh();
+    });
+  }
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-canvas/60 px-4 backdrop-blur-sm animate-fade-in">
+      <div role="alertdialog" aria-modal="true" aria-labelledby="mark-paid-title" className="w-full max-w-md rounded-card border border-overlay/10 bg-elevated p-6 shadow-2xl">
+        <h2 id="mark-paid-title" className="text-base font-semibold text-ink">
+          {t("Mark {0} paid?", link.number)}
+        </h2>
+        <p className="mt-2 text-[13px] text-ink-muted">{t("This line is linked to {0} for {1}, which is still unpaid.", link.number, link.client)}</p>
+        <dl className="mt-4 grid grid-cols-2 gap-y-1.5 text-[13px]">
+          <dt className="text-ink-soft">{t("Still due")}</dt>
+          <dd className="tnum text-right text-ink">{money(link.currency, link.due)}</dd>
+          <dt className="text-ink-soft">{t("This receipt")}</dt>
+          <dd className="tnum text-right text-ink">{money(link.receivedCurrency, link.received)}</dd>
+        </dl>
+        {link.leftOver > 0 && (
+          <p className="mt-3 text-[12px] text-ink-muted">{t("{0} left over goes to the client's credit.", money(link.currency, link.leftOver))}</p>
+        )}
+        {link.fromCredit > 0 && (
+          <p className="mt-3 text-[12px] text-ink-muted">{t("{0} of the client's credit makes up the difference.", money(link.currency, link.fromCredit))}</p>
+        )}
+        {link.short > 0 && (
+          <p className="mt-3 rounded-control border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-[12px] text-amber-700 dark:text-amber-200">
+            {t("The receipt is {0} short. The invoice will still be marked paid in full.", money(link.currency, link.short))}
+          </p>
+        )}
+        {link.receivedCurrency !== link.currency && (
+          <p className="mt-3 text-[12px] text-ink-muted">{t("The receipt is in a different currency, so the invoice is marked paid without changing the client's credit.")}</p>
+        )}
+        {error && <p className="mt-3 rounded-control border border-danger/30 bg-danger/10 px-3 py-2 text-[13px] text-rose-700 dark:text-rose-200">{t(error)}</p>}
+        <div className="mt-5 flex justify-end gap-2">
+          <Button variant="secondary" size="sm" onClick={close} disabled={pending}>
+            {t("Not now")}
+          </Button>
+          <Button size="sm" onClick={confirm} loading={pending} autoFocus>
+            {t("Mark paid")}
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -240,6 +306,7 @@ function TxnPanel({
   purposes,
   defaultAccount,
   onClose,
+  onUnpaid,
 }: {
   row: CashLedgerRow | "new" | null;
   accounts: Account[];
@@ -247,6 +314,7 @@ function TxnPanel({
   purposes: string[];
   defaultAccount: string;
   onClose: () => void;
+  onUnpaid: (link: UnpaidLink) => void;
 }) {
   const router = useRouter();
   const { t } = useI18n();
@@ -273,6 +341,7 @@ function TxnPanel({
       if (!res.ok) return setError(res.error);
       onClose();
       router.refresh();
+      if (res.unpaid) onUnpaid(res.unpaid);
     });
   }
 
