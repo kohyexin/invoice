@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import { BrandLogo, BrandMark } from "@/components/brand/brand-logo";
 import { useI18n } from "@/components/i18n/locale-provider";
 
-export const PRODUCT_NAME = "Invoice & Cash";
+export const PRODUCT_NAME = "Back Office";
 
 /** Sidebar identity: STAR SAAS logo and the product name, linking home. */
 export function SidebarBrand({ collapsed, onNavigate }: { collapsed?: boolean; onNavigate?: () => void }) {

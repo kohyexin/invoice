@@ -13,7 +13,7 @@ export type FxSnapshot = { rates: Record<string, number>; updatedAt: string | nu
 
 async function yahooPerUsd(currency: string): Promise<number> {
   const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${currency}=X?range=1d&interval=1d`, {
-    headers: { "User-Agent": "Mozilla/5.0 (compatible; STAR SAAS Invoice)" },
+    headers: { "User-Agent": "Mozilla/5.0 (compatible; STAR SAAS Back Office)" },
     cache: "no-store",
     signal: AbortSignal.timeout(8000),
   });

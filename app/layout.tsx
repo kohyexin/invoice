@@ -16,8 +16,8 @@ const baloo = Baloo_2({
 });
 
 export const metadata: Metadata = {
-  title: "STAR SAAS Invoice",
-  description: "Client invoices, payments and billing for SPARK and STAR SAAS.",
+  title: "STAR SAAS Back Office",
+  description: "Clients, invoices, cash, agreements and e-signing for SPARK and STAR SAAS.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

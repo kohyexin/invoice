@@ -24,7 +24,7 @@ import {
 const MAX_FAILURES = 5;
 const EMAIL_CODE_MINUTES = 10;
 export const EMAIL_CODE_COOLDOWN_SECONDS = 60;
-const ISSUER = "STAR SAAS Invoice";
+const ISSUER = "STAR SAAS Back Office";
 
 export const sha256 = (v: string) => createHash("sha256").update(v).digest("hex");
 

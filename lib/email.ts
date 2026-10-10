@@ -89,7 +89,7 @@ export function sendSignInCodeEmail(to: string, name: string, code: string) {
             <td style="padding:36px 40px 16px 40px;">
               <p style="margin:0 0 8px 0;font-size:18px;font-weight:bold;color:#0f172a;">Your verification code</p>
               <p style="margin:0 0 24px 0;font-size:14px;line-height:22px;color:#475569;">
-                Hi ${esc(name)}, use the code below to finish signing in to STAR SAAS Invoice.
+                Hi ${esc(name)}, use the code below to finish signing in to STAR SAAS Back Office.
               </p>
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
                 <tr>
@@ -109,7 +109,7 @@ export function sendSignInCodeEmail(to: string, name: string, code: string) {
   return send(
     to,
     {
-      subject: `${code} is your STAR SAAS Invoice verification code`,
+      subject: `${code} is your STAR SAAS Back Office verification code`,
       html: layout(body, `This email was sent to ${esc(to)} because a sign-in was attempted on your account.`),
     },
     `Sign-in code for ${to}: ${code}`
@@ -120,9 +120,9 @@ export function sendInviteEmail(to: string, inviteLink: string, inviterName: str
   const link = esc(inviteLink);
   const body = `<tr>
             <td style="padding:36px 40px 16px 40px;">
-              <p style="margin:0 0 8px 0;font-size:18px;font-weight:bold;color:#0f172a;">You're invited to STAR SAAS Invoice &amp; Cash</p>
+              <p style="margin:0 0 8px 0;font-size:18px;font-weight:bold;color:#0f172a;">You're invited to STAR SAAS Back Office</p>
               <p style="margin:0 0 24px 0;font-size:14px;line-height:22px;color:#475569;">
-                ${esc(inviterName)} invited you to join STAR SAAS Invoice &amp; Cash as <strong>${esc(roleLabel)}</strong>. Accept the invitation to set your name and password.
+                ${esc(inviterName)} invited you to join STAR SAAS Back Office as <strong>${esc(roleLabel)}</strong>. Accept the invitation to set your name and password.
               </p>
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
                 <tr>
@@ -147,7 +147,7 @@ export function sendInviteEmail(to: string, inviteLink: string, inviterName: str
   return send(
     to,
     {
-      subject: `${inviterName} invited you to STAR SAAS Invoice & Cash`,
+      subject: `${inviterName} invited you to STAR SAAS Back Office`,
       html: layout(body, `This email was sent to ${esc(to)} because an administrator invited you.`),
     },
     `Invitation for ${to}: ${inviteLink}`
@@ -160,7 +160,7 @@ export function sendPasswordResetEmail(to: string, resetLink: string) {
             <td style="padding:36px 40px 16px 40px;">
               <p style="margin:0 0 8px 0;font-size:18px;font-weight:bold;color:#0f172a;">Reset your password</p>
               <p style="margin:0 0 24px 0;font-size:14px;line-height:22px;color:#475569;">
-                We received a request to reset the password for your STAR SAAS Invoice account. Click the button below to choose a new one.
+                We received a request to reset the password for your STAR SAAS Back Office account. Click the button below to choose a new one.
               </p>
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
                 <tr>
@@ -185,7 +185,7 @@ export function sendPasswordResetEmail(to: string, resetLink: string) {
   return send(
     to,
     {
-      subject: "Reset your STAR SAAS Invoice password",
+      subject: "Reset your STAR SAAS Back Office password",
       html: layout(body, `This email was sent to ${esc(to)} because a password reset was requested for your account.`),
     },
     `Password reset for ${to}: ${resetLink}`
