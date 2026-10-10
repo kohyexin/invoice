@@ -9,13 +9,13 @@ import { SALARY_CATEGORY, salaryParts } from "@/lib/salary-parts";
 type RowKind = "balance" | "section" | "item" | "sub" | "subtotal" | "grand";
 type ReportRow = { key: string; label: string; kind: RowKind; values: number[] };
 
-const ZERO = 0.5;
+const ZERO = 0.005;
 
-/** Whole dollars, negatives in brackets, nil as a dash. */
+/** Two decimals like the workbook, negatives in brackets, nil as a dash. */
 export function acct(n: number | null) {
   if (n === null) return "";
   if (Math.abs(n) < ZERO) return "–";
-  const s = formatMoney(Math.abs(n), 0);
+  const s = formatMoney(Math.abs(n));
   return n < 0 ? `(${s})` : s;
 }
 
@@ -167,7 +167,7 @@ export function MonthReport({ stmt, recent }: { stmt: MonthlyStatement; recent: 
   ];
 
   return (
-    <div className="tnum w-[560px] text-[13px]">
+    <div className="tnum w-[600px] text-[13px]">
       <ReportHeader title={t("Monthly cash report · {0}", formatMonth(`${stmt.month}-01`))} subtitle={t("All bank accounts, in USD")} />
       <div className="mb-2 grid grid-cols-4 gap-2">
         {tiles.map((x) => (
