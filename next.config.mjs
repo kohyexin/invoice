@@ -1,6 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Baked into this build's pages and server alike; the app compares them to spot a newer deployment.
+  env: { NEXT_PUBLIC_APP_VERSION: process.env.VERCEL_GIT_COMMIT_SHA || String(Date.now()) },
   experimental: {
     // Server-only packages that must not be bundled by webpack.
     serverComponentsExternalPackages: ["@react-pdf/renderer", "exceljs", "pg", "unpdf", "imapflow", "mailparser", "fontkit"],
