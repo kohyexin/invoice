@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { FileDown, PencilLine } from "lucide-react";
+import { Building2, FileDown, PencilLine } from "lucide-react";
 import { ActivityList } from "@/components/activity/activity-list";
 import { PageHeader } from "@/components/ui/page-header";
 import { GenerateBadge, StatusBadge } from "@/components/ui/badge";
@@ -63,6 +63,15 @@ export default async function InvoicePage({ params, searchParams }: { params: { 
           <div className="flex items-center gap-2">
             <GenerateBadge generate={inv.generate} />
             <StatusBadge status={inv.status} />
+            {/* Without access to clients, the Invoices list filtered by the client shows the same invoices. */}
+            <Link
+              href={can(me.role, "clients") ? `/clients/${inv.clientId}` : `/invoices?q=${encodeURIComponent(inv.client.name)}`}
+              title={t("All invoices from {0}", inv.client.name)}
+              className="inline-flex h-9 items-center gap-2 rounded-control border border-overlay/10 bg-overlay/[0.04] px-3.5 text-sm font-medium text-ink hover:bg-overlay/[0.08]"
+            >
+              <Building2 className="h-4 w-4" />
+              {t("View client")}
+            </Link>
             {composed && can(me.role, "invoiceCreate", "EDIT") && (
               <Link
                 href={`/invoices/${inv.id}/edit${back ? `?from=${searchParams.from}` : ""}`}

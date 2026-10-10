@@ -27,6 +27,8 @@ export const ZH: Record<string, string> = {
   "See all {0} matching cash lines": "查看全部 {0} 条匹配的资金流水",
   "Are you still there?": "您还在吗？",
   "Back to {0}": "返回 {0}",
+  "View client": "查看客户",
+  "All invoices from {0}": "{0} 的全部发票",
   "For your security, you'll be signed out soon because you've been inactive.": "为了您的安全，由于长时间未操作，您即将被退出登录。",
   "Stay signed in": "保持登录",
   "You were signed out after {0} minutes without activity.": "由于 {0} 分钟未操作，您已被退出登录。",
