@@ -45,6 +45,7 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 export function LedgerView({ rows, lookups, initialQuery = "" }: { rows: LedgerRow[]; lookups: Lookups; initialQuery?: string }) {
   const router = useRouter();
   const canEdit = useCan("invoices", "EDIT");
+  const canPay = useCan("invoicePayments", "EDIT");
   const { t } = useI18n();
   const [query, setQuery] = useState(initialQuery);
   const [adding, setAdding] = useState(false);
@@ -165,16 +166,20 @@ export function LedgerView({ rows, lookups, initialQuery = "" }: { rows: LedgerR
             className={cn(fieldClass, "pl-9")}
           />
         </div>
-        {canEdit && (
+        {(canEdit || canPay) && (
           <div className="ml-auto flex gap-2">
-            <Button variant="secondary" onClick={() => setRecording(true)}>
-              <HandCoins className="h-4 w-4" />
-              {t("Record payment")}
-            </Button>
-            <Button variant="secondary" onClick={() => setAdding(true)}>
-              <Plus className="h-4 w-4" />
-              {t("Record invoice")}
-            </Button>
+            {canPay && (
+              <Button variant="secondary" onClick={() => setRecording(true)}>
+                <HandCoins className="h-4 w-4" />
+                {t("Record payment")}
+              </Button>
+            )}
+            {canEdit && (
+              <Button variant="secondary" onClick={() => setAdding(true)}>
+                <Plus className="h-4 w-4" />
+                {t("Record invoice")}
+              </Button>
+            )}
           </div>
         )}
       </div>
@@ -188,7 +193,7 @@ export function LedgerView({ rows, lookups, initialQuery = "" }: { rows: LedgerR
         exportName="invoices"
         defaultPageSize={50}
         rowActions={(r) =>
-          canEdit && r.status === "SENT" ? (
+          canPay && r.status === "SENT" ? (
             <Button size="sm" variant="secondary" onClick={() => setPaying(r)}>
               {t("Mark paid")}
             </Button>

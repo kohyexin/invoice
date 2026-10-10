@@ -16,8 +16,14 @@ export const FEATURES = [
   {
     key: "invoices",
     label: "Invoices",
-    help: "View: list, details and PDFs. Edit: record invoices, change ledger entries, mark paid, change status, delete, refresh FX.",
+    help: "View: list, details and PDFs. Edit: record invoices, change ledger entries, delete, refresh FX.",
     levels: ["NONE", "VIEW", "EDIT"],
+  },
+  {
+    key: "invoicePayments",
+    label: "Invoice payments and status",
+    help: "Mark paid, record payments, and change an invoice's status (end, lost, waive, back to sent). Also lets approved bank lines mark invoices paid.",
+    levels: ["NONE", "EDIT"],
   },
   {
     key: "invoiceCreate",
@@ -92,6 +98,8 @@ export function normalizePermissions(raw: unknown): Permissions {
     const v = src[f.key];
     out[f.key] = typeof v === "string" && allowed.includes(v as Level) ? (v as Level) : allowed[0];
   }
+  /* Roles saved before payments had their own level could do it with Invoices: Edit. */
+  if (src.invoicePayments === undefined && out.invoices === "EDIT") out.invoicePayments = "EDIT";
   return out;
 }
 
@@ -100,13 +108,13 @@ const full = (): Permissions => Object.fromEntries(FEATURES.map((f) => [f.key, f
 /** What a role can actually do. */
 export function effectivePermissions(system: SystemRoleName | null, stored: unknown): Permissions {
   if (system === "OWNER") return full();
-  if (system === "ADMIN") return { ...full(), cashBook: "VIEW", statementImport: "VIEW" };
+  if (system === "ADMIN") return { ...full(), invoicePayments: "NONE", cashBook: "VIEW", statementImport: "VIEW" };
   return normalizePermissions(stored);
 }
 
 export const SYSTEM_ROLE_HELP: Record<SystemRoleName, string> = {
   OWNER: "Full access, including users, roles and other Owners.",
-  ADMIN: "Everything except changing the cash book and statement imports. Manages users and roles, but not Owners.",
+  ADMIN: "Everything except marking invoices paid or changing their status, and changing the cash book and statement imports. Manages users and roles, but not Owners.",
 };
 
 /** A role's display name. "Owner" already means an invoice's account owner in

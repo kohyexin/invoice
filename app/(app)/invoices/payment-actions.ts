@@ -13,7 +13,7 @@ export type OpenInvoice = { id: string; number: string; invoiceDate: string; cur
 
 /** A client's unpaid invoices (oldest first) and credit, for recording a payment. */
 export async function paymentContext(clientId: string) {
-  await requireAccess("invoices", "EDIT");
+  await requireAccess("invoicePayments", "EDIT");
   const [invoices, credit] = await Promise.all([
     prisma.invoice.findMany({
       where: { clientId, status: "SENT" },
@@ -49,7 +49,7 @@ const money = (v: string) => {
 /** One payment from a client: pays the ticked invoices in full, using the client's credit
     when the payment falls short, and keeps anything left over as credit. */
 export async function recordPayment(input: PaymentRecord): Promise<Result<{ paid: number; credit: number }>> {
-  const auth = await authorize("invoices", "EDIT");
+  const auth = await authorize("invoicePayments", "EDIT");
   if (!auth.ok) return auth;
   const date = parseDateInput(input.date);
   const amount = money(input.amount);

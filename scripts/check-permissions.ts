@@ -27,9 +27,13 @@ function rules() {
   for (const f of FEATURES) expect(can(owner, f.key, f.levels[f.levels.length - 1]), `Owner has the top level of ${f.key}`);
   for (const f of FEATURES) {
     const top = f.levels[f.levels.length - 1] as Level;
+    if (f.key === "invoicePayments") continue;
     const capped = f.key === "cashBook" || f.key === "statementImport";
     expect(can(admin, f.key, capped ? "VIEW" : top) && (!capped || !can(admin, f.key, "EDIT")), `Admin: ${f.key} is ${capped ? "VIEW only" : top}`);
   }
+  expect(!can(admin, "invoicePayments", "EDIT"), "Admin can't mark invoices paid or change their status");
+  expect(normalizePermissions({ invoices: "EDIT" }).invoicePayments === "EDIT", "older roles with Invoices: Edit keep payments");
+  expect(normalizePermissions({ invoices: "EDIT", invoicePayments: "NONE" }).invoicePayments === "NONE", "payments can be turned off separately");
   expect(isOwner(owner) && isManager(owner) && isManager(admin) && !isOwner(admin), "Owner and Admin are managers; only Owner is owner");
 
   const junk = normalizePermissions({ dashboard: "NONE", invoiceCreate: "VIEW", cashReports: "EDIT", bogus: "EDIT", clients: 5 });

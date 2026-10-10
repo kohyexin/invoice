@@ -130,7 +130,7 @@ export async function approveStatementLine(id: string, edits: LineEdits, refresh
   if (!auth.ok) return auth;
   try {
     const line = await lineForLog(id);
-    const done = await approveLine(id, edits, auth.user.id, { markPaid: can(auth.user.role, "invoices", "EDIT") });
+    const done = await approveLine(id, edits, auth.user.id, { markPaid: can(auth.user.role, "invoicePayments", "EDIT") });
     if (line) await logActivity(auth.user, { action: "approve", entity: "statement_line", entityId: id, label: line.label, before: line.fields, after: edits });
     for (const p of done.settled) await logActivity(auth.user, { action: "mark_paid", entity: "invoice", entityId: p.id, label: p.number, before: p.before, after: p.after });
     for (const p of done.payments) await logPayment(auth.user, p);

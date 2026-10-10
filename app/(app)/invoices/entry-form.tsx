@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Field, Select, fieldClass } from "@/components/ui/form-controls";
 import { CURRENCIES, STATUSES, cn, round2, toDateInput } from "@/lib/utils";
 import { useI18n } from "@/components/i18n/locale-provider";
+import { useCan } from "@/components/shell/user-context";
 import { FxRateNote, type FxState } from "@/components/invoices/fx-rate-note";
 import { deleteEntry, entryDefaults, saveEntry, type EntryInput } from "./actions";
 
@@ -60,6 +61,7 @@ export function EntryForm({
   printedLocked?: boolean;
 }) {
   const { t } = useI18n();
+  const canPay = useCan("invoicePayments", "EDIT");
   const [v, setV] = useState<EntryInput>(initial);
   const [clientText, setClientText] = useState(() => lookups.clients.find((c) => c.id === initial.clientId)?.name ?? "");
   const [usdTouched, setUsdTouched] = useState(Boolean(id));
@@ -243,8 +245,8 @@ export function EntryForm({
             )}
           </div>
         )}
-        <Field label="Status">
-          <Select value={v.status} onChange={(e) => set("status", e.target.value as EntryInput["status"])}>
+        <Field label="Status" hint={canPay || readOnly ? undefined : "Your role can't change the status or mark invoices paid."}>
+          <Select value={v.status} disabled={!canPay} onChange={(e) => set("status", e.target.value as EntryInput["status"])}>
             {STATUSES.map((s) => (
               <option key={s} value={s}>
                 {t(s)}
@@ -255,14 +257,14 @@ export function EntryForm({
       </div>
 
       {paid && (
-        <div className="rounded-card border border-line/70 p-4">
+        <fieldset disabled={!canPay} className="min-w-0 rounded-card border border-line/70 p-4">
           <p className="mb-3 font-mono text-[11px] uppercase tracking-[0.16em] text-ink-soft">{t("Payment")}</p>
           <PaymentFields
             value={v}
             onChange={(key, value) => set(key, value)}
             defaultAmount={v.currency === "USD" ? v.amount : v.usdAmount}
           />
-        </div>
+        </fieldset>
       )}
 
       <Field label="Notes">

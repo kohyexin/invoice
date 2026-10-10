@@ -6,6 +6,7 @@ import { prisma } from "@/lib/db";
 import type { Currency, Generate, InvoiceStatus } from "@/lib/generated/prisma/client";
 import { CURRENCIES, STATUSES, parseDateInput, round2 } from "@/lib/utils";
 import { fxRates, suggestInvoiceNumber, toUsd } from "@/lib/rules";
+import { can } from "@/lib/roles";
 import { authorize, requireAccess } from "@/lib/session";
 import { discardDocument, refreshDocument } from "@/lib/documents";
 import { applyCreditToNewInvoice } from "@/lib/credit";
@@ -140,6 +141,12 @@ export async function saveEntry(id: string | null, input: EntryInput, confirmReu
     updatedById: auth.user.id,
   };
 
+  if (!can(auth.user.role, "invoicePayments", "EDIT")) {
+    const paymentKeys = ["status", "receivedDate", "receivedAmount", "receivedCurrency", "fee", "paymentNote"] as const;
+    if (id) for (const key of paymentKeys) delete (data as Partial<typeof data>)[key];
+    else Object.assign(data, { status: "SENT", receivedDate: null, receivedAmount: null, receivedCurrency: null, fee: null, paymentNote: "" });
+  }
+
   const composed = id ? await prisma.invoice.findFirst({ where: { id, companyId: { not: null }, lines: { some: {} } }, select: { id: true } }) : null;
   if (composed) {
     for (const key of ["clientId", "number", "invoiceDate", "dueDate", "currency", "amount", "usdAmount", "fxRate"] as const) delete (data as Partial<typeof data>)[key];
@@ -166,7 +173,7 @@ export async function saveEntry(id: string | null, input: EntryInput, confirmReu
 }
 
 export async function markPaid(id: string, input: PaymentInput): Promise<Result> {
-  const auth = await authorize("invoices", "EDIT");
+  const auth = await authorize("invoicePayments", "EDIT");
   if (!auth.ok) return auth;
   const receivedDate = parseDateInput(input.receivedDate);
   const receivedAmount = money(input.receivedAmount);
@@ -193,7 +200,7 @@ export async function markPaid(id: string, input: PaymentInput): Promise<Result>
 }
 
 export async function setStatus(id: string, status: InvoiceStatus): Promise<Result> {
-  const auth = await authorize("invoices", "EDIT");
+  const auth = await authorize("invoicePayments", "EDIT");
   if (!auth.ok) return auth;
   if (!(STATUSES as readonly string[]).includes(status)) return { ok: false, error: "Unknown status." };
   const cleared = status === "SENT" ? { receivedDate: null, receivedAmount: null, receivedCurrency: null, fee: null } : {};

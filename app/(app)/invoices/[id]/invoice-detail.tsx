@@ -31,6 +31,7 @@ export function InvoiceDetail({
 }) {
   const router = useRouter();
   const canEdit = useCan("invoices", "EDIT");
+  const canPay = useCan("invoicePayments", "EDIT");
   const [pending, start] = useTransition();
   const { t } = useI18n();
 
@@ -38,7 +39,7 @@ export function InvoiceDetail({
     <section className="glass-panel neon-edge rounded-card p-5">
       <div className="mb-5 flex flex-wrap items-center gap-2">
         <h2 className="mr-auto font-mono text-[11px] uppercase tracking-[0.16em] text-ink-soft">{t("Ledger entry")}</h2>
-        {canEdit &&
+        {canPay &&
           QUICK.filter((q) => q.status !== status).map((q) => (
             <Button
               key={q.status}

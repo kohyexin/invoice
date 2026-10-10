@@ -66,7 +66,7 @@ export function ClientForm({
 }) {
   const router = useRouter();
   const canEdit = useCan("clients", "EDIT");
-  const canPay = useCan("invoices", "EDIT");
+  const canPay = useCan("invoicePayments", "EDIT");
   const [recording, setRecording] = useState(false);
   const { t } = useI18n();
   const [values, setValues] = useState<ClientInput>(initial);
