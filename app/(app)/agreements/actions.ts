@@ -175,6 +175,34 @@ function mappedDetails(fields: FieldConfig[], values: Record<string, string>) {
 /** Client text columns the form can set. A combined address sets all three lines, blank ones included. */
 const DETAIL_TEXT = CLIENT_KEYS.map((c) => c.key).filter((k) => k !== "name" && k !== "agreementNo" && k !== "agreementDate" && k !== "address");
 
+/** Why `agreementNo` can't be used for a new agreement for `clientId`, or null when it's free.
+ *  The chosen client's own number (e.g. from the Jotform import) is fine until an agreement uses it. */
+async function agreementNoClash(agreementNo: string, clientId: string | null): Promise<string | null> {
+  const ref = nameKey(agreementNo);
+  if (!ref) return null;
+  const agreement = await prisma.agreement.findFirst({
+    where: { agreementRef: { equals: ref, mode: "insensitive" } },
+    select: { client: { select: { name: true } } },
+  });
+  if (agreement) return `Agreement no. ${ref} is already used by an agreement for ${agreement.client.name}. Enter a different agreement number.`;
+  const client = await prisma.client.findFirst({
+    where: {
+      ...(clientId ? { id: { not: clientId } } : {}),
+      OR: [{ agreementNo: { equals: ref, mode: "insensitive" } }, { otherAgreements: { has: ref } }],
+    },
+    select: { name: true },
+  });
+  if (client) return `Agreement no. ${ref} already belongs to ${client.name}. Enter a different agreement number.`;
+  return null;
+}
+
+/** Checked as the agreement number is typed, before saving. */
+export async function checkAgreementNo(agreementNo: string, clientId: string | null): Promise<Result<{ clash: string | null }>> {
+  const auth = await authorize("agreements", "EDIT");
+  if (!auth.ok) return auth;
+  return { ok: true, clash: await agreementNoClash(agreementNo, clientId) };
+}
+
 export async function createAgreement(input: AgreementInput): Promise<Result<{ id: string }>> {
   const auth = await authorize("agreements", "EDIT");
   if (!auth.ok) return auth;
@@ -193,6 +221,8 @@ export async function createAgreement(input: AgreementInput): Promise<Result<{ i
   try {
     const existing = input.clientId ? await prisma.client.findUnique({ where: { id: input.clientId } }) : null;
     if (input.clientId && !existing) return { ok: false, error: "That client no longer exists." };
+    const numberClash = await agreementNoClash(agreementNo, existing?.id ?? null);
+    if (numberClash) return { ok: false, error: numberClash };
     const newName = (input.newClientName.trim() || details.name || "").replace(/\s+/g, " ");
     if (!existing) {
       if (!newName) return { ok: false, error: "Enter the new client's name." };

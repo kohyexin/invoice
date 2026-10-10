@@ -11,7 +11,7 @@ import { Field, Segmented, Select, fieldClass } from "@/components/ui/form-contr
 import { clientKeyLabel, isFormula, prefillFromClient, resolveDefault, type ClientDetails, type FieldConfig } from "@/lib/agreements/fields";
 import { nameKey } from "@/lib/client-import";
 import { cn, toDateInput } from "@/lib/utils";
-import { createAgreement } from "../actions";
+import { checkAgreementNo, createAgreement } from "../actions";
 
 type Template = { id: string; name: string; code: string; fields: FieldConfig[] };
 
@@ -123,10 +123,27 @@ export function AgreementForm({
   }, [inputKey, templateId]);
 
   const nameField = fields.find((f) => f.clientKey === "name");
+  const numberField = fields.find((f) => f.clientKey === "agreementNo");
+  const agreementNo = numberField ? (values[numberField.pdfFieldName] ?? "").trim() : "";
+  const [numberClash, setNumberClash] = useState<string | null>(null);
+  useEffect(() => {
+    setNumberClash(null);
+    if (!agreementNo) return;
+    let stale = false;
+    const timer = setTimeout(async () => {
+      const res = await checkAgreementNo(agreementNo, client?.id ?? null).catch(() => null);
+      if (!stale && res?.ok) setNumberClash(res.clash);
+    }, 500);
+    return () => {
+      stale = true;
+      clearTimeout(timer);
+    };
+  }, [agreementNo, client?.id]);
 
   function save() {
     setError(null);
     if (mode === "existing" && !client) return setError("Pick a client from the list, or choose New client.");
+    if (numberClash) return setError(numberClash);
     start(async () => {
       const res = await createAgreement({ templateId, clientId: client?.id ?? null, newClientName: mode === "new" ? newClientName : "", values });
       if (!res.ok) return setError(res.error);
@@ -215,6 +232,7 @@ export function AgreementForm({
                 value={values[f.pdfFieldName] ?? ""}
                 onChange={(v) => set(f.pdfFieldName, v)}
                 onReset={isFormula(f.default) && typedOver.has(f.pdfFieldName) ? () => resetFormula(f.pdfFieldName) : undefined}
+                problem={f === numberField ? numberClash : null}
               />
             </div>
           ))}
@@ -249,12 +267,15 @@ function AgreementField({
   value,
   onChange,
   onReset,
+  problem,
 }: {
   field: FieldConfig;
   value: string;
   onChange: (v: string) => void;
   /** Set when a formula field was typed over: puts the formula back. */
   onReset?: () => void;
+  /** Shown in red under the field, e.g. an agreement number that's already used. */
+  problem?: string | null;
 }) {
   const { t } = useI18n();
   const label = f.required ? `${f.label} *` : f.label;
@@ -362,10 +383,12 @@ function AgreementField({
           type={f.type === "date" ? "date" : f.type === "number" ? "number" : "text"}
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className={fieldClass}
+          className={cn(fieldClass, problem && "border-danger/60 focus:border-danger focus:ring-danger/25")}
+          aria-invalid={problem ? true : undefined}
         />
       )}
       {formula}
+      {problem && <p className="mt-1 text-[12px] text-rose-700 dark:text-rose-300">{t(problem)}</p>}
     </Field>
   );
 }
