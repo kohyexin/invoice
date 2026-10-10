@@ -3,39 +3,43 @@ import type { ParsedStatement, StatementEntry } from "./types";
 
 /* Industrial Bank (兴业银行) transaction downloads for the XMXY accounts: an Excel
    sheet for whatever date range was picked, newest first, one row per transaction
-   with the balance after it. Lines are keyed by the bank's Unique Code. */
+   with the balance after it. Lines are keyed by the bank's Unique Code. Online
+   banking exports the same columns with English or Chinese headers. */
 
 const BANK_NAME = "兴业银行";
 const COLUMNS = {
-  ref: "Unique Code",
-  account: "Account",
-  holder: "Holder Name",
-  currency: "Currency",
-  debit: "Debit Amount",
-  credit: "Credit Amount",
-  balance: "Account Balance",
-  type: "Description",
-  recipient: "Recipient Name",
-  date: "Posting Date",
-  time: "Date & Time",
-  purpose: "Purpose",
-  remarks: "Remarks",
+  ref: ["Unique Code", "唯一流水编号"],
+  account: ["Account", "账号"],
+  holder: ["Holder Name", "户名"],
+  currency: ["Currency", "币种"],
+  debit: ["Debit Amount", "借方金额(支出)"],
+  credit: ["Credit Amount", "贷方金额(收入)"],
+  balance: ["Account Balance", "账户余额"],
+  type: ["Description", "摘要"],
+  recipient: ["Recipient Name", "对方户名"],
+  date: ["Posting Date", "记账日期"],
+  time: ["Date & Time", "交易时间"],
+  purpose: ["Purpose", "用途"],
+  remarks: ["Remarks", "备注"],
 } as const;
 
 type Cell = string | number | boolean | null | undefined;
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 const text = (v: Cell) => String(v ?? "").replace(/&amp;/g, "&").trim();
-const header = (v: Cell) => text(v).replace(/\s+/g, " ");
+/** Fullwidth brackets and spacing vary between exports: "借方金额（支出）" = "借方金额(支出)". */
+const header = (v: Cell) => text(v).replace(/（/g, "(").replace(/）/g, ")").replace(/\s+/g, " ");
+const is = (c: Cell, names: readonly string[]) => names.includes(header(c));
 const money = (v: Cell) => (typeof v === "number" ? round2(v) : round2(Number(text(v).replace(/,/g, "")) || 0));
-const currencyOf = (v: string) => (/^(RMB|CNY)$/i.test(v) ? "CNY" : v.toUpperCase());
+const CURRENCIES: Record<string, string> = { RMB: "CNY", CNY: "CNY", 人民币: "CNY", 美元: "USD", 港币: "HKD", 港元: "HKD", 欧元: "EUR" };
+const currencyOf = (v: string) => CURRENCIES[v.toUpperCase()] ?? v.toUpperCase();
 function headerRow(rows: Cell[][]) {
-  return rows.findIndex((r) => r.some((c) => header(c) === COLUMNS.ref) && r.some((c) => header(c) === COLUMNS.balance));
+  return rows.findIndex((r) => r.some((c) => is(c, COLUMNS.ref)) && r.some((c) => is(c, COLUMNS.balance)));
 }
 
 export function isCib(rows: Cell[][]) {
   const i = headerRow(rows);
-  return i >= 0 && rows[i].some((c) => header(c) === COLUMNS.debit);
+  return i >= 0 && rows[i].some((c) => is(c, COLUMNS.debit));
 }
 
 /** "待报解预算收入（TIPS系统）" + "435026…-个人所得税" -> "待报解预算收入（TIPS系统） 个人所得税". */
@@ -52,9 +56,9 @@ export function parseCib(rows: Cell[][]): ParsedStatement[] {
   const h = headerRow(rows);
   if (h < 0) throw new Error("This doesn't look like an Industrial Bank download (no Unique Code / Account Balance columns).");
   const col = {} as Record<keyof typeof COLUMNS, number>;
-  for (const [key, name] of Object.entries(COLUMNS) as [keyof typeof COLUMNS, string][]) {
-    col[key] = rows[h].findIndex((c) => header(c) === name);
-    if (col[key] < 0) throw new Error(`The download has no "${name}" column.`);
+  for (const [key, names] of Object.entries(COLUMNS) as [keyof typeof COLUMNS, readonly string[]][]) {
+    col[key] = rows[h].findIndex((c) => is(c, names));
+    if (col[key] < 0) throw new Error(`The download has no "${names[0]}" (${names[1]}) column.`);
   }
 
   const body = rows.slice(h + 1).filter((r) => text(r[col.ref]));
