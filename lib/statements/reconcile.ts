@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/db";
+import { Prisma } from "@/lib/generated/prisma/client";
 import { round2 } from "@/lib/utils";
 import { BALANCE_USES } from "@/lib/cash";
 import { accountName, accountNameWithCurrency } from "@/lib/account-name";
@@ -7,7 +8,8 @@ import { exactInvoices, invoiceNumbers, isInvoiceParty, openInvoices, type OpenI
 import type { ParsedStatement, SplitPattern, SplitRow, StatementEntry } from "./types";
 
 /* Compares statements with the cash book and the approval queue. Nothing here
-   writes; stageStatements() queues the proposed lines for approval. */
+   writes except refreshWaitingSuggestions(); stageStatements() queues the proposed
+   lines for approval. */
 
 const MATCH_DAYS = 3;
 const DAY = 86_400_000;
@@ -169,10 +171,31 @@ function splitRowsFrom(pattern: SplitPattern[], amount: number, description: str
   }));
 }
 
-export async function reconcileStatements(
-  files: { name: string; statement: ParsedStatement }[],
-  accountChoices: Record<string, string> = {},
-): Promise<Omit<StatementPreview, "errors">> {
+/** GA wallet on the balance sheet — not the compact Airwallex Pay invoice extra. */
+const airwallexWallet = (a: { label: string; currency: string }) => / \(Airwallex\)$/i.test(a.label) && a.label !== "Airwallex Pay";
+
+const BOOK_SELECT = {
+  id: true,
+  date: true,
+  period: true,
+  amountIn: true,
+  amountOut: true,
+  purpose: true,
+  party: true,
+  memo: true,
+  categoryId: true,
+  importKey: true,
+  invoice: { select: { clientId: true } },
+} as const;
+
+const loadBook = (accountId: string): Promise<BookLine[]> =>
+  prisma.cashTxn.findMany({ where: { accountId }, orderBy: [{ date: "asc" }, { seq: "asc" }], select: BOOK_SELECT });
+
+/**
+ * What suggestions are made from: remembered bookings, the cash book, unpaid invoices and the
+ * waiting lines that already claim some of them (except `refreshing`, which are being redone).
+ */
+async function suggestionContext(refreshing: string[] = []) {
   const [accounts, categories, dbHints, unpaid, waitingParties] = await Promise.all([
     prisma.bankAccount.findMany({
       where: { use: { in: [...BALANCE_USES] } },
@@ -185,12 +208,10 @@ export async function reconcileStatements(
       where: { status: "SENT" },
       select: { id: true, number: true, currency: true, amount: true, amountPaid: true, alias: true, clientId: true, invoiceDate: true },
     }),
-    prisma.statementLine.findMany({ where: { status: "PENDING" }, select: { party: true } }),
+    prisma.statementLine.findMany({ where: { status: "PENDING", id: { notIn: refreshing } }, select: { party: true } }),
   ]);
   const zijin = categories.find((c) => c.nameZh === "资金相关")?.id ?? "";
   const income = categories.find((c) => c.nameZh === "营业收入")?.id ?? "";
-  /** GA wallet on the balance sheet — not the compact Airwallex Pay invoice extra. */
-  const airwallexWallet = (a: { label: string; currency: string }) => / \(Airwallex\)$/i.test(a.label) && a.label !== "Airwallex Pay";
   const airwallexIds = accounts.filter(airwallexWallet).map((a) => a.id);
 
   // Each unpaid invoice is offered to one receipt only, and not if a waiting line already names it.
@@ -240,36 +261,44 @@ export async function reconcileStatements(
     return fill.length ? pick(fill) : undefined;
   };
 
-  const candidates: StatementPreview["candidates"] = {};
-  for (const a of accounts) (candidates[a.currency] ??= []).push({ id: a.id, label: `${accountName(a)} (${a.label})` });
-
   const hints = new Map<string, Hint>();
   for (const h of dbHints) hints.set(`${h.accountId}|${h.counterparty}|${h.direction}`, { ...h, splits: (h.splits as SplitPattern[] | null) ?? null });
 
+  /** The booking suggested for a new bank entry; invoices it pays aren't offered to later entries. */
+  const suggest = async (accountId: string, bank: string, currency: string, key: string, e: StatementEntry, amount: number, book: BookLine[]) => {
+    const dir = amount >= 0 ? "in" : "out";
+    let hint = hints.get(`${accountId}|${e.counterparty}|${dir}`);
+    // A refund or release is booked like the payment it reverses, which may have left another wallet.
+    if (!hint && bank === "AIRWALLEX" && dir === "in") {
+      hint = hints.get(`${accountId}|${e.counterparty}|out`) ?? airwallexIds.map((id) => hints.get(`${id}|${e.counterparty}|out`)).find(Boolean);
+    }
+    // Lines booked by hand or brought in from the workbook never left a remembered booking.
+    hint ??= fromHistory(book, e, dir);
+    if (hint && !hint.clientId && hint.party) {
+      const clients = await clientsFor(hint.party);
+      if (clients.length === 1) hint = { ...hint, clientId: clients[0] };
+    }
+    const mayPay = amount > 0 && !hint?.splits && (bank !== "AIRWALLEX" || AIRWALLEX_RECEIPT.test(e.ref ?? ""));
+    const invoices = mayPay ? await invoicesFor(currency, amount, hint) : undefined;
+    for (const i of invoices?.invoices ?? []) claimed.add(i.number);
+    return entryLine(key, e, amount, bank, hint, invoices);
+  };
+
+  return { accounts, zijin, hints, suggest };
+}
+
+export async function reconcileStatements(
+  files: { name: string; statement: ParsedStatement }[],
+  accountChoices: Record<string, string> = {},
+): Promise<Omit<StatementPreview, "errors">> {
+  const { accounts, zijin, hints, suggest } = await suggestionContext();
+
+  const candidates: StatementPreview["candidates"] = {};
+  for (const a of accounts) (candidates[a.currency] ??= []).push({ id: a.id, label: `${accountName(a)} (${a.label})` });
+
   const books = new Map<string, BookLine[]>();
   const bookOf = async (accountId: string) => {
-    if (!books.has(accountId)) {
-      books.set(
-        accountId,
-        await prisma.cashTxn.findMany({
-          where: { accountId },
-          orderBy: [{ date: "asc" }, { seq: "asc" }],
-          select: {
-            id: true,
-            date: true,
-            period: true,
-            amountIn: true,
-            amountOut: true,
-            purpose: true,
-            party: true,
-            memo: true,
-            categoryId: true,
-            importKey: true,
-            invoice: { select: { clientId: true } },
-          },
-        }),
-      );
-    }
+    if (!books.has(accountId)) books.set(accountId, await loadBook(accountId));
     return books.get(accountId)!;
   };
   const queues = new Map<string, QueueLine[]>();
@@ -488,21 +517,7 @@ export async function reconcileStatements(
           add(interestLine(key, e, amount, zijin));
           continue;
         }
-        let hint = hints.get(`${account.id}|${e.counterparty}|${dir}`);
-        // A refund or release is booked like the payment it reverses, which may have left another wallet.
-        if (!hint && s.bank === "AIRWALLEX" && dir === "in") {
-          hint = hints.get(`${account.id}|${e.counterparty}|out`) ?? airwallexIds.map((id) => hints.get(`${id}|${e.counterparty}|out`)).find(Boolean);
-        }
-        // Lines booked by hand or brought in from the workbook never left a remembered booking.
-        hint ??= fromHistory(book, e, dir);
-        if (hint && !hint.clientId && hint.party) {
-          const clients = await clientsFor(hint.party);
-          if (clients.length === 1) hint = { ...hint, clientId: clients[0] };
-        }
-        const mayPay = amount > 0 && !hint?.splits && (s.bank !== "AIRWALLEX" || AIRWALLEX_RECEIPT.test(e.ref ?? ""));
-        const invoices = mayPay ? await invoicesFor(section.currency, amount, hint) : undefined;
-        for (const i of invoices?.invoices ?? []) claimed.add(i.number);
-        add(entryLine(key, e, amount, s.bank, hint, invoices));
+        add(await suggest(account.id, s.bank, section.currency, key, e, amount, book));
       }
 
       // Lines in the book for this period that the bank doesn't have.
@@ -537,6 +552,55 @@ export async function reconcileStatements(
   }
 
   return { months, accounts: [...details.values()], candidates };
+}
+
+/**
+ * Suggests a booking for waiting entries that have none yet (no category and no client), as an
+ * upload would now: from remembered bookings, the cash book's history and unpaid invoices.
+ */
+export async function refreshWaitingSuggestions() {
+  const lines = await prisma.statementLine.findMany({
+    where: { status: "PENDING", kind: "entry", categoryId: null, clientId: null, splits: { equals: Prisma.DbNull } },
+    orderBy: [{ date: "asc" }, { key: "asc" }],
+    select: { id: true, key: true, statementId: true, accountId: true, date: true, amountIn: true, amountOut: true, description: true, counterparty: true, account: { select: { currency: true } } },
+  });
+  if (!lines.length) return { checked: 0, updated: 0 };
+  const { suggest } = await suggestionContext(lines.map((l) => l.id));
+  const books = new Map<string, BookLine[]>();
+  let updated = 0;
+  for (const l of lines) {
+    if (!books.has(l.accountId)) books.set(l.accountId, await loadBook(l.accountId));
+    const amount = round2(Number(l.amountIn) - Number(l.amountOut));
+    const ref = l.key.split(":ref:")[1];
+    const entry: StatementEntry = {
+      date: iso(l.date),
+      description: l.description,
+      debit: Math.max(-amount, 0),
+      credit: Math.max(amount, 0),
+      isInterest: false,
+      counterparty: l.counterparty,
+      ref,
+    };
+    // Statement ids start with the bank, e.g. "AIRWALLEX:…".
+    const s = await suggest(l.accountId, l.statementId.split(":")[0], l.account.currency, l.key, entry, amount, books.get(l.accountId)!);
+    if (s.suggested === "none") continue;
+    await prisma.statementLine.update({
+      where: { id: l.id },
+      data: {
+        period: utc(`${s.period ?? entry.date.slice(0, 7)}-01`),
+        categoryId: s.categoryId || null,
+        purpose: s.purpose,
+        party: s.party,
+        memo: s.memo,
+        suggested: s.suggested,
+        clientId: s.clientId || null,
+        invoiceIds: s.invoiceIds?.length ? s.invoiceIds : Prisma.DbNull,
+        splits: s.splits ? (s.splits as Prisma.InputJsonValue) : Prisma.DbNull,
+      },
+    });
+    updated++;
+  }
+  return { checked: lines.length, updated };
 }
 
 const HISTORY_LINES = 5;

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, Ban, CheckCheck, CheckCircle2, ChevronDown, FileUp, Inbox, Plus, RotateCcw, Split, X } from "lucide-react";
+import { AlertTriangle, Ban, CheckCheck, CheckCircle2, ChevronDown, FileUp, Inbox, Plus, RefreshCw, RotateCcw, Split, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, fieldClass } from "@/components/ui/form-controls";
@@ -18,6 +18,7 @@ import {
   approveStatementLine,
   copyAccountDetails,
   finishStatementApprovals,
+  refreshSuggestions,
   rejectStatementLine,
   restoreStatementLine,
   saveStatementLine,
@@ -468,6 +469,8 @@ function ApprovalQueue({ lines, categories, payment }: { lines: QueueLine[]; cat
   const [edits, setEdits] = useState<Record<string, LineEdits>>({});
   const [bulk, setBulk] = useState<Progress | null>(null);
   const [bulkErrors, setBulkErrors] = useState<string[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshNote, setRefreshNote] = useState("");
   const [done, setDone] = useState<Set<string>>(new Set());
   const stopRef = useRef(false);
   const visible = lines.filter((l) => !done.has(l.id));
@@ -492,6 +495,17 @@ function ApprovalQueue({ lines, categories, payment }: { lines: QueueLine[]; cat
     router.refresh();
   }
 
+  async function resuggest() {
+    setRefreshing(true);
+    setRefreshNote("");
+    const res = await refreshSuggestions();
+    setRefreshing(false);
+    if (!res.ok) return setRefreshNote(t(res.error));
+    setEdits({});
+    setRefreshNote(res.updated ? t("Suggested bookings for {0} of {1} blank lines.", res.updated, res.checked) : t("No new suggestions found."));
+    router.refresh();
+  }
+
   return (
     <section className={cn(card, "p-5")}>
       <datalist id={CLIENT_LIST}>
@@ -503,8 +517,14 @@ function ApprovalQueue({ lines, categories, payment }: { lines: QueueLine[]; cat
         <Inbox className="h-4 w-4 text-amber-600 dark:text-amber-300" />
         <h2 className="text-base font-semibold text-ink">{t("Waiting for approval")}</h2>
         <span className="rounded-full bg-overlay/[0.06] px-2 text-[12px] text-ink-muted">{visible.length}</span>
+        {canEdit && visible.length > 0 && (
+          <Button size="sm" variant="secondary" className="ml-auto" onClick={resuggest} loading={refreshing} disabled={bulk !== null}>
+            <RefreshCw className="h-4 w-4" />
+            {t("Refresh suggestions")}
+          </Button>
+        )}
         {canEdit && ready.length > 1 && (
-          <Button size="sm" className="ml-auto" onClick={approveAll} loading={bulk !== null}>
+          <Button size="sm" onClick={approveAll} loading={bulk !== null} disabled={refreshing}>
             <CheckCheck className="h-4 w-4" />
             {t("Approve all ready ({0})", ready.length)}
           </Button>
@@ -513,6 +533,7 @@ function ApprovalQueue({ lines, categories, payment }: { lines: QueueLine[]; cat
       <p className="text-[13px] text-ink-muted">
         {t("Nothing reaches the cash book until you approve it. Lines marked Missing in Excel are on the bank statement but not in your workbook; add them to Excel too while you run both.")}
       </p>
+      {refreshNote && <p className="mt-1 text-[12px] text-ink-soft">{refreshNote}</p>}
       {bulk && <ProgressBar progress={bulk} onStop={() => (stopRef.current = true)} />}
       {bulkErrors.length > 0 && (
         <ul className="mt-3 space-y-0.5 rounded-control border border-danger/30 bg-danger/10 px-3 py-2 text-[12px] text-rose-700 dark:text-rose-200">

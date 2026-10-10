@@ -8,7 +8,7 @@ import { can } from "@/lib/roles";
 import { authorize } from "@/lib/session";
 import { approveLine, rejectLine, restoreLine, saveLine, stageStatements, type LineEdits } from "@/lib/statements/queue";
 import { MAX_FILES, readStatementFiles } from "@/lib/statements/read";
-import { reconcileStatements, type StatementPreview } from "@/lib/statements/reconcile";
+import { reconcileStatements, refreshWaitingSuggestions, type StatementPreview } from "@/lib/statements/reconcile";
 
 type Result = { ok: true } | { ok: false; error: string };
 
@@ -166,6 +166,22 @@ export async function restoreStatementLine(id: string): Promise<Result> {
     return { ok: true };
   } catch (e) {
     return { ok: false, error: errorText(e, "Couldn't restore the line.") };
+  }
+}
+
+/** Suggests bookings for waiting lines that still have no category or client. */
+export async function refreshSuggestions(): Promise<({ ok: true; checked: number; updated: number }) | { ok: false; error: string }> {
+  const auth = await authorize("statementImport", "EDIT");
+  if (!auth.ok) return auth;
+  try {
+    const { checked, updated } = await refreshWaitingSuggestions();
+    if (updated) {
+      await logActivity(auth.user, { action: "update", entity: "statement_line", label: "Refresh suggestions", changes: { checked, updated } });
+      revalidatePath("/cash/import");
+    }
+    return { ok: true, checked, updated };
+  } catch (e) {
+    return { ok: false, error: errorText(e, "Couldn't refresh the suggestions.") };
   }
 }
 

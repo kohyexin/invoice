@@ -453,6 +453,10 @@ export const ZH: Record<string, string> = {
   "Rejected before, so not queued again:": "此前已拒绝，不会再次加入待批准：",
   "Waiting for approval": "待批准",
   "Approve all ready ({0})": "批准全部就绪项（{0}）",
+  "Refresh suggestions": "刷新建议",
+  "Suggested bookings for {0} of {1} blank lines.": "已为 {1} 条空白记录中的 {0} 条给出建议。",
+  "No new suggestions found.": "没有找到新的建议。",
+  "Couldn't refresh the suggestions.": "无法刷新建议。",
   "Approving {0} of {1}…": "正在批准第 {0} / {1} 项…",
   "Nothing is posted to the ledger until you approve it. Rejected invoices are remembered and won't be queued again.":
     "经您批准后才会记入台账。被拒绝的发票会被记住，不会再次加入待批准。",
