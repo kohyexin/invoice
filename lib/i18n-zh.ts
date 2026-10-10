@@ -28,6 +28,7 @@ export const ZH: Record<string, string> = {
   "Are you still there?": "您还在吗？",
   "Back to {0}": "返回 {0}",
   "View client": "查看客户",
+  "Search client name or alias": "搜索客户名称或简称",
   "All invoices from {0}": "{0} 的全部发票",
   "For your security, you'll be signed out soon because you've been inactive.": "为了您的安全，由于长时间未操作，您即将被退出登录。",
   "Stay signed in": "保持登录",

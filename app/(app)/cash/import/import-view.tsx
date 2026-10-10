@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, Ban, CheckCheck, CheckCircle2, ChevronDown, FileUp, Inbox, Plus, RotateCcw, Split, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -494,6 +494,11 @@ function ApprovalQueue({ lines, categories, payment }: { lines: QueueLine[]; cat
 
   return (
     <section className={cn(card, "p-5")}>
+      <datalist id={CLIENT_LIST}>
+        {payment.clients.map((c) => (
+          <option key={c.id} value={c.name} />
+        ))}
+      </datalist>
       <div className="flex flex-wrap items-center gap-2">
         <Inbox className="h-4 w-4 text-amber-600 dark:text-amber-300" />
         <h2 className="text-base font-semibold text-ink">{t("Waiting for approval")}</h2>
@@ -710,14 +715,7 @@ function InvoicePicker({
     <div className="mt-3 space-y-2 rounded-control border border-line/60 p-3 text-[13px]">
       <div className="flex flex-wrap items-center gap-3">
         <span className={label}>{t("Client")}</span>
-        <Select value={clientId} onChange={(e) => pickClient(e.target.value)} disabled={disabled} className="h-9 max-w-xs">
-          <option value="">{t("No client")}</option>
-          {payment.clients.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </Select>
+        <ClientSearch clients={payment.clients} value={clientId} onPick={pickClient} disabled={disabled} />
         {clientId && plan.credit > 0 && <span className="tnum text-ink-muted">{t("Credit {0}", money(plan.credit))}</span>}
       </div>
 
@@ -758,6 +756,45 @@ function InvoicePicker({
         <p className="text-amber-700 dark:text-amber-300">{t("Short by {0}: the client has {1} credit.", money(plan.short), money(plan.credit))}</p>
       )}
     </div>
+  );
+}
+
+/** One list of clients for every card's search box (rendered once by the approval queue). */
+const CLIENT_LIST = "import-clients";
+
+/** Type a client's name or alias; picking a suggestion sets the client, clearing the box removes it. */
+function ClientSearch({
+  clients,
+  value,
+  onPick,
+  disabled,
+}: {
+  clients: PaymentOptions["clients"];
+  value: string;
+  onPick: (id: string) => void;
+  disabled: boolean;
+}) {
+  const { t } = useI18n();
+  const current = clients.find((c) => c.id === value)?.name ?? "";
+  const [text, setText] = useState(current);
+  useEffect(() => setText(current), [current]);
+
+  return (
+    <input
+      list={CLIENT_LIST}
+      value={text}
+      disabled={disabled}
+      placeholder={t("Search client name or alias")}
+      onChange={(e) => {
+        const typed = e.target.value;
+        setText(typed);
+        const hit = clients.find((c) => c.name.toLowerCase() === typed.trim().toLowerCase());
+        if (hit) onPick(hit.id);
+        else if (!typed.trim()) onPick("");
+      }}
+      onBlur={() => setText(current)}
+      className={cn(fieldClass, "h-9 w-full max-w-sm")}
+    />
   );
 }
 

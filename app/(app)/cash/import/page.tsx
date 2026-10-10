@@ -91,7 +91,8 @@ export default async function StatementImportPage() {
     } else invoices.set(k, { number: i.number, ids: [i.id], clientId: i.clientId, currency: i.currency, invoiceDate: iso(i.invoiceDate), due: round2(due) });
   }
   const payment = {
-    clients: clients.map((c) => ({ id: c.id, name: c.alias ? `${c.name} (${c.alias})` : c.name })),
+    // Alias first: the cash book knows clients by it (e.g. "OCEANLINK · Weizhibao Bussiness Co., Limited").
+    clients: clients.map((c) => ({ id: c.id, name: c.alias ? `${c.alias} · ${c.name}` : c.name })),
     invoices: [...invoices.values()].filter((i) => i.due > 0),
     credits: Object.fromEntries(credits.map((c) => [`${c.clientId}|${c.currency}`, round2(Number(c._sum.amount ?? 0))])),
   };

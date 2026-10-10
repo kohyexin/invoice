@@ -115,9 +115,11 @@ type BookLine = {
   memo: string;
   categoryId: string | null;
   importKey: string | null;
+  invoice: { clientId: string } | null;
 };
 
-type Hint = { categoryId: string | null; purpose: string; party: string; periodLag: number; splits: SplitPattern[] | null };
+/** How a counterparty was booked before; `clientId` is the client its receipts paid. */
+type Hint = { categoryId: string | null; purpose: string; party: string; periodLag: number; splits: SplitPattern[] | null; clientId?: string };
 /** A line to propose; without a period it belongs to the month of its date. */
 type NewLine = Omit<ProposedLine, "accountId" | "period" | "clientId" | "invoiceIds" | "splits"> &
   Partial<Pick<ProposedLine, "clientId" | "invoiceIds" | "splits">> & { period?: string };
@@ -209,7 +211,8 @@ export async function reconcileStatements(
    * its oldest invoices while the receipt covers them, the rest becoming credit.
    */
   const invoicesFor = async (currency: string, amount: number, hint: Hint | undefined): Promise<InvoicePick | undefined> => {
-    const usual = hint?.party ? await clientsFor(hint.party) : [];
+    const usual = hint?.party ? [...(await clientsFor(hint.party))] : [];
+    if (hint?.clientId && !usual.includes(hint.clientId)) usual.unshift(hint.clientId);
     const free = open.filter((i) => i.currency === currency && i.due > 0 && !claimed.has(i.number));
     const pick = (invoices: OpenInvoice[]) => {
       const clients = new Set(invoices.map((i) => i.clientId));
@@ -251,7 +254,19 @@ export async function reconcileStatements(
         await prisma.cashTxn.findMany({
           where: { accountId },
           orderBy: [{ date: "asc" }, { seq: "asc" }],
-          select: { id: true, date: true, period: true, amountIn: true, amountOut: true, purpose: true, party: true, memo: true, categoryId: true, importKey: true },
+          select: {
+            id: true,
+            date: true,
+            period: true,
+            amountIn: true,
+            amountOut: true,
+            purpose: true,
+            party: true,
+            memo: true,
+            categoryId: true,
+            importKey: true,
+            invoice: { select: { clientId: true } },
+          },
         }),
       );
     }
@@ -478,6 +493,12 @@ export async function reconcileStatements(
         if (!hint && s.bank === "AIRWALLEX" && dir === "in") {
           hint = hints.get(`${account.id}|${e.counterparty}|out`) ?? airwallexIds.map((id) => hints.get(`${id}|${e.counterparty}|out`)).find(Boolean);
         }
+        // Lines booked by hand or brought in from the workbook never left a remembered booking.
+        hint ??= fromHistory(book, e, dir);
+        if (hint && !hint.clientId && hint.party) {
+          const clients = await clientsFor(hint.party);
+          if (clients.length === 1) hint = { ...hint, clientId: clients[0] };
+        }
         const mayPay = amount > 0 && !hint?.splits && (s.bank !== "AIRWALLEX" || AIRWALLEX_RECEIPT.test(e.ref ?? ""));
         const invoices = mayPay ? await invoicesFor(section.currency, amount, hint) : undefined;
         for (const i of invoices?.invoices ?? []) claimed.add(i.number);
@@ -518,6 +539,27 @@ export async function reconcileStatements(
   return { months, accounts: [...details.values()], candidates };
 }
 
+const HISTORY_LINES = 5;
+
+/**
+ * How the book recorded this payer before, in the same direction: lines whose memo is the bank's
+ * wording, or that name the counterparty. The latest sets the category and purpose; the client is
+ * the one the latest receipts paid.
+ */
+function fromHistory(book: BookLine[], e: StatementEntry, dir: "in" | "out"): Hint | undefined {
+  const description = squash(e.description);
+  const payer = squash(e.counterparty);
+  const recent = book
+    .filter((l) => (dir === "in" ? Number(l.amountIn) > 0 : Number(l.amountOut) > 0))
+    .filter((l) => squash(l.memo) === description || (payer.length >= 4 && [l.memo, l.purpose, l.party].some((s) => squash(s).includes(payer))))
+    .slice(-HISTORY_LINES)
+    .reverse();
+  const lead = recent[0];
+  if (!lead) return undefined;
+  const clientId = recent.find((l) => l.invoice)?.invoice?.clientId;
+  return { categoryId: lead.categoryId, purpose: lead.purpose, party: lead.party, periodLag: periodLag(lead.date, lead.period), splits: null, clientId };
+}
+
 function entryKey(prefix: string, date: string, amount: number, n: number) {
   return `${prefix}:${date}:${amount.toFixed(2)}:${n}`;
 }
@@ -547,7 +589,7 @@ function entryLine(key: string, e: StatementEntry, amount: number, bank: string,
     description: e.description,
     counterparty: e.counterparty,
     suggested: pick ? "invoice" : hint ? "history" : "none",
-    clientId: pick?.clientId ?? "",
+    clientId: pick?.clientId || (amount > 0 ? hint?.clientId : "") || "",
     invoiceIds: pick?.invoices.flatMap((i) => i.ids) ?? [],
     splits,
   };
