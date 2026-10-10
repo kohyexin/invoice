@@ -145,7 +145,3 @@ export async function draftForInvoice(id: string): Promise<InvoiceDraft | null> 
     extraAccountIds: inv.extraAccountIds,
   };
 }
-
-export function pdfFilename(alias: string, number: string) {
-  return `${(alias || "Invoice").replace(/[^\w.-]+/g, "_")}_Invoice ${number}.pdf`;
-}

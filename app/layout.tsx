@@ -5,6 +5,7 @@ import { GeistMono } from "geist/font/mono";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme/theme-provider";
 import { LocaleProvider } from "@/components/i18n/locale-provider";
+import { UpdateBanner } from "@/components/shell/update-banner";
 import { getLocale } from "@/lib/i18n-server";
 
 // Rounded display face (same as Gatehub).
@@ -30,7 +31,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     >
       <body className="theme-skin-midnight">
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} disableTransitionOnChange>
-          <LocaleProvider initialLocale={locale}>{children}</LocaleProvider>
+          <LocaleProvider initialLocale={locale}>
+            {children}
+            <UpdateBanner />
+          </LocaleProvider>
         </ThemeProvider>
       </body>
     </html>

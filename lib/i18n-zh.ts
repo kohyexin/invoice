@@ -1277,6 +1277,7 @@ export const ZH: Record<string, string> = {
   "A new version of Back Office is available.": "后台办公有新版本可用。",
   Reload: "重新加载",
   Later: "稍后",
+  "Reload to get the latest changes. You'll stay signed in.": "重新加载以获取最新更改，您将保持登录状态。",
   "Created by": "创建人",
   Filed: "已归档",
   "Pending upload": "待上传",

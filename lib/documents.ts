@@ -16,6 +16,11 @@ export function archiveName(number: string, alias: string) {
   return `${clean(number)}${alias ? ` ${clean(alias)}` : ""}.pdf`;
 }
 
+/** "SI2600002243 MIARICHPAY 2026-10-09.pdf": number, client alias and invoice date. */
+export function invoiceFilename(inv: { number: string; alias: string; invoiceDate: Date }) {
+  return archiveName(inv.number, [inv.alias, inv.invoiceDate.toISOString().slice(0, 10)].filter(Boolean).join(" "));
+}
+
 async function driveReady() {
   return driveConfigured() && Boolean(await getDriveConnection());
 }
@@ -24,9 +29,9 @@ async function driveReady() {
 export async function freezeGeneratedPdf(invoiceId: string) {
   const draft = await draftForInvoice(invoiceId);
   if (!draft) return;
-  const inv = await prisma.invoice.findUniqueOrThrow({ where: { id: invoiceId }, select: { number: true, alias: true } });
+  const inv = await prisma.invoice.findUniqueOrThrow({ where: { id: invoiceId }, select: { number: true, alias: true, invoiceDate: true } });
   const data = Buffer.from(await renderInvoicePdf(await pdfDataFromDraft(draft)));
-  const doc = { filename: archiveName(inv.number, inv.alias), source: "GENERATED" as const, data, size: data.length, syncError: "" };
+  const doc = { filename: invoiceFilename(inv), source: "GENERATED" as const, data, size: data.length, syncError: "" };
   await prisma.invoiceDocument.upsert({ where: { invoiceId }, update: doc, create: { invoiceId, ...doc } });
   await syncDocument(invoiceId);
 }
@@ -47,7 +52,7 @@ export async function syncDocument(invoiceId: string): Promise<boolean> {
       select: { id: true, data: true, contentType: true, driveFileId: true, driveFolderId: true, driveName: true, invoice: { select: { number: true, alias: true, invoiceDate: true } } },
     });
     if (!doc) return false;
-    const name = archiveName(doc.invoice.number, doc.invoice.alias);
+    const name = invoiceFilename(doc.invoice);
     const folderId = await monthFolder(doc.invoice.invoiceDate);
     const data = doc.data ? new Uint8Array(doc.data) : undefined;
     const moved = doc.driveFolderId !== folderId || doc.driveName !== name;

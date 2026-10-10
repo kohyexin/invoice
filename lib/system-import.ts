@@ -5,7 +5,7 @@ import type { Currency, ReviewStatus } from "@/lib/generated/prisma/client";
 import { CURRENCIES, parseDateInput } from "@/lib/utils";
 import { fxRates, toUsd } from "@/lib/rules";
 import { extractPdfText, parseSystemInvoiceText, type SystemInvoice } from "@/lib/system-invoice";
-import { archiveName, syncDocument } from "@/lib/documents";
+import { invoiceFilename, syncDocument } from "@/lib/documents";
 
 export type ImportSource = {
   data: Uint8Array;
@@ -197,7 +197,13 @@ export async function approveReview(
       sourceMessageId: row.messageId,
       createdById: actorId,
       updatedById: actorId,
-      document: { create: { filename: archiveName(inv.number, client.alias || inv.clientName.toUpperCase()), data: Buffer.from(row.pdf), size: row.pdf.length } },
+      document: {
+        create: {
+          filename: invoiceFilename({ number: inv.number, alias: client.alias || inv.clientName.toUpperCase(), invoiceDate: parseDateInput(inv.invoiceDate)! }),
+          data: Buffer.from(row.pdf),
+          size: row.pdf.length,
+        },
+      },
     },
   });
   await prisma.importReview.update({
